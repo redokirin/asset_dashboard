@@ -1,0 +1,29 @@
+[project]
+name = "asset-tracking"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "albert.lin",email = "albert.lin@presco.ws"}
+]
+requires-python = ">=3.14"
+dependencies = [
+    "yfinance (>=1.1.0,<2.0.0)",
+    "pandas (>=2.2.0,<3.0.0)",
+    "matplotlib (>=3.10.8,<4.0.0)",
+    "numpy (>=2.4.2,<3.0.0)",
+    "rich (>=14.3.2,<15.0.0)",
+    "streamlit (>=1.55.0,<2.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "jupyter (>=1.1.1,<2.0.0)",
+    "ipykernel (>=7.2.0,<8.0.0)",
+    "pandas (>=2.2.0,<3.0.0)",
+    "numpy (>=2.4.2,<3.0.0)"
+]
