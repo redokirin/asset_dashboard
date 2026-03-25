@@ -7,6 +7,7 @@ import sys
 import math
 
 from assets_config import ASSETS, RADAR_TICKERS, ALPHA_ANALYSIS
+from tabulate import tabulate
 
 # 嘗試引入 rich
 try:
@@ -85,6 +86,19 @@ def get_market_radar_data():
     return data
 
 
+def export_for_ai(df):
+    # print(df)
+    # sys.exit()
+    """
+    產生一個專門給 AI 分析用的純文字摘要
+    """
+    print("--- AI 分析專用數據摘要 ---")
+    # 只挑選核心欄位，轉成 Markdown
+    summary_cols = ["代碼", "股價", "平均成本", "單位數", "報酬率", "建議掛單"]
+    print(df[summary_cols].to_markdown(index=False))
+    print("-" * 30)
+
+
 def get_batch_buy_signals(tickers: list):
     """
     For a list of tickers, download data in one batch and calculate the buy signal for each.
@@ -98,7 +112,7 @@ def get_batch_buy_signals(tickers: list):
     strong = "🟠"  # 極度價值區 (低於季線，強力加碼)
     buy = "🟡"  # 價值區 (低於月線，適合分批加加碼)
     warning = "🔴"  # 過熱區 (遠離月線，暫緩加碼)
-    healthy = "🟢"  # 趨勢區 (沿月線上漲，定期定額
+    healthy = "🟢"  # 趨勢區 (沿月線上漲，定期定額)
     default_signal = "  "  # Default if data is unavailable
 
     signals = {}
@@ -190,9 +204,21 @@ def calculate_assets_data(exchange_rates):
         try:
             ccy = asset["ccy"]
             rate = exchange_rates.get(ccy, 1)  # 從字典取匯率，預設為 1 (TWD)
-            inv = asset.get("investment", [])
-            total_units = sum(i.get("units", i.get("shares", 0)) for i in inv)
-            total_cost_origin = sum(i.get("cost", 0) for i in inv)
+
+            if "units" in asset:
+                total_units = float(asset["units"])
+            elif "shares" in asset:
+                total_units = float(asset["shares"])
+            else:
+                inv = asset.get("investment", [])
+                total_units = sum(i.get("units", i.get("shares", 0)) for i in inv)
+
+            if "cost" in asset:
+                total_cost_origin = float(asset["cost"])
+            else:
+                inv = asset.get("investment", [])
+                total_cost_origin = sum(i.get("cost", 0) for i in inv)
+
             avg_cost = (total_cost_origin / total_units) if total_units > 0 else 0
 
             if price is None:  # 基金
@@ -243,6 +269,10 @@ def calculate_assets_data(exchange_rates):
     all_assets = [(ASSETS["funds"], "基金"), (ASSETS["etfs"], "ETF")]
     for asset_dict, category in all_assets:
         for asset in asset_dict.values():
+            # 若設定 enabled: False 則跳過不計算
+            if not asset.get("enabled", True):
+                continue
+
             price = None
             if asset.get("get_value", False):
                 try:
@@ -255,7 +285,7 @@ def calculate_assets_data(exchange_rates):
 
     df = pd.DataFrame(results)  # This df contains individual asset data
     if not df.empty:
-        df.sort_values(by=["幣別", "報酬率"], ascending=[False, False], inplace=True)
+        # df.sort_values(by=["幣別", "報酬率"], ascending=[False, False], inplace=True)
         total_portfolio_value = df["市值"].sum()
         df["佔比"] = df["市值"] / total_portfolio_value * 100
 
@@ -375,18 +405,36 @@ def show_streamlit(df, radar_data, market_share_data, alpha_results):
 
     if alpha_results:
         st.subheader("🔬 Alpha 穩定性分析")
+
+        alpha_data = []
         for result in alpha_results:
-            with st.expander(
-                f"{result['name']} ({result['target']} vs {result['benchmark']})"
-            ):
-                col1, col2, col3 = st.columns(3)
-                col1.metric("觀測月份", f"{result['total_months']} 個月")
-                col2.metric("月度勝率", f"{result['batting_avg']:.1f}%")
-                col3.metric("平均月 Alpha", f"{result['avg_alpha']:+.2f}%")
-                st.text("近期對決明細 (每月 Alpha %):")
-                st.dataframe(
-                    result["recent_alpha"].to_frame("Alpha").style.format("{:+.2%}")
-                )
+            alpha_data.append(
+                {
+                    "名稱": result["name"],
+                    "標的": result["target"],
+                    "基準": result["benchmark"],
+                    "觀測月數": result["total_months"],
+                    "月度勝率": result["batting_avg"],
+                    "平均月 Alpha": result["avg_alpha"],
+                    "夏普比率": result["sharpe_ratio"],
+                }
+            )
+
+        if alpha_data:
+            alpha_df = pd.DataFrame(alpha_data)
+            st.dataframe(
+                alpha_df.style.format(
+                    {
+                        "月度勝率": "{:.1f}%",
+                        "平均月 Alpha": "{:+.2f}%",
+                        "夏普比率": "{:.2f}",
+                    }
+                ).map(
+                    lambda x: "color: #ff4b4b" if x > 0 else "color: #00c853",
+                    subset=["平均月 Alpha"],
+                ),
+                use_container_width=True,
+            )
 
 
 def show_console_rich(df, radar_data, market_share_data, alpha_results):
@@ -423,25 +471,25 @@ def show_console_rich(df, radar_data, market_share_data, alpha_results):
     # Alpha 分析
     if alpha_results:
         console.print("[bold cyan]--- 🔬 Alpha 穩定性分析 ---[/bold cyan]")
-        for result in alpha_results:
-            title = f"{result['name']} ({result['target']} vs {result['benchmark']})"
-            summary_table = Table(box=box.ROUNDED, show_header=False, title=title)
-            summary_table.add_row("觀測月份", f"{result['total_months']} 個月")
-            summary_table.add_row("月度勝率", f"{result['batting_avg']:.1f}%")
-            summary_table.add_row("平均月 Alpha", f"{result['avg_alpha']:+.2f}%")
-            console.print(summary_table)
+        alpha_table = Table(box=box.SIMPLE_HEAD, show_header=True)
+        alpha_table.add_column("名稱", style="white")
+        alpha_table.add_column("標的 vs 基準", style="dim")
+        alpha_table.add_column("月數", justify="right")
+        alpha_table.add_column("勝率", justify="right", style="magenta")
+        alpha_table.add_column("平均 Alpha", justify="right", style="bold")
+        alpha_table.add_column("夏普值", justify="right")
 
-            details_table = Table(
-                box=box.SIMPLE, show_header=True, caption="近期對決明細 (每月 Alpha %)"
+        for result in alpha_results:
+            alpha_color = "red" if result["avg_alpha"] > 0 else "green"
+            alpha_table.add_row(
+                result["name"],
+                f"{result['target']} vs {result['benchmark']}",
+                str(result["total_months"]),
+                f"{result['batting_avg']:.1f}%",
+                f"[{alpha_color}]{result['avg_alpha']:+.2f}%[/{alpha_color}]",
+                f"{result['sharpe_ratio']:.2f}",
             )
-            details_table.add_column("月份", style="dim")
-            details_table.add_column("Alpha (%)", justify="right")
-            for date, value in result["recent_alpha"].items():
-                color = "red" if value > 0 else "green"
-                details_table.add_row(
-                    date.strftime("%Y-%m"), f"[{color}]{value:+.2%}[/{color}]"
-                )
-            console.print(details_table)
+        console.print(alpha_table)
         console.print("")
 
     # 2. 顯示資產表
@@ -458,7 +506,7 @@ def show_console_rich(df, radar_data, market_share_data, alpha_results):
         asset["id"]
         for category in ["funds", "etfs"]
         for asset in ASSETS[category].values()
-        if asset.get("get_value", False)
+        if asset.get("get_value", False) and asset.get("enabled", True)
     ]
     buy_signals = get_batch_buy_signals(tickers_to_signal)
 
@@ -543,24 +591,32 @@ def show_jupyter(df, radar_data, exchange_rates, market_share_data, alpha_result
     # Alpha 分析
     if alpha_results:
         print("\n--- 🔬 Alpha 穩定性分析 ---")
+        alpha_list = []
         for result in alpha_results:
-            print(f"\n{result['name']} ({result['target']} vs {result['benchmark']})")
+            alpha_list.append(
+                {
+                    "名稱": result["name"],
+                    "標的": result["target"],
+                    "基準": result["benchmark"],
+                    "觀測月數": result["total_months"],
+                    "勝率": result["batting_avg"],
+                    "平均 Alpha": result["avg_alpha"],
+                    "夏普值": result["sharpe_ratio"],
+                }
+            )
 
-            summary_data = {
-                "指標": ["觀測月份", "月度勝率", "平均月 Alpha"],
-                "數值": [
-                    f"{result['total_months']} 個月",
-                    f"{result['batting_avg']:.1f}%",
-                    f"{result['avg_alpha']:+.2f}%",
-                ],
-            }
-            summary_df = pd.DataFrame(summary_data)
-            display(summary_df.style.hide(axis="index"))
-
-            print("\n近期對決明細 (每月 Alpha %):")
-            recent_alpha_df = result["recent_alpha"].to_frame("Alpha (%)")
-            recent_alpha_df.index = recent_alpha_df.index.strftime("%Y-%m")
-            display(recent_alpha_df.style.format({"Alpha (%)": "{:+.2%}"}))
+        if alpha_list:
+            alpha_df = pd.DataFrame(alpha_list)
+            display(
+                alpha_df.style.format(
+                    {"勝率": "{:.1f}%", "平均 Alpha": "{:+.2f}%", "夏普值": "{:.2f}"}
+                )
+                .map(
+                    lambda x: "color: red" if x > 0 else "color: green",
+                    subset=["平均 Alpha"],
+                )
+                .hide(axis="index")
+            )
         print("\n")
 
     print("\n")
@@ -620,10 +676,16 @@ def calculate_single_alpha(target, benchmark, start):
         batting_avg = win_months.mean() * 100
         avg_alpha = monthly_returns["Monthly_Alpha"].mean() * 100
 
+        # 計算年化夏普比率 (假設無風險利率為 0)
+        mean_ret = monthly_returns[target].mean()
+        std_ret = monthly_returns[target].std()
+        sharpe_ratio = (mean_ret / std_ret) * (12**0.5) if std_ret != 0 else 0
+
         return {
             "total_months": len(monthly_returns),
             "batting_avg": batting_avg,
             "avg_alpha": avg_alpha,
+            "sharpe_ratio": sharpe_ratio,
             "recent_alpha": monthly_returns["Monthly_Alpha"].tail(5),
         }
     except Exception:
@@ -638,26 +700,33 @@ def run_alpha_analysis():
         return analysis_results
 
     for analysis in ALPHA_ANALYSIS:
-        result = calculate_single_alpha(
-            analysis["target"], analysis["benchmark"], analysis["start"]
-        )
-        if result:
-            analysis_results.append(
-                {
-                    "name": analysis["name"],
-                    "target": analysis["target"],
-                    "benchmark": analysis["benchmark"],
-                    **result,
-                }
-            )
+        targets = analysis["target"]
+        names = analysis["name"]
+        benchmark = analysis["benchmark"]
+        start = analysis["start"]
+
+        # 支援多檔同時設定 (List) 或 單檔 (String)
+        if not isinstance(targets, list):
+            targets_list = [targets]
+            names_list = [names]
+        else:
+            targets_list = targets
+            names_list = names if isinstance(names, list) else [names] * len(targets)
+
+        for target, name in zip(targets_list, names_list):
+            result = calculate_single_alpha(target, benchmark, start)
+            if result:
+                analysis_results.append(
+                    {"name": name, "target": target, "benchmark": benchmark, **result}
+                )
     return analysis_results
 
 
 # --- 4. 主程式 ---
 
 if __name__ == "__main__":
-    # alpha_results = run_alpha_analysis()
-    alpha_results = None
+    alpha_results = run_alpha_analysis() if "--alpha" in sys.argv else None
+    # alpha_results = None
     radar = get_market_radar_data()
     exchange_rates = {
         "JPY": next(
@@ -669,12 +738,16 @@ if __name__ == "__main__":
         "TWD": 1,
     }  # This is correct
     df_res, market_share_data = calculate_assets_data(exchange_rates)
-
-    if CURRENT_ENV == "streamlit":
-        show_streamlit(df_res, radar, market_share_data, alpha_results)
-    elif CURRENT_ENV == "jupyter":
-        show_jupyter(df_res, radar, exchange_rates, market_share_data, alpha_results)
-    elif HAS_RICH:
-        show_console_rich(df_res, radar, market_share_data, alpha_results)
+    if "--ai" in sys.argv:
+        export_for_ai(df_res)
     else:
-        print(df_res.to_string())
+        if CURRENT_ENV == "streamlit":
+            show_streamlit(df_res, radar, market_share_data, alpha_results)
+        elif CURRENT_ENV == "jupyter":
+            show_jupyter(
+                df_res, radar, exchange_rates, market_share_data, alpha_results
+            )
+        elif HAS_RICH:
+            show_console_rich(df_res, radar, market_share_data, alpha_results)
+        else:
+            print(df_res.to_string())
