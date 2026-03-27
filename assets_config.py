@@ -4,22 +4,23 @@ ASSETS = {
     "funds": {
         "18488469A": {
             "market": "台股",
-            "enabled": False,
+            "enabled": True,
             "get_value": True,
             "id": "0P00006AKV.TW",
             "isin": "TW000T3207Y5",
             "name": "野村中小基金",
             "ccy": "TWD",
-            "nav": 353.4,
+            "nav": 387.98,
             # "value": 223160,
-            "units": 653.99889,
-            "cost": 109708,
+            "units": 412.01931,
+            "cost": 68116,
             # "investment": [
             #     {"units": 653.99889, "cost": 109708},
             # ],
         },
         "00910007": {
             "market": "日股",
+            "enabled": True,
             "get_value": True,
             "id": "0P0001CGLL.T",
             "isin": "IE00BF4KRV02",
@@ -38,12 +39,13 @@ ASSETS = {
         },
         "00010044": {
             "market": "日股",
+            "enabled": True,
             "get_value": False,
             "id": "00010044",
             "isin": "LU0235639324",
             "name": "JPM日本股票基金",
             "ccy": "JPY",
-            "nav": 2911.0000,
+            "nav": 2990.0000,
             "units": 164.921,
             "cost": 500000,
             # "investment": [
@@ -56,6 +58,7 @@ ASSETS = {
     "etfs": {
         "1655.T": {
             "market": "美股",
+            "enabled": True,
             "market_type": "JP_ETF",
             "discount": 0.995,
             "get_value": True,
@@ -73,8 +76,24 @@ ASSETS = {
             #     {"shares": 400, "cost": 761},   # 03/19
             # ],
         },
+        "1306.T": {
+            "market": "日股",
+            "enabled": True,
+            "market_type": "JP_ETF",
+            "discount": 0.995,
+            "get_value": True,
+            "id": "1306.T",
+            "name": "NextFunds東證股價指數",
+            "ccy": "JPY",
+            "shares": 100,
+            "cost": 378500,
+            # "investment": [
+            #     {"shares": 100, "cost": 3785},   # 03/27
+            # ]
+        },
         "00985A.TW": {
             "market": "台股",
+            "enabled": True,
             "market_type": "TW_ETF",
             "discount": 0.990,
             "get_value": True,
@@ -93,6 +112,7 @@ ASSETS = {
         },
         "00981A.TW": {
             "market": "台股",
+            "enabled": True,
             "market_type": "TW_ETF",
             "discount": 0.990,
             "get_value": True,
@@ -107,6 +127,7 @@ ASSETS = {
         },
         "0052": {
             "market": "台股",
+            "enabled": True,
             "market_type": "TW_ETF",
             "discount": 0.985,
             "get_value": True,
@@ -124,11 +145,12 @@ ASSETS = {
         },
         "2409": {
             "market": "台股",
+            "enabled": True,
             "market_type": "TW_ETF",
             "discount": 0.985,
             "get_value": True,
             "id": "2409.TW",
-            "name": "友達",
+            "name": "友達光電",
             "ccy": "TWD",
             "shares": 2000,
             "cost": 30850,
@@ -139,6 +161,7 @@ ASSETS = {
         },
         "2330": {
             "market": "台股",
+            "enabled": True,
             "market_type": "TW_ETF_HIGH",
             "discount": 0.980,
             "get_value": True,

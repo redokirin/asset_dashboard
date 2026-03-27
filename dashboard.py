@@ -1,56 +1,25 @@
 # -*- coding: utf-8 -*-
 import yfinance as yf
 import pandas as pd
-import matplotlib.pyplot as plt
-import platform
 import sys
 import math
+import numpy as np
+
+try:
+    from scipy import stats
+
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
 
 from assets_config import ASSETS, RADAR_TICKERS, ALPHA_ANALYSIS
-from tabulate import tabulate
-
-# 嘗試引入 rich
-try:
-    from rich.console import Console
-    from rich.table import Table
-    from rich import box
-
-    HAS_RICH = True
-except ImportError:
-    HAS_RICH = False
-
-
-# --- 1. 環境偵測 ---
-def get_env():
-    if "streamlit" in sys.modules or "streamlit.runtime" in sys.modules:
-        return "streamlit"
-    try:
-        from IPython.core.getipython import get_ipython
-
-        if get_ipython().__class__.__name__ == "ZMQInteractiveShell":
-            return "jupyter"
-    except Exception:
-        pass
-    return "console"
-
-
-CURRENT_ENV = get_env()
-if CURRENT_ENV == "streamlit":
-    try:
-        import streamlit as st
-    except ImportError:
-        CURRENT_ENV = "console"
-
-# --- 2. 核心計算邏輯 ---
-
-
-def set_chinese_font():
-    system = platform.system()
-    if system == "Darwin":
-        plt.rcParams["font.sans-serif"] = ["Arial Unicode MS"]
-    elif system == "Windows":
-        plt.rcParams["font.sans-serif"] = ["Microsoft JhengHei"]
-    plt.rcParams["axes.unicode_minus"] = False
+from dashboard_ui import (
+    CURRENT_ENV,
+    HAS_RICH,
+    show_streamlit,
+    show_console_rich,
+    show_jupyter,
+)
 
 
 def get_exchange_rate():
@@ -94,105 +63,37 @@ def export_for_ai(df):
     """
     print("--- AI 分析專用數據摘要 ---")
     # 只挑選核心欄位，轉成 Markdown
-    summary_cols = ["代碼", "股價", "平均成本", "單位數", "報酬率", "建議掛單"]
+    summary_cols = ["代碼", "股價", "漲跌", "平均成本", "單位數", "報酬率", "建議掛單"]
     print(df[summary_cols].to_markdown(index=False))
     print("-" * 30)
 
 
-def get_batch_buy_signals(tickers: list):
+def calculate_tick_price(target_price, market_type):
     """
-    For a list of tickers, download data in one batch and calculate the buy signal for each.
-    This is much more efficient than downloading one by one in a loop.
-    Returns a dictionary mapping each ticker to its signal light ('🔴', '🟡', '⚠️', '🟢').
+    根據目標價格與市場類型，修正為符合交易規則的 Tick
     """
-    if not tickers:
-        return {}
+    if market_type == "TW_STOCK":
+        if target_price < 10:
+            tick = 0.01
+        elif target_price < 50:
+            tick = 0.05
+        elif target_price < 100:
+            tick = 0.1
+        elif target_price < 500:
+            tick = 0.5
+        elif target_price < 1000:
+            tick = 1.0
+        else:
+            tick = 5.0
+        return math.floor(round(target_price / tick, 8)) * tick
 
-    # Define signals
-    strong = "🟠"  # 極度價值區 (低於季線，強力加碼)
-    buy = "🟡"  # 價值區 (低於月線，適合分批加加碼)
-    warning = "🔴"  # 過熱區 (遠離月線，暫緩加碼)
-    healthy = "🟢"  # 趨勢區 (沿月線上漲，定期定額)
-    default_signal = "  "  # Default if data is unavailable
+    elif market_type in ["TW_ETF", "TW_ETF_HIGH"]:
+        # 台股 ETF 規則：50元以下 0.01，50元以上 0.05
+        tick = 0.01 if target_price < 50 else 0.05
+        return math.floor(round(target_price / tick, 8)) * tick
 
-    signals = {}
-    try:
-        # Download data for all tickers at once. progress=False to keep console clean.
-        # group_by='ticker' makes the data structure consistent even for a single ticker.
-        # Use 1y period to be safer and ensure enough data for MA60
-        data = yf.download(tickers, period="1y", progress=False, group_by="ticker")
-        if data.empty:
-            return {ticker: default_signal for ticker in tickers}
-
-        for ticker in tickers:
-            try:
-                # Access data for the specific ticker. data.get(ticker) is safer.
-                # When group_by='ticker', yfinance returns a multi-index DataFrame.
-                # We select the sub-frame for the current ticker.
-                if isinstance(data.columns, pd.MultiIndex):
-                    ticker_df = data[ticker]
-                else:  # Fallback for single ticker without MultiIndex
-                    ticker_df = data
-
-                if (
-                    ticker_df is None
-                    or ticker_df.empty
-                    or ticker_df["Close"].isnull().all()
-                ):
-                    signals[ticker] = default_signal
-                    continue
-
-                ticker_data = ticker_df.copy()
-                # Drop rows where 'Close' is NaN. This handles non-trading days or
-                # days with incomplete data, which would cause MA to be NaN.
-                ticker_data.dropna(subset=["Close"], inplace=True)
-
-                # Calculate MAs
-                ticker_data["MA20"] = ticker_data["Close"].rolling(window=20).mean()
-                ticker_data["MA60"] = ticker_data["Close"].rolling(window=60).mean()
-
-                # Get latest values
-                latest = ticker_data.iloc[-1]
-                current_price = latest["Close"]
-                ma20 = latest["MA20"]
-                ma60 = latest["MA60"]
-
-                # Ensure values are not NaN before comparison
-                if pd.isna(current_price) or pd.isna(ma20) or pd.isna(ma60):
-                    signals[ticker] = default_signal
-                    continue
-
-                # Calculate bias and determine signal
-                bias_ma20 = (current_price - ma20) / ma20 * 100
-                if current_price <= ma60:
-                    signals[ticker] = strong
-                elif current_price <= ma20:
-                    signals[ticker] = buy
-                elif bias_ma20 > 5:
-                    signals[ticker] = warning
-                else:
-                    signals[ticker] = healthy
-
-            except KeyError, IndexError:
-                signals[ticker] = default_signal  # This ticker might have failed
-    except Exception:
-        return {
-            ticker: default_signal for ticker in tickers
-        }  # General download failure
-    return signals
-
-
-def calculate_tick_price(price, market_type):
-    """根據不同市場與價格區間，計算合法的掛單跳動單位"""
-    if market_type == "JP_ETF":
-        return round(price, 1)  # 日股 ETF 通常小數點第一位
-    elif market_type == "TW_ETF":
-        # 台股 50 元以下 ETF，跳動單位為 0.05
-        return math.floor(price / 0.05) * 0.05
-    elif market_type in ["TW_STOCK_HIGH", "TW_ETF_HIGH"]:
-        # 台股 1000 元以上，跳動單位為 5 元
-        return math.floor(price / 5.0) * 5.0
-    return round(price, 2)
+    # 其他市場（如日股）暫不處理特殊 Tick，直接回傳
+    return round(target_price, 2)
 
 
 def calculate_assets_data(exchange_rates):
@@ -200,7 +101,7 @@ def calculate_assets_data(exchange_rates):
     results = []
     # PROFIT_GOAL = 100
 
-    def process_asset(asset, category, price=None):
+    def process_asset(asset, category, price=None, change_val=None):
         try:
             ccy = asset["ccy"]
             rate = exchange_rates.get(ccy, 1)  # 從字典取匯率，預設為 1 (TWD)
@@ -236,9 +137,18 @@ def calculate_assets_data(exchange_rates):
             # 計算建議掛單
             suggested_bid = 0.0
             m_type = asset.get("market_type")
-            discount = asset.get("discount")
-            if price is not None and m_type and discount:
-                suggested_bid = calculate_tick_price(price * discount, m_type)
+            if price is not None and m_type:
+                discount = asset.get("discount", 0.985)
+                market_target = price * discount
+
+                # 成本錨點 (Cost Anchor) 邏輯：確保掛單價能降低平均成本
+                if avg_cost > 0:
+                    cost_target = avg_cost * 0.998  # 預留 0.2% 降本空間
+                    final_target = min(market_target, cost_target)
+                else:
+                    final_target = market_target
+
+                suggested_bid = calculate_tick_price(final_target, m_type)
 
             # 獲利標記
             display_name = asset["name"]
@@ -255,6 +165,7 @@ def calculate_assets_data(exchange_rates):
                 "幣別": asset["ccy"],
                 "單位數": total_units,
                 "平均成本": avg_cost,
+                "漲跌": change_val,
                 "股價": current_price,
                 "建議掛單": suggested_bid,
                 "成本": round(cost_twd),
@@ -274,12 +185,22 @@ def calculate_assets_data(exchange_rates):
                 continue
 
             price = None
+            change_val = None
             if asset.get("get_value", False):
                 try:
-                    price = yf.Ticker(asset["id"]).fast_info["last_price"]
+                    t = yf.Ticker(asset["id"])
+                    info = t.fast_info
+                    # 修正：使用屬性訪問 (Attribute Access) 而非字典索引
+                    price = getattr(info, "last_price", None)
+                    # 僅針對 ETF 計算單日漲跌數值
+                    if category == "ETF" and price is not None:
+                        change_val = 0.0  # ETF 預設為 0.0 而非 None
+                        prev_close = getattr(info, "previous_close", None)
+                        if prev_close is not None and prev_close != 0:
+                            change_val = price - prev_close
                 except Exception:
                     pass
-            res = process_asset(asset, category, price)
+            res = process_asset(asset, category, price, change_val)
             if res:
                 results.append(res)
 
@@ -299,356 +220,79 @@ def calculate_assets_data(exchange_rates):
     return df, market_share_series
 
 
-# --- 3. 顯示層 ---
-def plot_asset_allocation(df, exchange_rates):
-    """繪製資產分佈圓餅圖 (市場別 & 項目別)"""
+def get_rs_percentile_rank(tickers_list, benchmark="0050.TW"):
+    """
+    計算所有標的相對於 benchmark 的 RS 百分位數排名 (跨市場比較)
+    """
+    if not HAS_SCIPY:
+        print(
+            "警告：缺少 'scipy' 套件，無法進行 RS 分析。請執行 'pip install scipy' 或 'poetry add scipy'"
+        )
+        return pd.DataFrame()
 
-    # 定義共用的 autopct 產生器
-    def make_autopct(values):
-        def my_autopct(pct):
-            total = sum(values)
-            val = int(round(pct * total / 100.0))
-            # 若佔比小於 1% 則不顯示文字，避免重疊
-            return f"{pct:.1f}%\n(${val:,})" if pct > 1 else ""
+    results = []
+    try:
+        # 預先下載 Benchmark 與匯率數據
+        common_tickers = [benchmark, "JPYTWD=X", "USDTWD=X"]
+        common_data = yf.download(common_tickers, period="2y", progress=False)["Close"]
 
-        return my_autopct
+        for ticker in tickers_list:
+            try:
+                # 抓取 2 年歷史數據計算百分位 (RS 需要較長的觀察期)
+                data = yf.download(ticker, period="2y", progress=False)["Close"]
+                if data.empty:
+                    continue
 
-    # 建立 1x2 的子圖 (寬度設大一點以容納兩張圖)
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+                # 判斷幣別 (使用 ticker 後綴判定)
+                ccy = (
+                    "JPY"
+                    if ticker.endswith(".T")
+                    else "TWD"
+                    if ticker.endswith(".TW")
+                    else "USD"
+                )
 
-    # --- 左圖：市場分佈 ---
-    market_dist = df.groupby("市場")["市值"].sum()
-    market_dist.plot(
-        kind="pie",
-        autopct=make_autopct(market_dist),
-        startangle=140,
-        shadow=True,
-        ax=axes[0],
-        ylabel="",
-    )
-    rates_str_parts = []
-    if "JPY" in exchange_rates:
-        rates_str_parts.append(f"JPY/TWD: {exchange_rates['JPY']:.4f}")
-    if "USD" in exchange_rates:
-        rates_str_parts.append(f"USD/TWD: {exchange_rates['USD']:.2f}")
-    axes[0].set_title(f"資產分佈 - 市場別 ({', '.join(rates_str_parts)})", fontsize=14)
+                rate = (
+                    common_data["JPYTWD=X"]
+                    if ccy == "JPY"
+                    else common_data["USDTWD=X"]
+                    if ccy == "USD"
+                    else 1.0
+                )
 
-    # --- 右圖：項目分佈 ---
-    # 移除名稱中的 Emoji，避免 Matplotlib 字型警告
-    clean_names = (
-        df["名稱"]
-        .astype(str)
-        .str.replace("🏆 ", "", regex=False)
-        .str.replace("🚩 ", "", regex=False)
-    )
-    item_dist = df.set_index(clean_names)["市值"]
-    item_dist.plot(
-        kind="pie",
-        autopct=make_autopct(item_dist),
-        startangle=140,
-        shadow=True,
-        ax=axes[1],
-        ylabel="",
-    )
-    axes[1].set_title("資產分佈 - 項目別", fontsize=14)
+                # 計算 RS 系列 (標的 TWD 價格 / Benchmark 價格)
+                # 確保 index 對齊
+                combined = pd.DataFrame(
+                    {"price": data, "rate": rate, "bench": common_data[benchmark]}
+                ).dropna()
+                rs_series = (combined["price"] * combined["rate"]) / combined["bench"]
 
-    plt.tight_layout()
-    plt.show()
+                if len(rs_series) < 20:
+                    continue
 
+                current_rs = rs_series.iloc[-1]
+                percentile = stats.percentileofscore(rs_series, current_rs)
 
-def show_streamlit(df, radar_data, market_share_data, alpha_results):
-    st.set_page_config(page_title="全球資產看板", layout="wide")
-    st.title("📈 全球資產即時監控")
-
-    # 雷達區
-    cols = st.columns(len(radar_data) + 1)
-    for i, item in enumerate(radar_data):
-        cols[i].metric(item["名稱"], f"{item['數值']:,.2f}", f"{item['漲跌幅']:+.2f}%")
-
-    total_pl = df["損益"].sum()
-    roi = total_pl / df["成本"].sum() * 100
-    cols[-1].metric("總損益", f"${total_pl:+,.0f}", f"{roi:+.2f}%")
-
-    st.subheader("📋 持倉明細")
-    st.dataframe(
-        df.style.format(
-            {
-                "單位數": "{:,.2f}",
-                "平均成本": "{:,.2f}",
-                "股價": "{:,.2f}",
-                "建議掛單": "{:,.2f}",
-                "市值": "${:,.0f}",
-                "損益": "${:+,.0f}",
-                "報酬率": "{:+.2f}%",
-                "佔比": "{:.1f}%",
-            }
-        ).map(
-            lambda x: "color: #ff4b4b" if x > 0 else "color: #00c853", subset=["損益"]
-        ),
-        use_container_width=True,
-    )
-
-    st.subheader("📊 資產分佈")
-    st.subheader("🌍 市場分佈佔比")
-    market_share_cols = st.columns(len(market_share_data))
-    for i, (market, share) in enumerate(market_share_data.items()):
-        market_share_cols[i].metric(market, f"{share:.1f}%")
-
-    set_chinese_font()
-    fig, ax = plt.subplots(figsize=(6, 3))
-    ax.pie(
-        df["市值"],
-        labels=df["名稱"].str.replace(r"[^\w\s-]", "", regex=True),
-        autopct="%1.1f%%",
-    )
-    st.pyplot(fig)
-
-    if alpha_results:
-        st.subheader("🔬 Alpha 穩定性分析")
-
-        alpha_data = []
-        for result in alpha_results:
-            alpha_data.append(
-                {
-                    "名稱": result["name"],
-                    "標的": result["target"],
-                    "基準": result["benchmark"],
-                    "觀測月數": result["total_months"],
-                    "月度勝率": result["batting_avg"],
-                    "平均月 Alpha": result["avg_alpha"],
-                    "夏普比率": result["sharpe_ratio"],
-                }
-            )
-
-        if alpha_data:
-            alpha_df = pd.DataFrame(alpha_data)
-            st.dataframe(
-                alpha_df.style.format(
+                results.append(
                     {
-                        "月度勝率": "{:.1f}%",
-                        "平均月 Alpha": "{:+.2f}%",
-                        "夏普比率": "{:.2f}",
+                        "代碼": ticker,
+                        "當前 RS": round(current_rs, 4),
+                        "RS 百分位": percentile,
+                        "狀態": "🔵 深水"
+                        if percentile <= 15
+                        else ("🔥 過熱" if percentile >= 85 else "⚪ 正常"),
+                        "score": percentile,  # 用於排序
                     }
-                ).map(
-                    lambda x: "color: #ff4b4b" if x > 0 else "color: #00c853",
-                    subset=["平均月 Alpha"],
-                ),
-                use_container_width=True,
-            )
-
-
-def show_console_rich(df, radar_data, market_share_data, alpha_results):
-    console = Console()
-
-    # 1. 顯示雷達
-    console.print("\n[bold cyan]--- 🌍 全球市場即時雷達 ---[/bold cyan]")
-    radar_table = Table(box=box.SIMPLE_HEAD, show_header=True)
-    radar_table.add_column("指標名稱", style="cyan")
-    radar_table.add_column("數值", justify="right")
-    radar_table.add_column("漲跌幅", justify="right")
-
-    for item in radar_data:
-        color = "red" if item["漲跌幅"] > 0 else "green"
-        radar_table.add_row(
-            item["名稱"],
-            f"{item['數值']:,.2f}",
-            f"[{color}]{item['漲跌幅']:+.2f}%[/{color}]",
-        )
-    console.print(radar_table)
-    console.print("")
-
-    # 2. 顯示市場分佈佔比
-    console.print("[bold cyan]--- 🌍 市場分佈佔比 ---[/bold cyan]")
-    market_share_table = Table(box=box.SIMPLE_HEAD, show_header=True)
-    market_share_table.add_column("市場", style="cyan")
-    market_share_table.add_column("佔比", justify="right")
-
-    for market, share in market_share_data.items():
-        market_share_table.add_row(market, f"{share:.1f}%")
-    console.print(market_share_table)
-    console.print("")
-
-    # Alpha 分析
-    if alpha_results:
-        console.print("[bold cyan]--- 🔬 Alpha 穩定性分析 ---[/bold cyan]")
-        alpha_table = Table(box=box.SIMPLE_HEAD, show_header=True)
-        alpha_table.add_column("名稱", style="white")
-        alpha_table.add_column("標的 vs 基準", style="dim")
-        alpha_table.add_column("月數", justify="right")
-        alpha_table.add_column("勝率", justify="right", style="magenta")
-        alpha_table.add_column("平均 Alpha", justify="right", style="bold")
-        alpha_table.add_column("夏普值", justify="right")
-
-        for result in alpha_results:
-            alpha_color = "red" if result["avg_alpha"] > 0 else "green"
-            alpha_table.add_row(
-                result["name"],
-                f"{result['target']} vs {result['benchmark']}",
-                str(result["total_months"]),
-                f"{result['batting_avg']:.1f}%",
-                f"[{alpha_color}]{result['avg_alpha']:+.2f}%[/{alpha_color}]",
-                f"{result['sharpe_ratio']:.2f}",
-            )
-        console.print(alpha_table)
-        console.print("")
-
-    # 2. 顯示資產表
-    console.print(
-        f"[bold yellow]📅 報表時間: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}[/bold yellow]"
-    )
-    table = Table(box=box.SIMPLE, show_header=True)
-
-    # Pre-calculate buy signals for all ETFs to avoid repeated downloads in the loop
-
-    # Only get signals for ETFs configured with "ge__value": True
-    # Only get signals for assets configured with "get_value": True from both funds and etfs
-    tickers_to_signal = [
-        asset["id"]
-        for category in ["funds", "etfs"]
-        for asset in ASSETS[category].values()
-        if asset.get("get_value", False) and asset.get("enabled", True)
-    ]
-    buy_signals = get_batch_buy_signals(tickers_to_signal)
-
-    cols_config = [
-        ("訊號", "dim white", "center"),
-        ("市場", "cyan", "left"),
-        ("名稱", "white", "left"),
-        ("代碼", "dim white", "left"),
-        ("幣別", "yellow", "center"),
-        ("單位數", "dim white", "right"),
-        ("平均成本", "dim white", "right"),
-        ("股價", "bold white", "right"),
-        ("建議掛單", "magenta", "right"),
-        ("成本", "dim white", "right"),
-        ("市值", "bold white", "right"),
-        ("損益", "bold", "right"),
-        ("報酬率", "bold", "right"),
-        ("佔比", "blue", "right"),
-    ]
-    for c, s, j in cols_config:
-        table.add_column(c, style=s, justify=j)
-
-    for _, row in df.iterrows():
-        color = "red" if row["損益"] > 0 else "green"
-
-        # 從預先計算的結果中查找買賣訊號
-        signal = buy_signals.get(row["代碼"], " ")
-        bid_str = f"{row['建議掛單']:,.2f}" if row["建議掛單"] > 0 else "-"
-
-        table.add_row(
-            signal,
-            row["市場"],
-            row["名稱"],
-            row["代碼"],
-            row["幣別"],
-            f"{row['單位數']:,.2f}",
-            f"{row['平均成本']:,.2f}",
-            f"{row['股價']:,.2f}",
-            bid_str,
-            f"${row['成本']:,}",
-            f"${row['市值']:,}",
-            f"[{color}]{row['損益']:+,.0f}[/]",
-            f"[{color}]{row['報酬率']:+.1f}%[/]",
-            f"{row['佔比']:.1f}%",
-        )
-    console.print(table)
-
-    # 3. 總結
-    t_val = df["市值"].sum()
-    t_pl = df["損益"].sum()
-    t_roi = t_pl / df["成本"].sum() * 100
-    console.print(
-        f"\n💰 [bold]總市值: ${t_val:,}[/] | 📈 [bold]總損益: [{'red' if t_pl > 0 else 'green'}]{t_pl:+,.0f} ({t_roi:+.2f}%)[/]"
-    )
-    console.print("=" * 60)
-
-
-def show_jupyter(df, radar_data, exchange_rates, market_share_data, alpha_results):
-    from IPython.display import display, HTML
-
-    set_chinese_font()
-
-    # 1. 顯示雷達 (使用 DataFrame 取代 print 以解決跑版)
-    print("--- 🌍 全球市場雷達 ---")
-    radar_df = pd.DataFrame(radar_data)[["名稱", "數值", "漲跌幅"]]
-    # 格式化
-    radar_style = radar_df.style.format({"數值": "{:,.2f}", "漲跌幅": "{:+.2f}%"}).map(
-        lambda x: "color: red" if x > 0 else "color: green", subset=["漲跌幅"]
-    )
-    # 隱藏 index 並顯示
-    display(radar_style.hide(axis="index"))
-
-    # 顯示市場分佈佔比
-    print("\n--- 🌍 市場分佈佔比 ---")
-    market_share_df_display = market_share_data.reset_index()
-    market_share_df_display.columns = ["市場", "佔比"]
-    display(
-        market_share_df_display.style.format({"佔比": "{:.1f}%"}).hide(axis="index")
-    )
-    print("\n")
-
-    # Alpha 分析
-    if alpha_results:
-        print("\n--- 🔬 Alpha 穩定性分析 ---")
-        alpha_list = []
-        for result in alpha_results:
-            alpha_list.append(
-                {
-                    "名稱": result["name"],
-                    "標的": result["target"],
-                    "基準": result["benchmark"],
-                    "觀測月數": result["total_months"],
-                    "勝率": result["batting_avg"],
-                    "平均 Alpha": result["avg_alpha"],
-                    "夏普值": result["sharpe_ratio"],
-                }
-            )
-
-        if alpha_list:
-            alpha_df = pd.DataFrame(alpha_list)
-            display(
-                alpha_df.style.format(
-                    {"勝率": "{:.1f}%", "平均 Alpha": "{:+.2f}%", "夏普值": "{:.2f}"}
                 )
-                .map(
-                    lambda x: "color: red" if x > 0 else "color: green",
-                    subset=["平均 Alpha"],
-                )
-                .hide(axis="index")
-            )
-        print("\n")
+            except Exception:
+                continue
+    except Exception as e:
+        print(f"RS 分析發生錯誤: {e}")
 
-    print("\n")
+    if not results:
+        return pd.DataFrame()
 
-    # 2. 顯示資產表
-    display(
-        df.style.format(
-            {
-                "單位數": "{:,.2f}",
-                "平均成本": "{:,.2f}",
-                "股價": "{:,.2f}",
-                "建議掛單": "{:,.2f}",
-                "成本": "${:,.0f}",
-                "市值": "${:,.0f}",
-                "損益": "${:+,.0f}",
-                "報酬率": "{:+.2f}%",
-                "佔比": "{:.1f}%",
-            }
-        ).map(
-            lambda x: "color: red" if x > 0 else "color: green",
-            subset=["損益", "報酬率"],
-        )
-    )
-
-    # 3. 總結
-    t_pl = df["損益"].sum()
-    t_cost = df["成本"].sum()
-    print(
-        f"💰 總市值: ${df['市值'].sum():,} | 📈 總損益: ${t_pl:+,.0f} ({(t_pl / t_cost * 100):+.2f}%)"
-    )
-
-    plot_asset_allocation(df, exchange_rates)
+    return pd.DataFrame(results).sort_values("score")
 
 
 def calculate_single_alpha(target, benchmark, start):
@@ -726,7 +370,6 @@ def run_alpha_analysis():
 
 if __name__ == "__main__":
     alpha_results = run_alpha_analysis() if "--alpha" in sys.argv else None
-    # alpha_results = None
     radar = get_market_radar_data()
     exchange_rates = {
         "JPY": next(
@@ -736,18 +379,40 @@ if __name__ == "__main__":
             (item["數值"] for item in radar if item["代碼"] == "USDTWD=X"), 32.0
         ),
         "TWD": 1,
-    }  # This is correct
+    }
     df_res, market_share_data = calculate_assets_data(exchange_rates)
+
+    # 跨市場 RS 分析 (選用)
+    rs_results = None
+    if "--rs" in sys.argv:
+        # 取得所有啟用的標的 ID，僅包含 .T, .TW 或明顯的 Ticker 格式
+        active_tickers = [
+            t
+            for t in df_res["代碼"].tolist()
+            if (".T" in t or ".TW" in t or t.isupper()) and not t.isdigit()
+        ]
+        if active_tickers:
+            rs_results = get_rs_percentile_rank(active_tickers)
+        else:
+            print("警告：沒有適合進行 RS 分析的 Ticker (例如 .TW 或 .T)")
+
     if "--ai" in sys.argv:
         export_for_ai(df_res)
     else:
         if CURRENT_ENV == "streamlit":
-            show_streamlit(df_res, radar, market_share_data, alpha_results)
+            show_streamlit(df_res, radar, market_share_data, alpha_results, rs_results)
         elif CURRENT_ENV == "jupyter":
             show_jupyter(
-                df_res, radar, exchange_rates, market_share_data, alpha_results
+                df_res,
+                radar,
+                exchange_rates,
+                market_share_data,
+                alpha_results,
+                rs_results,
             )
         elif HAS_RICH:
-            show_console_rich(df_res, radar, market_share_data, alpha_results)
+            show_console_rich(
+                df_res, radar, market_share_data, alpha_results, rs_results
+            )
         else:
             print(df_res.to_string())
