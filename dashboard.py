@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
-import sys
+import argparse
 from dashboard_logic import (
-    get_exchange_rate,
     get_market_radar_data,
     calculate_assets_data,
-    get_rs_percentile_rank,
-    run_alpha_analysis,
+    run_advanced_analysis,
     export_for_ai,
+    exchange_rate,
 )
 from dashboard_ui import (
     CURRENT_ENV,
@@ -17,44 +16,33 @@ from dashboard_ui import (
 )
 
 if __name__ == "__main__":
-    alpha_results = run_alpha_analysis() if "--alpha" in sys.argv else None
+    parser = argparse.ArgumentParser(description="全球資產即時監控面板")
+    parser.add_argument("--ai", action="store_true", help="導出為 AI 分析用格式")
+    parser.add_argument("--analyze", action="store_true", help="執行進階量化分析 (RS & Alpha)")
+    parser.add_argument("--report", action="store_true", help="顯示資產明細報表")
+    args, _ = parser.parse_known_args()
+
+    # 若未特別指示，預設給出預設報表模式
+    if not any([args.ai, args.analyze, args.report]):
+        args.report = True
+
     radar = get_market_radar_data()
-    exchange_rates = {
-        "JPY": next(
-            (item["數值"] for item in radar if item["代碼"] == "JPYTWD=X"), 0.215
-        ),
-        "USD": next(
-            (item["數值"] for item in radar if item["代碼"] == "USDTWD=X"), 32.0
-        ),
-        "TWD": 1,
-    }
+    exchange_rates = exchange_rate(radar)
+
     df_res, market_share_data = calculate_assets_data(exchange_rates)
 
-    # 跨市場 RS 分析 (選用)
-    rs_results = None
-    if "--rs" in sys.argv:
-        # 只處理 ASSETS[etfs] 且在 df_res 中成功抓取到數據的標的
-        active_tickers = df_res[df_res["類型"] == "ETF"]["代碼"].tolist()
-        if active_tickers:
-            rs_results = get_rs_percentile_rank(active_tickers)
-        else:
-            print("警告：沒有適合進行 RS 分析的 Ticker (例如 .TW 或 .T)")
-
-    if "--ai" in sys.argv:
+    if args.ai:
         export_for_ai(df_res)
     else:
         if CURRENT_ENV == "streamlit":
-            show_streamlit(df_res, radar, market_share_data)
+            show_streamlit(df_res, radar)
         elif CURRENT_ENV == "jupyter":
-            show_jupyter(
-                df_res,
-                radar,
-                exchange_rates,
-                market_share_data,
-            )
+            show_jupyter(df_res, radar, exchange_rates)
         elif HAS_RICH:
+            advanced_results = run_advanced_analysis(df_res) if args.analyze else None
+
             show_console_rich(
-                df_res, radar, market_share_data, alpha_results, rs_results
+                df_res, radar, market_share_data, advanced_results, show_report=args.report
             )
         else:
             print(df_res.to_string())

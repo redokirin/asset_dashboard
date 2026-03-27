@@ -82,7 +82,7 @@ def plot_asset_allocation(df, exchange_rates):
     plt.show()
 
 
-def show_streamlit(df, radar_data, market_share_data):
+def show_streamlit(df, radar_data):
     import streamlit as st
 
     st.set_page_config(page_title="全球資產看板", layout="wide")
@@ -121,12 +121,13 @@ def show_streamlit(df, radar_data, market_share_data):
 
 
 def show_console_rich(
-    df, radar_data, market_share_data, alpha_results, rs_results=None
+    df, radar_data, market_share_data, advanced_results=None, show_report=True
 ):
     if not HAS_RICH:
         print(df.to_string())
         return
     console = Console()
+    # 1. 顯示雷達
     console.print("\n[bold cyan]--- 🌍 全球市場即時雷達 ---[/bold cyan]")
     radar_table = Table(box=box.SIMPLE_HEAD)
     radar_table.add_column("指標名稱")
@@ -141,85 +142,118 @@ def show_console_rich(
         )
     console.print(radar_table)
 
-    if rs_results is not None and not rs_results.empty:
-        console.print("\n[bold cyan]--- 📊 跨市場 RS 排行榜 ---[/bold cyan]")
-        rs_table = Table(box=box.SIMPLE_HEAD)
-        for col in rs_results.columns:
-            rs_table.add_column(col)
-        for _, row in rs_results.iterrows():
-            rs_table.add_row(*[str(v) for v in row.values])
-        console.print(rs_table)
+    # 2. 顯示市場分佈佔比
+    if show_report:
+        console.print("[bold cyan]--- 🌍 市場分佈佔比 ---[/bold cyan]")
+        market_share_table = Table(box=box.SIMPLE_HEAD, show_header=True)
+        market_share_table.add_column("市場", style="cyan")
+        market_share_table.add_column("總市值", justify="right")
+        market_share_table.add_column("佔比", justify="right")
 
-    # 顯示資產表
-    console.print(
-        f"\n[bold yellow]📅 報表時間: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}[/bold yellow]"
-    )
-    table = Table(box=box.SIMPLE)
-    tickers_to_signal = [
-        a["id"]
-        for cat in ["funds", "etfs"]
-        for a in ASSETS[cat].values()
-        if a.get("get_value") and a.get("enabled", True)
-    ]
-    buy_signals = get_batch_buy_signals(tickers_to_signal)
+        for market, data in market_share_data.items():
+            market_share_table.add_row(market, f"${data['市值']:,.0f}", f"{data['佔比']:.1f}%")
+        console.print(market_share_table)
 
-    cols_config = [
-        ("訊號", "dim white", "center"),
-        ("市場", "cyan", "left"),
-        ("名稱", "white", "left"),
-        ("代碼", "dim white", "left"),
-        ("幣別", "yellow", "center"),
-        ("單位數", "dim white", "right"),
-        ("平均成本", "dim white", "right"),
-        ("漲跌", "bold", "right"),
-        ("股價", "bold white", "right"),
-        ("建議掛單", "magenta", "right"),
-        ("成本", "dim white", "right"),
-        ("市值", "bold white", "right"),
-        ("損益", "bold", "right"),
-        ("報酬率", "bold", "right"),
-        ("佔比", "blue", "right"),
-    ]
-    for c, s, j in cols_config:
-        table.add_column(c, style=s, justify=j)
+    if advanced_results is not None and not advanced_results.empty:
+        console.print("\n[bold cyan]--- 🔬 進階量化分析 (RS & Alpha) ---[/bold cyan]")
+        adv_table = Table(box=box.SIMPLE_HEAD, show_header=True)
+        adv_table.add_column("代碼", style="dim")
+        adv_table.add_column("名稱", style="white")
+        adv_table.add_column("當前 RS", justify="right")
+        adv_table.add_column("RS 百分位", justify="right", style="bold")
+        adv_table.add_column("狀態", justify="left")
+        adv_table.add_column("Alpha 勝率", justify="right", style="magenta")
+        adv_table.add_column("月度 Alpha", justify="right", style="bold")
+        adv_table.add_column("夏普值", justify="right")
 
-    for _, row in df.iterrows():
-        color = "red" if row["損益"] > 0 else "green"
+        for _, row in advanced_results.iterrows():
+            alpha_val = row["月度 Alpha"]
+            alpha_color = "red" if "+" in str(alpha_val) else "green" if "-" in str(alpha_val) else "white"
+            
+            adv_table.add_row(
+                str(row["代碼"]),
+                str(row["名稱"]),
+                str(row["當前 RS"]),
+                str(row["RS 百分位"]),
+                str(row["狀態"]),
+                str(row["Alpha 勝率"]),
+                f"[{alpha_color}]{alpha_val}[/{alpha_color}]",
+                str(row["夏普值"])
+            )
+        console.print(adv_table)
+        console.print("")
 
-        # 處理漲跌欄位的顏色 (Console)
-        if pd.notnull(row["漲跌"]):
-            change_color = "red" if row["漲跌"] > 0 else "green"
-            change_str = f"[{change_color}]{row['漲跌']:+,.2f}[/]"
-        else:
-            change_str = "-"
-
-        bid_str = f"{row['建議掛單']:,.2f}" if row["建議掛單"] > 0 else "-"
-
-        table.add_row(
-            buy_signals.get(row["代碼"], " "),
-            row["市場"],
-            row["名稱"],
-            row["代碼"],
-            row["幣別"],
-            f"{row['單位數']:,.2f}",
-            f"{row['平均成本']:,.2f}",
-            change_str,
-            f"{row['股價']:,.2f}",
-            bid_str,
-            f"${row['成本']:,}",
-            f"${row['市值']:,}",
-            f"[{color}]{row['損益']:+,.0f}[/]",
-            f"[{color}]{row['報酬率']:+.1f}%[/]",
-            f"{row['佔比']:.1f}%",
+    if show_report:
+        # 顯示資產表
+        console.print(
+            f"\n[bold yellow]📅 報表時間: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}[/bold yellow]"
         )
-    console.print(table)
-    t_val, t_pl = df["市值"].sum(), df["損益"].sum()
-    console.print(
-        f"\n💰 [bold]總市值: ${t_val:,}[/] | 📈 [bold]總損益: {t_pl:+,.0f}[/]"
-    )
+        table = Table(box=box.SIMPLE)
+        tickers_to_signal = [
+            a["id"]
+            for cat in ["funds", "etfs"]
+            for a in ASSETS[cat].values()
+            if a.get("get_value") and a.get("enabled", True)
+        ]
+        buy_signals = get_batch_buy_signals(tickers_to_signal)
+
+        cols_config = [
+            ("訊號", "dim white", "center"),
+            ("市場", "cyan", "left"),
+            ("名稱", "white", "left"),
+            ("代碼", "dim white", "left"),
+            ("幣別", "yellow", "center"),
+            ("單位數", "dim white", "right"),
+            ("平均成本", "dim white", "right"),
+            ("漲跌", "bold", "right"),
+            ("股價", "bold white", "right"),
+            ("建議掛單", "magenta", "right"),
+            ("成本", "dim white", "right"),
+            ("市值", "bold white", "right"),
+            ("損益", "bold", "right"),
+            ("報酬率", "bold", "right"),
+            ("佔比", "blue", "right"),
+        ]
+        for c, s, j in cols_config:
+            table.add_column(c, style=s, justify=j)
+
+        for _, row in df.iterrows():
+            color = "red" if row["損益"] > 0 else "green"
+
+            # 處理漲跌欄位的顏色 (Console)
+            if pd.notnull(row["漲跌"]):
+                change_color = "red" if row["漲跌"] > 0 else "green"
+                change_str = f"[{change_color}]{row['漲跌']:+,.2f}[/]"
+            else:
+                change_str = "-"
+
+            bid_str = f"{row['建議掛單']:,.2f}" if row["建議掛單"] > 0 else "-"
+
+            table.add_row(
+                buy_signals.get(row["代碼"], " "),
+                row["市場"],
+                row["名稱"],
+                row["代碼"],
+                row["幣別"],
+                f"{row['單位數']:,.2f}",
+                f"{row['平均成本']:,.2f}",
+                change_str,
+                f"{row['股價']:,.2f}",
+                bid_str,
+                f"${row['成本']:,}",
+                f"${row['市值']:,}",
+                f"[{color}]{row['損益']:+,.0f}[/]",
+                f"[{color}]{row['報酬率']:+.1f}%[/]",
+                f"{row['佔比']:.1f}%",
+            )
+        console.print(table)
+        t_val, t_pl = df["市值"].sum(), df["損益"].sum()
+        console.print(
+            f"\n💰 [bold]總市值: ${t_val:,}[/] | 📈 [bold]總損益: {t_pl:+,.0f}[/]"
+        )
 
 
-def show_jupyter(df, radar_data, exchange_rates, market_share_data):
+def show_jupyter(df, radar_data, exchange_rates):
     from IPython.display import display
 
     set_chinese_font()

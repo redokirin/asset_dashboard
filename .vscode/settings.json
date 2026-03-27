@@ -1,5 +1,18 @@
 {
     "cSpell.words": [
         "JPYTWD"
-    ]
+    ],
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}"
+    ],
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+    "files.associations": {
+        "*.mustache": "html",
+        "*.ipynb": "python"
+    },
+    "[python]": {
+        "editor.formatOnType": true
+    },
+    "python.analysis.typeCheckingMode": "standard",
+    "editor.formatOnSave": true,
 }
