@@ -3,97 +3,229 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import platform
 import sys
+import math
+
+try:
+    from rich.console import Console
+
+    HAS_RICH = True
+except ImportError:
+    HAS_RICH = False
 
 
-# --- 貨幣偵測輔助函式 ---
-def get_ticker_currency(ticker_name):
-    """
-    根據後綴或 yfinance 資訊判斷標的幣別
-    """
-    # 1. 優先透過後綴快速判斷，減少 API 請求
-    if ticker_name.endswith(".T"):
-        return "JPY"
-    if ticker_name.endswith(".TW"):
-        return "TWD"
-    if "." not in ticker_name:
-        return "USD"  # 通常美股無後綴
-
-    # 2. 若無法判斷，則抓取 yfinance 的 fast_info (較快)
+# --- 環境偵測 ---
+def get_env():
+    if "streamlit" in sys.modules or "streamlit.runtime" in sys.modules:
+        return "streamlit"
     try:
-        t = yf.Ticker(ticker_name)
-        return t.fast_info.get("currency", "USD")
-    except:
-        return "USD"  # 預設回傳美金
+        from IPython.core.getipython import get_ipython
+
+        if get_ipython().__class__.__name__ == "ZMQInteractiveShell":
+            return "jupyter"
+    except Exception:
+        pass
+    return "console"
 
 
-def get_exchange_rate(from_ccy, to_ccy, period="2y"):
+CURRENT_ENV = get_env()
+
+
+def set_chinese_font():
+    system = platform.system()
+    if system == "Darwin":
+        plt.rcParams["font.sans-serif"] = ["Arial Unicode MS"]
+    elif system == "Windows":
+        plt.rcParams["font.sans-serif"] = ["Microsoft JhengHei"]
+    plt.rcParams["axes.unicode_minus"] = False
+
+
+def plot_rs_analysis(ticker_a="1306.T", ticker_b="0050.TW", period="1y"):
     """
-    自動抓取對應匯率，若幣別相同則回傳 1
+    計算並繪製 A 相對於 B 的相對強度指標 (RS)
     """
-    if from_ccy == to_ccy:
-        return pd.Series(1.0, name="Rate")
-
-    pair = f"{from_ccy}{to_ccy}=X"
-    print(f"🔄 偵測到跨幣別交易，正在抓取匯率: {pair}")
     try:
-        df = yf.download(pair, period=period, progress=False)
-        # 處理 yfinance 可能回傳的 MultiIndex 或不同格式
-        if isinstance(df.columns, pd.MultiIndex):
-            return df["Close"][pair]
-        return df["Close"]
-    except:
-        print(f"⚠️ 無法取得匯率 {pair}，預設比率為 1")
-        return pd.Series(1.0, name="Rate")
+        # 1. 抓取歷史數據
+        df_a = yf.download(ticker_a, period=period, progress=False)
+        df_b = yf.download(ticker_b, period=period, progress=False)
+        df_rate = yf.download("JPYTWD=X", period=period, progress=False)
+
+        close_col = "Close"
+
+        # Safely extract Series, returning empty Series if data is missing
+        data_a_series = pd.Series(dtype="float64")
+        if not df_a.empty and close_col in df_a.columns:
+            data_a_series = df_a[close_col]
+        else:
+            print(f"⚠️ 無法取得 {ticker_a} 的 {close_col} 數據。")
+
+        data_b_series = pd.Series(dtype="float64")
+        if not df_b.empty and close_col in df_b.columns:
+            data_b_series = df_b[close_col]
+        else:
+            print(f"⚠️ 無法取得 {ticker_b} 的 {close_col} 數據。")
+
+        rate_series = pd.Series(dtype="float64")
+        if not df_rate.empty and close_col in df_rate.columns:
+            rate_series = df_rate[close_col]
+        else:
+            print(f"⚠️ 無法取得 JPYTWD=X 的 {close_col} 數據。")
+
+        # 2. 將 1306.T 轉換為台幣計價
+        combined = pd.DataFrame(
+            {"A_JPY": data_a_series, "B_TWD": data_b_series, "Rate": rate_series}
+        ).dropna()
+        combined["A_TWD"] = combined["A_JPY"] * combined["Rate"]
+
+        # 3. 計算 RS 比率
+        combined["RS"] = combined["A_TWD"] / combined["B_TWD"]
+
+        # 4. 計算 RS 的 20 日均線
+        combined["RS_MA20"] = combined["RS"].rolling(window=20).mean()
+
+        # 確保 combined 不為空
+        if combined.empty:
+            print(f"⚠️ 數據處理後為空，無法進行 RS 分析。")
+            return
+
+        if CURRENT_ENV == "streamlit":
+            import streamlit as st
+
+            st.subheader(f"📊 台日資金流向觀察 (RS): {ticker_a} vs {ticker_b}")
+            set_chinese_font()
+            fig, ax = plt.subplots(figsize=(10, 5))
+            ax.set_title("Relative Strength: Japan TOPIX vs Taiwan Top 50")
+            ax.plot(
+                combined.index,
+                combined["RS"],
+                label="RS Ratio (JPY-TWD adjusted)",
+                color="blue",
+                alpha=0.5,
+            )
+            ax.plot(
+                combined.index,
+                combined["RS_MA20"],
+                label="RS 20MA Trend",
+                color="red",
+                linewidth=2,
+            )
+            ax.legend()
+            st.pyplot(fig)
+
+            current_rs = combined["RS"].iloc[-1]
+            prev_rs_ma = combined["RS_MA20"].iloc[-1]
+            status = (
+                "🟢 資金流向日本 (日股強)"
+                if current_rs > prev_rs_ma
+                else "🔴 資金流向台灣 (台股強)"
+            )
+            st.info(f"當前趨勢診斷：{status}")
+
+        elif CURRENT_ENV == "jupyter":
+            print(f"\n--- 📊 台日資金流向觀察 (RS): {ticker_a} vs {ticker_b} ---")
+            set_chinese_font()
+            plt.figure(figsize=(10, 4))
+            plt.plot(
+                combined.index,
+                combined["RS"],
+                label="RS Ratio",
+                color="blue",
+                alpha=0.5,
+            )
+            plt.plot(
+                combined.index,
+                combined["RS_MA20"],
+                label="RS 20MA Trend",
+                color="red",
+                linewidth=2,
+            )
+            plt.title("Relative Strength: Japan TOPIX vs Taiwan Top 50")
+            plt.legend()
+            plt.show()
+            current_rs = combined["RS"].iloc[-1]
+            prev_rs_ma = combined["RS_MA20"].iloc[-1]
+            status = (
+                "🟢 資金流向日本 (日股強)"
+                if current_rs > prev_rs_ma
+                else "🔴 資金流向台灣 (台股強)"
+            )
+            print(f"當前趨勢診斷：{status}")
+
+        elif HAS_RICH:
+            current_rs = combined["RS"].iloc[-1]
+            prev_rs_ma = combined["RS_MA20"].iloc[-1]
+            status = (
+                "🟢 資金流向日本 (日股強)"
+                if current_rs > prev_rs_ma
+                else "🔴 資金流向台灣 (台股強)"
+            )
+            Console().print(
+                f"\n[bold yellow]📊 台日資金流向觀察 (RS): {ticker_a} vs {ticker_b}[/bold yellow]\n當前趨勢診斷：{status}"
+            )
+
+        else:  # Plain console output
+            current_rs = combined["RS"].iloc[-1]
+            prev_rs_ma = combined["RS_MA20"].iloc[-1]
+            status = (
+                "🟢 資金流向日本 (日股強)"
+                if current_rs > prev_rs_ma
+                else "🔴 資金流向台灣 (台股強)"
+            )
+            print(f"\n--- 📊 台日資金流向觀察 (RS): {ticker_a} vs {ticker_b} ---")
+            print(f"當前趨勢診斷：{status}")
+
+    except Exception as e:
+        print(f"RS 分析時發生錯誤: {e}")
 
 
-# --- 修改後的分析核心邏輯 ---
-def analyze_rs_smart(ticker_a, ticker_b, period="2y"):
-    """
-    自動偵測幣別並計算相對強度
-    """
-    # 偵測幣別
-    ccy_a = get_ticker_currency(ticker_a)
-    ccy_b = get_ticker_currency(ticker_b)
+def analyze_rs_thresholds():
+    # 1. 下載過去兩年數據
+    tickers = ["1306.T", "0050.TW", "JPYTWD=X"]
+    try:
+        all_data = yf.download(tickers, period="2y", progress=False)
+    except Exception as e:
+        print(f"⚠️ 無法取得 {', '.join(tickers)} 的歷史數據: {e}")
+        return None, None
 
-    print(f"🔍 標的分析: {ticker_a} ({ccy_a}) vs {ticker_b} ({ccy_b})")
+    if all_data.empty:
+        print(f"⚠️ 抓取數據失敗或數據為空，無法進行 RS 閾值分析。")
+        return None, None
 
-    # 1. 抓取股價數據
-    data_a = yf.download(ticker_a, period=period, progress=False)
-    data_b = yf.download(ticker_b, period=period, progress=False)
+    # Extract 'Close' prices for each ticker
+    close_prices = pd.DataFrame()
+    for ticker in tickers:
+        if (ticker, "Close") in all_data.columns:
+            close_prices[ticker] = all_data[(ticker, "Close")]
+        else:
+            print(f"⚠️ 無法取得 {ticker} 的 'Close' 數據，跳過。")
+            return None, None  # If any critical ticker is missing, return None
 
-    # 2. 處理跨幣別轉換 (統一換算成 ticker_b 的幣別)
-    rate_series = get_exchange_rate(ccy_a, ccy_b, period=period)
+    # 2. 計算以台幣為基準的相對強度 (RS)
+    rs_series = (close_prices["1306.T"] * close_prices["JPYTWD=X"]) / close_prices[
+        "0050.TW"
+    ]
+    rs_series = rs_series.dropna()  # 移除計算後的 NaN 值
 
-    # 3. 資料清洗與對齊
-    # 提取 Close
-    def extract_close(df, name):
-        if isinstance(df.columns, pd.MultiIndex):
-            return df["Close"][name]
-        return df["Close"]
+    if rs_series.empty:
+        print(f"⚠️ RS 系列數據為空，無法進行 RS 閾值分析。")
+        return None, None
 
-    close_a = extract_close(data_a, ticker_a)
-    close_b = extract_close(data_b, ticker_b)
+    # 3. 計算統計區間
+    mean_rs = rs_series.mean()
+    p20 = rs_series.quantile(0.20)  # 20% 分位數 (進入深水區)
+    p10 = rs_series.quantile(0.10)  # 10% 分位數 (極度超跌)
+    current_rs = rs_series.iloc[-1]
 
-    combined = pd.DataFrame({"A": close_a, "B": close_b, "Rate": rate_series}).dropna()
+    print(f"\n--- 1306.T vs 0050 RS 兩年數據分析 ---")
+    print(f"平均 RS 值: {mean_rs:.4f}")
+    print(f"目前 RS 值: {current_rs:.4f}")
+    print(f"【深水區】門檻 (P20): {p20:.4f}")
+    print(f"【大掃把】門檻 (P10): {p10:.4f}")
 
-    # 4. 計算 RS ( A * Rate / B )
-    combined["RS"] = (combined["A"] * combined["Rate"]) / combined["B"]
-    combined["RS_MA20"] = combined["RS"].rolling(window=20).mean()
-
-    # 5. 輸出統計 (P20/P10 門檻)
-    p20 = combined["RS"].quantile(0.20)
-    p10 = combined["RS"].quantile(0.10)
-    current_rs = combined["RS"].iloc[-1]
-
-    print(f"\n--- 歷史區間分析 ---")
-    print(f"當前 RS: {current_rs:.4f} | P20 深水區: {p20:.4f} | P10 大掃把: {p10:.4f}")
-
-    # 繪圖與診斷邏輯 (略，與原腳本相同)
-    return current_rs, p20, p10
+    return p20, p10
 
 
 if __name__ == "__main__":
-    t_a = sys.argv[1] if len(sys.argv) > 1 else "1306.T"
-    t_b = sys.argv[2] if len(sys.argv) > 2 else "0050.TW"
-
-    analyze_rs_smart(t_a, t_b)
+    print("--- 執行 RS 分析 ---")
+    plot_rs_analysis()
+    print("\n--- 執行 RS 閾值分析 ---")
+    analyze_rs_thresholds()

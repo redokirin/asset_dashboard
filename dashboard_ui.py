@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
 import platform
 import sys
-import math
+
+from dashboard_logic import get_batch_buy_signals
 from assets_config import ASSETS
 
 # 嘗試引入 rich
@@ -41,58 +41,6 @@ def set_chinese_font():
     elif system == "Windows":
         plt.rcParams["font.sans-serif"] = ["Microsoft JhengHei"]
     plt.rcParams["axes.unicode_minus"] = False
-
-
-def get_batch_buy_signals(tickers: list):
-    """
-    計算買賣訊號燈號 (UI 輔助邏輯)
-    """
-    if not tickers:
-        return {}
-    strong, buy, warning, healthy, default_signal = "🟠", "🟡", "🔴", "🟢", "  "
-    signals = {}
-    try:
-        data = yf.download(tickers, period="1y", progress=False, group_by="ticker")
-        if data.empty:
-            return {ticker: default_signal for ticker in tickers}
-        for ticker in tickers:
-            try:
-                ticker_df = (
-                    data[ticker] if isinstance(data.columns, pd.MultiIndex) else data
-                )
-                if (
-                    ticker_df is None
-                    or ticker_df.empty
-                    or ticker_df["Close"].isnull().all()
-                ):
-                    signals[ticker] = default_signal
-                    continue
-                ticker_data = ticker_df.copy().dropna(subset=["Close"])
-                ticker_data["MA20"] = ticker_data["Close"].rolling(window=20).mean()
-                ticker_data["MA60"] = ticker_data["Close"].rolling(window=60).mean()
-                latest = ticker_data.iloc[-1]
-                current_price, ma20, ma60 = (
-                    latest["Close"],
-                    latest["MA20"],
-                    latest["MA60"],
-                )
-                if pd.isna(current_price) or pd.isna(ma20) or pd.isna(ma60):
-                    signals[ticker] = default_signal
-                    continue
-                bias_ma20 = (current_price - ma20) / ma20 * 100
-                if current_price <= ma60:
-                    signals[ticker] = strong
-                elif current_price <= ma20:
-                    signals[ticker] = buy
-                elif bias_ma20 > 5:
-                    signals[ticker] = warning
-                else:
-                    signals[ticker] = healthy
-            except Exception:
-                signals[ticker] = default_signal
-    except Exception:
-        return {ticker: default_signal for ticker in tickers}
-    return signals
 
 
 def plot_asset_allocation(df, exchange_rates):
@@ -134,7 +82,7 @@ def plot_asset_allocation(df, exchange_rates):
     plt.show()
 
 
-def show_streamlit(df, radar_data, market_share_data, alpha_results, rs_results=None):
+def show_streamlit(df, radar_data, market_share_data):
     import streamlit as st
 
     st.set_page_config(page_title="全球資產看板", layout="wide")
@@ -145,10 +93,6 @@ def show_streamlit(df, radar_data, market_share_data, alpha_results, rs_results=
     total_pl = df["損益"].sum()
     roi = total_pl / df["成本"].sum() * 100
     cols[-1].metric("總損益", f"${total_pl:+,.0f}", f"{roi:+.2f}%")
-
-    if rs_results is not None and not rs_results.empty:
-        st.subheader("📊 跨市場 RS 強度排行榜")
-        st.dataframe(rs_results.drop(columns=["score"]), use_container_width=True)
 
     st.subheader("📋 持倉明細")
     st.dataframe(
@@ -174,10 +118,6 @@ def show_streamlit(df, radar_data, market_share_data, alpha_results, rs_results=
         ),
         use_container_width=True,
     )
-
-    if alpha_results:
-        st.subheader("🔬 Alpha 穩定性分析")
-        st.dataframe(pd.DataFrame(alpha_results), use_container_width=True)
 
 
 def show_console_rich(
@@ -279,17 +219,13 @@ def show_console_rich(
     )
 
 
-def show_jupyter(
-    df, radar_data, exchange_rates, market_share_data, alpha_results, rs_results=None
-):
+def show_jupyter(df, radar_data, exchange_rates, market_share_data):
     from IPython.display import display
 
     set_chinese_font()
     print("--- 🌍 全球市場雷達 ---")
     display(pd.DataFrame(radar_data).style.hide(axis="index"))
-    if rs_results is not None:
-        print("\n--- 📊 RS 排行榜 ---")
-        display(rs_results.hide(axis="index"))
+
     print("\n--- 📋 資產明細 ---")
     display(
         df.style.format(
