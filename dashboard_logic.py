@@ -2,7 +2,6 @@
 import yfinance as yf
 import pandas as pd
 import math
-import numpy as np
 import logging
 from assets_config import ASSETS, RADAR_TICKERS
 
@@ -16,6 +15,43 @@ try:
     HAS_SCIPY = True
 except ImportError:
     HAS_SCIPY = False
+
+try:
+    import streamlit as st
+
+    HAS_STREAMLIT = True
+except ImportError:
+    HAS_STREAMLIT = False
+
+
+def safe_cache_data(*args, **kwargs):
+    if HAS_STREAMLIT:
+        import sys
+        import os
+
+        if "streamlit" not in os.path.basename(sys.argv[0]).lower():
+
+            def dummy_decorator(func):
+                return func
+
+            return dummy_decorator
+        return st.cache_data(*args, **kwargs)
+    else:
+
+        def decorator(func):
+            return func
+
+        return decorator
+
+
+@safe_cache_data(ttl=3600)
+def fetch_historical_data(tickers, period="2y", group_by="ticker"):
+    return yf.download(list(tickers), period=period, progress=False, group_by=group_by)
+
+
+@safe_cache_data(ttl=3600)
+def fetch_common_data(tickers, period="2y"):
+    return yf.download(list(tickers), period=period, progress=False)
 
 
 def get_market_radar_data():
@@ -53,44 +89,6 @@ def calculate_tick_price(target_price, market_type):
         tick = 0.01 if target_price < 50 else 0.05
         return math.floor(round(target_price / tick, 8)) * tick
     return round(target_price, 2)
-
-
-def get_batch_buy_signals(tickers: list):
-    """計算技術面買賣訊號"""
-    if not tickers:
-        return {}
-    strong, buy, warning, healthy, default_signal = "🟠", "🟡", "🔴", "🟢", "  "
-    signals = {}
-    try:
-        data = yf.download(tickers, period="1y", progress=False, group_by="ticker")
-        for ticker in tickers:
-            try:
-                df = data[ticker] if isinstance(data.columns, pd.MultiIndex) else data
-                if df is None or df.empty or df["Close"].isnull().all():
-                    signals[ticker] = default_signal
-                    continue
-                df = df.dropna(subset=["Close"]).copy()
-                ma20, ma60 = (
-                    df["Close"].rolling(20).mean().iloc[-1],
-                    df["Close"].rolling(60).mean().iloc[-1],
-                )
-                price = df["Close"].iloc[-1]
-                bias = (price - ma20) / ma20 * 100
-                if price <= ma60:
-                    signals[ticker] = strong
-                elif price <= ma20:
-                    signals[ticker] = buy
-                elif bias > 5:
-                    signals[ticker] = warning
-                else:
-                    signals[ticker] = healthy
-            except Exception as e:
-                logging.warning(f"計算買賣訊號單項失敗 [{ticker}]: {e}")
-                signals[ticker] = default_signal
-    except Exception as e:
-        logging.error(f"批量計算買賣訊號整體失敗: {e}")
-        return {t: default_signal for t in tickers}
-    return signals
 
 
 def exchange_rate(radar):
@@ -173,9 +171,7 @@ def calculate_assets_data(exchange_rates):
     if tickers_to_fetch:
         try:
             # 獲取近兩天資料以計算昨日收盤
-            hist_data = yf.download(
-                tickers_to_fetch, period="2d", progress=False, group_by="ticker"
-            )
+            hist_data = fetch_historical_data(tuple(tickers_to_fetch), period="2d")
             for ticker in tickers_to_fetch:
                 try:
                     df = (
@@ -227,12 +223,72 @@ def calculate_assets_data(exchange_rates):
     return df, market_share
 
 
+def calculate_realistic_entry(df, ma20, current_price):
+    if "High" not in df.columns or "Low" not in df.columns:
+        return None
+
+    # 1. 計算 ATR (取 14 天平均波動)
+    high_low = df["High"] - df["Low"]
+    atr = high_low.rolling(window=14).mean().iloc[-1]
+    if pd.isna(atr):
+        return None
+
+    # 2. 計算不同機率的進場位
+    high_prob_entry = current_price - (1.0 * atr)  # 正常波動範圍
+    mid_prob_entry = ma20 * 0.97  # -3% 乖離
+    low_prob_entry = min(ma20 * 0.95, current_price * 0.95)  # 極端超跌
+
+    return {
+        "日常波段": round(high_prob_entry, 2),
+        "技術回測": round(mid_prob_entry, 2),
+        "狙擊位": round(low_prob_entry, 2),
+    }
+
+
+def generate_advanced_diagnosis(bias, sharpe, rs_percentile, ticker):
+    """
+    綜合判斷：技術乖離 (Bias) + 資產效率 (Sharpe) + RS 強度
+    """
+    # 1. 首先檢查是否為「過熱強勢股」
+    if rs_percentile > 80:
+        return "⚠️ 強勢股\n  不宜掛單\n  (RS過熱)"
+
+    # 2. 檢查資產品質 (夏普值)
+    is_low_quality = sharpe < 0.5  # 設定夏普值門檻，低於 0.5 視為低效率資產
+
+    # 3. 技術面：極端負乖離 (🔵 燈)
+    if bias <= -7:
+        if is_low_quality:
+            # return f"🔵 極端負乖離\n，夏普值極低({sharpe:.2f})\n，僅限極短線反彈\n，勿長抱！"
+            return "🔵 極端負乖離，\n  夏普值極低，\n  僅限極短線反彈，\n  勿長抱！"
+        else:
+            return "🔥 技術性低點，\n  買入勝率極高，\n  (高效率資產優選)"
+
+    # 4. 技術面：一般負乖離 (🌊 燈)
+    elif bias <= -4:
+        if is_low_quality:
+            return "🌊 短線跌深，\n  但長期效率差，\n  不建議在此建立主要倉位"
+        else:
+            return "🌊 短線跌深，\n  優質資產分批進場點"
+
+    # 5. 一般區間 (🟡 燈)
+    else:
+        # 特別針對 2409 這類資產在區間震盪時的警示
+        # if is_low_quality and ticker == "2409.TW":
+        #     return "⚪ 區間震盪\n，資產效率負值\n，建議將資金轉向 1306.T / 1655.T"
+        return "⚪ 區間震盪\n  價值回歸中"
+
+
 # RS & 百分位：解決了「現在相對於台股，誰便宜、誰貴？」（相對位階）
 # Alpha（勝率/月度）：解決了「誰是真的有能力賺贏大盤，而不只是跟風？」（超額能力）
 # 夏普值 (Sharpe Ratio)：解決了「誰的報酬是拿高風險換來的？誰賺得最穩？」（風險效率）
 def run_advanced_analysis(df_res, benchmark="0050.TW"):
     """合併執行 RS (相對強度) 與 Alpha (穩定性) 進階分析"""
-    active_tickers = df_res[df_res["類型"] == "ETF"]["代碼"].tolist()
+    if len(df_res) == 1:
+        active_tickers = df_res["代碼"].tolist()
+    else:
+        active_tickers = df_res[df_res["類型"] == "ETF"]["代碼"].tolist()
+
     if not active_tickers or not HAS_SCIPY:
         if not active_tickers:
             print("警告：沒有適合進行進階分析的 ETF Ticker")
@@ -240,9 +296,7 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
 
     results = []
     try:
-        common = yf.download(
-            [benchmark, "JPYTWD=X", "USDTWD=X"], period="2y", progress=False
-        )
+        common = fetch_common_data((benchmark, "JPYTWD=X", "USDTWD=X"), period="2y")
         if common.empty:
             return pd.DataFrame()
         price_col = (
@@ -252,6 +306,9 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
         )
         c_data = common[price_col]
         b_series = c_data[benchmark].squeeze()
+        if hasattr(b_series.index, "tz") and b_series.index.tz is not None:
+            b_series.index = b_series.index.tz_localize(None)
+
         jpy_rate = (
             c_data["JPYTWD=X"].squeeze() if "JPYTWD=X" in c_data.columns else 0.215
         )
@@ -259,25 +316,83 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
             c_data["USDTWD=X"].squeeze() if "USDTWD=X" in c_data.columns else 32.0
         )
 
-        t_data_all = yf.download(
-            active_tickers, period="2y", progress=False, group_by="ticker"
+        t_data_all = fetch_historical_data(
+            tuple(active_tickers), period="2y", group_by="ticker"
         )
+
+        # 針對單一 ticker 可能返回非 MultiIndex 的結構進行處理
+        is_multi = isinstance(t_data_all.columns, pd.MultiIndex)
 
         for ticker in active_tickers:
             try:
                 if len(active_tickers) == 1:
-                    t_df = t_data_all
+                    # 強制轉為 MultiIndex 結構或直接處理
+                    if not is_multi:
+                        t_df = t_data_all
+                    else:
+                        t_df = (
+                            t_data_all[ticker]
+                            if ticker in t_data_all.columns.get_level_values(0)
+                            else t_data_all
+                        )
                 else:
                     t_df = (
                         t_data_all[ticker]
-                        if isinstance(t_data_all.columns, pd.MultiIndex)
+                        if is_multi and ticker in t_data_all.columns.get_level_values(0)
                         else t_data_all
                     )
 
                 if t_df is None or t_df.empty or "Close" not in t_df.columns:
                     continue
 
-                t_col = "Adj Close" if "Adj Close" in t_df.columns else "Close"
+                t_df_clean = t_df.dropna(subset=["Close"]).copy()
+                if len(t_df_clean) == 0:
+                    continue
+
+                # 計算技術燈號與均線
+                ma20_str, ma60_str = "-", "數據不足"
+                tech_signal = "  "
+                bias_str = "-"
+                bias_numeric = 0.0
+                diag_text = "數據不足"
+                ma20_val = None
+                price_val = float(t_df_clean["Close"].iloc[-1])
+
+                # tech_signal 說明：
+                # strong = "🔵"  # 極度價值區 (低於月線 -7%，強力加碼)
+                # rebound = "💧" # 跌深反彈區 (低於月線 -4%~-7%，注意反彈)
+                # buy = "🟡"     # 價值區 (低於月線，二線買點)
+                # warning = "🔴"  # 過熱區 (高於月線 +7%，暫緩加碼)
+                # healthy = "🟢"  # 趨勢區 (沿月線上漲，定期定額)
+
+                if len(t_df_clean) >= 20:
+                    ma20_val = t_df_clean["Close"].rolling(20).mean().iloc[-1]
+                    if pd.notnull(ma20_val) and ma20_val > 0:
+                        ma20_str = f"{ma20_val:.2f}"
+                        bias_numeric = ((price_val - ma20_val) / ma20_val) * 100
+                        bias_str = f"{bias_numeric:.2f}%"
+
+                        if bias_numeric <= -7:
+                            tech_signal = "🔵 極度價值區"
+                            diag_text = "🔥 技術性低點\n，買入勝率極高"
+                        elif -7 < bias_numeric <= -4:
+                            tech_signal = "💧 跌深反彈區"
+                            diag_text = "🌊 短線跌深\n，注意反彈機會"
+                        elif bias_numeric >= 7:
+                            tech_signal = "🔴 過熱區"
+                            diag_text = "⚠️ 短線過熱\n，嚴禁追高"
+                        else:
+                            tech_signal = (
+                                "🟢 趨勢區" if price_val >= ma20_val else "🟡 價值區"
+                            )
+                            diag_text = "區間震盪"
+
+                if len(t_df_clean) >= 60:
+                    ma60_val = t_df_clean["Close"].rolling(60).mean().iloc[-1]
+                    if pd.notnull(ma60_val):
+                        ma60_str = f"{ma60_val:.2f}"
+
+                t_col = "Adj Close" if "Adj Close" in t_df_clean.columns else "Close"
 
                 # 自動判斷幣別
                 ccy = (
@@ -289,12 +404,23 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                 )
                 rate = jpy_rate if ccy == "JPY" else usd_rate if ccy == "USD" else 1.0
 
-                p_series = t_df[t_col].squeeze()
-                r_series = rate.squeeze() if hasattr(rate, "squeeze") else rate
+                p_series = t_df_clean[t_col].squeeze()
+                if hasattr(p_series.index, "tz") and p_series.index.tz is not None:
+                    p_series.index = p_series.index.tz_localize(None)
 
-                comb = pd.DataFrame(
-                    {"p": p_series, "r": r_series, "b": b_series}
-                ).dropna()
+                r_series = rate.squeeze() if hasattr(rate, "squeeze") else rate
+                if (
+                    isinstance(r_series, pd.Series)
+                    and hasattr(r_series.index, "tz")
+                    and r_series.index.tz is not None
+                ):
+                    r_series.index = r_series.index.tz_localize(None)
+
+                comb = (
+                    pd.DataFrame({"p": p_series, "r": r_series, "b": b_series})
+                    .ffill()
+                    .dropna()
+                )
 
                 if comb.empty:
                     continue
@@ -306,6 +432,23 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
 
                 curr_rs = float(rs_series.iloc[-1])
                 pct = stats.percentileofscore(rs_series.values.flatten(), curr_rs)
+
+                # --- 建議掛單價計算 (多重位階) ---
+                suggested_bid_str = "-"
+                daily_wave, tech_retest, sniper_pos = "-", "-", "-"
+                if pct > 80:
+                    suggested_bid_str = "-"
+                    daily_wave, tech_retest, sniper_pos = "-", "-", "-"
+                else:
+                    if ma20_val is not None:
+                        entries = calculate_realistic_entry(
+                            t_df_clean, ma20_val, price_val
+                        )
+                        if entries:
+                            suggested_bid_str = f"{entries['日常波段']:.2f} | {entries['技術回測']:.2f} | {entries['狙擊位']:.2f}"
+                            daily_wave = f"{entries['日常波段']:.2f}"
+                            tech_retest = f"{entries['技術回測']:.2f}"
+                            sniper_pos = f"{entries['狙擊位']:.2f}"
 
                 # --- 2. Alpha 穩定性與夏普計算 ---
                 # 在換算為 TWD 基準下重新取樣至月底
@@ -330,6 +473,11 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                         else 0.0
                     )
 
+                # --- 3. 綜合診斷 ---
+                diag_text = generate_advanced_diagnosis(
+                    bias_numeric, sharpe, pct, ticker
+                )
+
                 # --- 結合結果 ---
                 asset_match = df_res[df_res["代碼"] == ticker]
                 asset_name = (
@@ -340,6 +488,16 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                     {
                         "代碼": ticker,
                         "名稱": asset_name,
+                        "股價": f"{price_val:.2f}",
+                        "技術燈號": tech_signal,
+                        "乖離率 (Bias)": bias_str,
+                        "技術診斷": diag_text,
+                        "建議掛單": suggested_bid_str,
+                        "日常波段": daily_wave,
+                        "技術回測": tech_retest,
+                        "狙擊位": sniper_pos,
+                        "MA20": ma20_str,
+                        "MA60": ma60_str,
                         "當前 RS": round(curr_rs, 4),
                         "RS 百分位": f"{pct:.1f}%",
                         "狀態": "🔵 深水"

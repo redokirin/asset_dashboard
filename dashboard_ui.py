@@ -2,16 +2,14 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import platform
-import sys
-
-from dashboard_logic import get_batch_buy_signals
-from assets_config import ASSETS
+import streamlit as st
 
 # 嘗試引入 rich
 try:
     from rich.console import Console
     from rich.table import Table
     from rich import box
+    from rich.align import Align
 
     HAS_RICH = True
 except ImportError:
@@ -19,8 +17,22 @@ except ImportError:
 
 
 def get_env():
-    if "streamlit" in sys.modules or "streamlit.runtime" in sys.modules:
+    import sys
+
+    # 1. 檢查是否在 Streamlit 執行環境中 (最可靠的方法)
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+        if get_script_run_ctx() is not None:
+            return "streamlit"
+    except ImportError:
+        pass
+
+    # 2. 備份方案：檢查 sys.argv
+    if any("streamlit" in arg.lower() for arg in sys.argv):
         return "streamlit"
+
+    # 3. 檢查是否在 Jupyter Notebook
     try:
         from IPython.core.getipython import get_ipython
 
@@ -28,6 +40,7 @@ def get_env():
             return "jupyter"
     except Exception:
         pass
+
     return "console"
 
 
@@ -83,9 +96,7 @@ def plot_asset_allocation(df, exchange_rates):
 
 
 def show_streamlit(df, radar_data):
-    import streamlit as st
-
-    st.set_page_config(page_title="全球資產看板", layout="wide")
+    # st.set_page_config 應在進入點 dashboard.py 優先執行，此處已移除
     st.title("📈 全球資產即時監控")
     cols = st.columns(len(radar_data) + 1)
     for i, item in enumerate(radar_data):
@@ -95,7 +106,7 @@ def show_streamlit(df, radar_data):
     cols[-1].metric("總損益", f"${total_pl:+,.0f}", f"{roi:+.2f}%")
 
     st.subheader("📋 持倉明細")
-    st.dataframe(
+    event = st.dataframe(
         df.style.format(
             {
                 "單位數": "{:,.2f}",
@@ -116,8 +127,47 @@ def show_streamlit(df, radar_data):
             ),
             subset=["損益", "漲跌"],
         ),
-        use_container_width=True,
+        width="stretch",
+        on_select="rerun",
+        selection_mode="single-row",
     )
+
+    # 處理點擊選取事件
+    if event and event.selection and event.selection.rows:
+        idx = event.selection.rows[0]
+        selected_row = df.iloc[idx]
+        ticker = selected_row["代碼"]
+        category = selected_row["類型"]
+
+        if category == "ETF":
+            st.markdown(f"### 🔍 {selected_row['名稱']} ({ticker}) 進階量化分析")
+            from dashboard_logic import run_advanced_analysis
+
+            with st.spinner(f"正在分析 {ticker} 的相對強度與 Alpha 穩定性..."):
+                # 執行進階分析 (針對單一選定股票)
+                adv_results = run_advanced_analysis(pd.DataFrame([selected_row]))
+
+                if not adv_results.empty:
+                    res = adv_results.iloc[0]
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("RS 百分位", res["RS 百分位"], res["狀態"])
+                    col2.metric("Alpha 勝率", res["Alpha 勝率"])
+                    col3.metric("月度 Alpha", res["月度 Alpha"])
+                    col4.metric("夏普值 (Sharpe)", res["夏普值"])
+
+                    # 診斷與掛單區塊
+                    st.info(f"**技術診斷：**\n{res['技術診斷']}")
+
+                    with st.expander("📊 技術位階與建議掛單", expanded=True):
+                        c1, c2, c3 = st.columns(3)
+                        c1.write(f"**日常波段點位:** {res['日常波段']}")
+                        c2.write(f"**技術回測點位:** {res['技術回測']}")
+                        c3.write(f"**狙擊防守位:** {res['狙擊位']}")
+                        st.caption(f"當前股價: {res['股價']} | MA20: {res['MA20']} | MA60: {res['MA60']}")
+                else:
+                    st.warning("暫無進階數據（可能因歷史資料不足或抓取失敗）")
+        else:
+            st.info(f"「{selected_row['名稱']}」為{category}類型，暫不支援進階量化分析。")
 
 
 def show_console_rich(
@@ -128,7 +178,7 @@ def show_console_rich(
         return
     console = Console()
     # 1. 顯示雷達
-    console.print("\n[bold cyan]--- 🌍 全球市場即時雷達 ---[/bold cyan]")
+    console.print("\n[bold cyan]--- 全球市場即時雷達 ---[/bold cyan]")
     radar_table = Table(box=box.SIMPLE_HEAD)
     radar_table.add_column("指標名稱")
     radar_table.add_column("數值", justify="right")
@@ -144,42 +194,73 @@ def show_console_rich(
 
     # 2. 顯示市場分佈佔比
     if show_report:
-        console.print("[bold cyan]--- 🌍 市場分佈佔比 ---[/bold cyan]")
+        console.print("[bold cyan]--- 市場分佈佔比 ---[/bold cyan]")
         market_share_table = Table(box=box.SIMPLE_HEAD, show_header=True)
         market_share_table.add_column("市場", style="cyan")
         market_share_table.add_column("總市值", justify="right")
         market_share_table.add_column("佔比", justify="right")
 
         for market, data in market_share_data.items():
-            market_share_table.add_row(market, f"${data['市值']:,.0f}", f"{data['佔比']:.1f}%")
+            market_share_table.add_row(
+                market, f"${data['市值']:,.0f}", f"{data['佔比']:.1f}%"
+            )
         console.print(market_share_table)
 
     if advanced_results is not None and not advanced_results.empty:
-        console.print("\n[bold cyan]--- 🔬 進階量化分析 (RS & Alpha) ---[/bold cyan]")
+        console.print("\n[bold cyan]--- 進階量化分析 (RS & Alpha) ---[/bold cyan]")
         adv_table = Table(box=box.SIMPLE_HEAD, show_header=True)
-        adv_table.add_column("代碼", style="dim")
-        adv_table.add_column("名稱", style="white")
-        adv_table.add_column("當前 RS", justify="right")
-        adv_table.add_column("RS 百分位", justify="right", style="bold")
-        adv_table.add_column("狀態", justify="left")
-        adv_table.add_column("Alpha 勝率", justify="right", style="magenta")
-        adv_table.add_column("月度 Alpha", justify="right", style="bold")
-        adv_table.add_column("夏普值", justify="right")
+        adv_table.add_column("指標", style="cyan", justify="left")
 
         for _, row in advanced_results.iterrows():
-            alpha_val = row["月度 Alpha"]
-            alpha_color = "red" if "+" in str(alpha_val) else "green" if "-" in str(alpha_val) else "white"
-            
-            adv_table.add_row(
-                str(row["代碼"]),
-                str(row["名稱"]),
-                str(row["當前 RS"]),
-                str(row["RS 百分位"]),
-                str(row["狀態"]),
-                str(row["Alpha 勝率"]),
-                f"[{alpha_color}]{alpha_val}[/{alpha_color}]",
-                str(row["夏普值"])
-            )
+            adv_table.add_column(str(row["代碼"]), justify="left", style="bold white")
+
+        # 定義指標順序與顯示名稱
+        metrics = [
+            ("MA20", "MA20", "dim"),
+            ("MA60", "MA60", "dim"),
+            ("股價", "股價", "bold white"),
+            ("日常波段", "日常波段", "magenta"),
+            ("技術回測", "技術回測", "magenta"),
+            ("狙擊位", "狙擊位", "magenta"),
+            ("當前 RS", "當前RS", "white"),
+            ("RS 百分位", "RS%", "bold"),
+            ("Alpha 勝率", "α勝率", "magenta"),
+            ("月度 Alpha", "月度α", "bold"),
+            ("夏普值", "夏普值", "white"),
+            ("乖離率 (Bias)", "乖離率", "white"),
+            ("狀態", "狀態", "white"),
+            ("技術燈號", "燈號", "white"),
+            ("技術診斷", "技術診斷", "white"),
+        ]
+
+        for internal_key, display_name, style_opt in metrics:
+            row_data = [f"[{style_opt}]{display_name}[/{style_opt}]"]
+            for _, row in advanced_results.iterrows():
+                val = row.get(internal_key, "-")
+
+                # 特殊處理顏色邏輯
+                formatted = str(val)
+                if internal_key == "月度 Alpha":
+                    alpha_color = (
+                        "red"
+                        if "+" in str(val)
+                        else "green"
+                        if "-" in str(val)
+                        else "white"
+                    )
+                    formatted = f"[{alpha_color}]{val}[/{alpha_color}]"
+                elif "[" not in str(formatted) and style_opt:
+                    formatted = f"[{style_opt}]{val}[/{style_opt}]"
+
+                if internal_key in ["狀態", "技術燈號", "技術診斷"]:
+                    # 已是靠左 (Column justify=left)，不需特別處理
+                    pass
+                else:
+                    # 其他數字類、MA、RS 等指標改為靠右顯示
+                    formatted = Align(formatted, align="right")
+                row_data.append(formatted)
+            adv_table.add_row(*row_data)
+
         console.print(adv_table)
         console.print("")
 
@@ -189,16 +270,7 @@ def show_console_rich(
             f"\n[bold yellow]📅 報表時間: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}[/bold yellow]"
         )
         table = Table(box=box.SIMPLE)
-        tickers_to_signal = [
-            a["id"]
-            for cat in ["funds", "etfs"]
-            for a in ASSETS[cat].values()
-            if a.get("get_value") and a.get("enabled", True)
-        ]
-        buy_signals = get_batch_buy_signals(tickers_to_signal)
-
         cols_config = [
-            ("訊號", "dim white", "center"),
             ("市場", "cyan", "left"),
             ("名稱", "white", "left"),
             ("代碼", "dim white", "left"),
@@ -230,7 +302,6 @@ def show_console_rich(
             bid_str = f"{row['建議掛單']:,.2f}" if row["建議掛單"] > 0 else "-"
 
             table.add_row(
-                buy_signals.get(row["代碼"], " "),
                 row["市場"],
                 row["名稱"],
                 row["代碼"],
