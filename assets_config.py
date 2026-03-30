@@ -4,7 +4,7 @@ ASSETS = {
     "funds": {
         "18488469A": {
             "market": "台股",
-            "enabled": True,
+            "enabled": False,
             "get_value": True,
             "id": "0P00006AKV.TW",
             "isin": "TW000T3207Y5",
@@ -66,7 +66,7 @@ ASSETS = {
             "name": "iShares S&P 500",
             "ccy": "JPY",
             "shares": 2200,
-            "cost": 1674747,
+            "cost": 1674747,  # +145600
             # "investment": [
             #     {"shares": 500, "cost": 765},   # 02/12
             #     {"shares": 200, "cost": 750},   # 02/23
@@ -74,6 +74,7 @@ ASSETS = {
             #     {"shares": 300, "cost": 764},   # 03/16
             #     {"shares": 500, "cost": 766},   # 03/17
             #     {"shares": 400, "cost": 761},   # 03/19
+            #     {"shares": 200, "cost": 728},   # 03/30
             # ],
         },
         "1306.T": {
@@ -85,10 +86,10 @@ ASSETS = {
             "id": "1306.T",
             "name": "NextFunds東證股價指數",
             "ccy": "JPY",
-            "shares": 100,
+            "shares": 1000,
             "cost": 378500,
             # "investment": [
-            #     {"shares": 100, "cost": 3785},   # 03/27
+            #     {"shares": 1000, "cost": 378.5},   # 03/27
             # ]
         },
         "00985A.TW": {

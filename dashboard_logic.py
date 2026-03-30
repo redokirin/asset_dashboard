@@ -1,9 +1,14 @@
-# -*- coding: utf-8 -*-
 import yfinance as yf
 import pandas as pd
+import numpy as np
 import math
 import logging
+import importlib.util
+import requests_cache
 from assets_config import ASSETS, RADAR_TICKERS
+
+# 設定 1 小時 (3600 秒) 的 Requests 快取，減輕 API 負擔並加速執行
+requests_cache.install_cache("asset_tracking_cache", expire_after=3600)
 
 logging.basicConfig(
     level=logging.WARNING, format="%(asctime)s - [%(levelname)s] - %(message)s"
@@ -16,42 +21,29 @@ try:
 except ImportError:
     HAS_SCIPY = False
 
-try:
-    import streamlit as st
 
-    HAS_STREAMLIT = True
-except ImportError:
-    HAS_STREAMLIT = False
-
-
-def safe_cache_data(*args, **kwargs):
-    if HAS_STREAMLIT:
-        import sys
-        import os
-
-        if "streamlit" not in os.path.basename(sys.argv[0]).lower():
-
-            def dummy_decorator(func):
-                return func
-
-            return dummy_decorator
-        return st.cache_data(*args, **kwargs)
-    else:
-
-        def decorator(func):
-            return func
-
-        return decorator
+# 定義資料抓取器註冊表，允許從外部注入 (例如 Streamlit 快取版本)
+FETCHERS = {
+    "historical": lambda *args, **kwargs: yf.download(
+        list(args[0]),
+        period=kwargs.get("period", "2y"),
+        progress=kwargs.get("progress", False),
+        group_by=kwargs.get("group_by", "ticker"),
+    ),
+    "common": lambda *args, **kwargs: yf.download(
+        list(args[0]),
+        period=kwargs.get("period", "2y"),
+        progress=kwargs.get("progress", False),
+    ),
+}
 
 
-@safe_cache_data(ttl=3600)
 def fetch_historical_data(tickers, period="2y", group_by="ticker"):
-    return yf.download(list(tickers), period=period, progress=False, group_by=group_by)
+    return FETCHERS["historical"](tickers, period=period, group_by=group_by)
 
 
-@safe_cache_data(ttl=3600)
 def fetch_common_data(tickers, period="2y"):
-    return yf.download(list(tickers), period=period, progress=False)
+    return FETCHERS["common"](tickers, period=period)
 
 
 def get_market_radar_data():
@@ -223,7 +215,7 @@ def calculate_assets_data(exchange_rates):
     return df, market_share
 
 
-def calculate_realistic_entry(df, ma20, current_price):
+def calculate_buffered_entries(df, ma20, current_price, rs_p10_price):
     if "High" not in df.columns or "Low" not in df.columns:
         return None
 
@@ -233,15 +225,33 @@ def calculate_realistic_entry(df, ma20, current_price):
     if pd.isna(atr):
         return None
 
-    # 2. 計算不同機率的進場位
-    high_prob_entry = current_price - (1.0 * atr)  # 正常波動範圍
-    mid_prob_entry = ma20 * 0.97  # -3% 乖離
-    low_prob_entry = min(ma20 * 0.95, current_price * 0.95)  # 極端超跌
+    # 2. 計算加入成交緩衝區 (Execution Buffer) 的建議買價
+    BUFFER_PERCENT = 0.005  # 0.5%
+
+    # 1. 日常波段位 (ATR 支撐線) -> 稍微往上墊高，增加日常掛單成交率
+    raw_daily_swing = current_price - (1.0 * atr)
+    buffered_daily_swing = raw_daily_swing * (1 + BUFFER_PERCENT)
+
+    # 2. 技術回測位 (MA20 負乖離區) -> 避免差一元沒買到的遺憾
+    raw_technical_retracement = ma20 * 0.97
+    buffered_technical_retracement = raw_technical_retracement * (1 + BUFFER_PERCENT)
+
+    # 3. 狙擊位 (大掃把 / RS 地核區) -> 即使是極端低點，也要稍微讓利確保入袋
+    raw_sniper_entry = min(ma20 * 0.95, rs_p10_price)
+    buffered_sniper_entry = raw_sniper_entry * (1 + BUFFER_PERCENT)
+
+    # 安全檢查：確保緩衝後的建議買價「絕對不會」高於當前市價 (避免變成追高)
+    # 我們設定建議價至少要比現價低 0.5%
+    MAX_ALLOWED_PRICE = current_price * 0.995
+
+    final_daily = min(buffered_daily_swing, MAX_ALLOWED_PRICE)
+    final_tech = min(buffered_technical_retracement, MAX_ALLOWED_PRICE)
+    final_sniper = min(buffered_sniper_entry, MAX_ALLOWED_PRICE)
 
     return {
-        "日常波段": round(high_prob_entry, 2),
-        "技術回測": round(mid_prob_entry, 2),
-        "狙擊位": round(low_prob_entry, 2),
+        "日常波段": round(final_daily, 2),
+        "技術回測": round(final_tech, 2),
+        "狙擊位": round(final_sniper, 2),
     }
 
 
@@ -251,7 +261,7 @@ def generate_advanced_diagnosis(bias, sharpe, rs_percentile, ticker):
     """
     # 1. 首先檢查是否為「過熱強勢股」
     if rs_percentile > 80:
-        return "⚠️ 強勢股\n  不宜掛單\n  (RS過熱)"
+        return "⚠️ 強勢股\n不宜掛單\n(RS過熱)"
 
     # 2. 檢查資產品質 (夏普值)
     is_low_quality = sharpe < 0.5  # 設定夏普值門檻，低於 0.5 視為低效率資產
@@ -260,23 +270,23 @@ def generate_advanced_diagnosis(bias, sharpe, rs_percentile, ticker):
     if bias <= -7:
         if is_low_quality:
             # return f"🔵 極端負乖離\n，夏普值極低({sharpe:.2f})\n，僅限極短線反彈\n，勿長抱！"
-            return "🔵 極端負乖離，\n  夏普值極低，\n  僅限極短線反彈，\n  勿長抱！"
+            return "🔵 極端負乖離，\n夏普值極低，\n僅限極短線反彈，\n勿長抱！"
         else:
-            return "🔥 技術性低點，\n  買入勝率極高，\n  (高效率資產優選)"
+            return "🔥 技術性低點，\n買入勝率極高，\n(高效率資產優選)"
 
     # 4. 技術面：一般負乖離 (🌊 燈)
     elif bias <= -4:
         if is_low_quality:
-            return "🌊 短線跌深，\n  但長期效率差，\n  不建議在此建立主要倉位"
+            return "🌊 短線跌深，\n但長期效率差，\n不建議在此建立主要倉位"
         else:
-            return "🌊 短線跌深，\n  優質資產分批進場點"
+            return "🌊 短線跌深，\n優質資產分批進場點"
 
     # 5. 一般區間 (🟡 燈)
     else:
         # 特別針對 2409 這類資產在區間震盪時的警示
         # if is_low_quality and ticker == "2409.TW":
         #     return "⚪ 區間震盪\n，資產效率負值\n，建議將資金轉向 1306.T / 1655.T"
-        return "⚪ 區間震盪\n  價值回歸中"
+        return "⚪ 區間震盪\n價值回歸中"
 
 
 # RS & 百分位：解決了「現在相對於台股，誰便宜、誰貴？」（相對位階）
@@ -433,6 +443,12 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                 curr_rs = float(rs_series.iloc[-1])
                 pct = stats.percentileofscore(rs_series.values.flatten(), curr_rs)
 
+                # 計算 RS 第 10 百分位值對應的股價 (Deep Water 價格)
+                # RS = (Asset_Price * Rate) / Benchmark_Price
+                # Asset_Price = (RS * Benchmark_Price) / Rate
+                rs_p10 = float(np.percentile(rs_series.values.flatten(), 10))
+                rs_p10_price = (rs_p10 * comb["b"].iloc[-1]) / comb["r"].iloc[-1]
+
                 # --- 建議掛單價計算 (多重位階) ---
                 suggested_bid_str = "-"
                 daily_wave, tech_retest, sniper_pos = "-", "-", "-"
@@ -441,8 +457,8 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                     daily_wave, tech_retest, sniper_pos = "-", "-", "-"
                 else:
                     if ma20_val is not None:
-                        entries = calculate_realistic_entry(
-                            t_df_clean, ma20_val, price_val
+                        entries = calculate_buffered_entries(
+                            t_df_clean, ma20_val, price_val, rs_p10_price
                         )
                         if entries:
                             suggested_bid_str = f"{entries['日常波段']:.2f} | {entries['技術回測']:.2f} | {entries['狙擊位']:.2f}"

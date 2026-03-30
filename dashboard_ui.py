@@ -2,7 +2,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import platform
-import streamlit as st
 
 # 嘗試引入 rich
 try:
@@ -14,37 +13,6 @@ try:
     HAS_RICH = True
 except ImportError:
     HAS_RICH = False
-
-
-def get_env():
-    import sys
-
-    # 1. 檢查是否在 Streamlit 執行環境中 (最可靠的方法)
-    try:
-        from streamlit.runtime.scriptrunner import get_script_run_ctx
-
-        if get_script_run_ctx() is not None:
-            return "streamlit"
-    except ImportError:
-        pass
-
-    # 2. 備份方案：檢查 sys.argv
-    if any("streamlit" in arg.lower() for arg in sys.argv):
-        return "streamlit"
-
-    # 3. 檢查是否在 Jupyter Notebook
-    try:
-        from IPython.core.getipython import get_ipython
-
-        if get_ipython().__class__.__name__ == "ZMQInteractiveShell":
-            return "jupyter"
-    except Exception:
-        pass
-
-    return "console"
-
-
-CURRENT_ENV = get_env()
 
 
 def set_chinese_font():
@@ -96,6 +64,8 @@ def plot_asset_allocation(df, exchange_rates):
 
 
 def show_streamlit(df, radar_data):
+    import streamlit as st
+
     # st.set_page_config 應在進入點 dashboard.py 優先執行，此處已移除
     st.title("📈 全球資產即時監控")
     cols = st.columns(len(radar_data) + 1)
@@ -163,11 +133,15 @@ def show_streamlit(df, radar_data):
                         c1.write(f"**日常波段點位:** {res['日常波段']}")
                         c2.write(f"**技術回測點位:** {res['技術回測']}")
                         c3.write(f"**狙擊防守位:** {res['狙擊位']}")
-                        st.caption(f"當前股價: {res['股價']} | MA20: {res['MA20']} | MA60: {res['MA60']}")
+                        st.caption(
+                            f"當前股價: {res['股價']} | MA20: {res['MA20']} | MA60: {res['MA60']}"
+                        )
                 else:
                     st.warning("暫無進階數據（可能因歷史資料不足或抓取失敗）")
         else:
-            st.info(f"「{selected_row['名稱']}」為{category}類型，暫不支援進階量化分析。")
+            st.info(
+                f"「{selected_row['名稱']}」為{category}類型，暫不支援進階量化分析。"
+            )
 
 
 def show_console_rich(
@@ -207,7 +181,7 @@ def show_console_rich(
         console.print(market_share_table)
 
     if advanced_results is not None and not advanced_results.empty:
-        console.print("\n[bold cyan]--- 進階量化分析 (RS & Alpha) ---[/bold cyan]")
+        console.print("\n[bold cyan]--- 進階量化分析 ---[/bold cyan]")
         adv_table = Table(box=box.SIMPLE_HEAD, show_header=True)
         adv_table.add_column("指標", style="cyan", justify="left")
 
