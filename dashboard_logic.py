@@ -261,8 +261,8 @@ def generate_advanced_diagnosis(bias, sharpe, rs_percentile, ticker):
     """
     # 1. 首先檢查是否為「過熱強勢股」
     if rs_percentile > 80:
-        return "強勢股\n不宜掛單\n(RS過熱)"
-    # return "⚠️ 強勢股\n不宜掛單\n(RS過熱)"
+        # return "強勢股\n不宜掛單\n(RS過熱)"
+        return "⚠️ 強勢股 不宜掛單(RS過熱)"
 
     # 2. 檢查資產品質 (夏普值)
     is_low_quality = sharpe < 0.5  # 設定夏普值門檻，低於 0.5 視為低效率資產
@@ -271,23 +271,23 @@ def generate_advanced_diagnosis(bias, sharpe, rs_percentile, ticker):
     if bias <= -7:
         if is_low_quality:
             # return f"🔵 極端負乖離\n，夏普值極低({sharpe:.2f})\n，僅限極短線反彈\n，勿長抱！"
-            return "極端負乖離，\n夏普值極低，\n僅限極短線反彈，\n勿長抱！"
+            return "🔵 極端負乖離，夏普值極低，僅限極短線反彈，勿長抱！"
         else:
-            return "技術性低點，\n買入勝率極高，\n(高效率資產優選)"
+            return "🔥 技術性低點，買入勝率極高，(高效率資產優選)"
 
     # 4. 技術面：一般負乖離 (🌊 燈)
     elif bias <= -4:
         if is_low_quality:
-            return "短線跌深，\n但長期效率差，\n不建議在此\n建立主要倉位"
+            return "🌊 短線跌深，但長期效率差，不建議在此建立主要倉位"
         else:
-            return "短線跌深，\n優質資產分批進場點"
+            return "🌊 短線跌深，優質資產分批進場點"
 
     # 5. 一般區間 (🟡 燈)
     else:
         # 特別針對 2409 這類資產在區間震盪時的警示
         # if is_low_quality and ticker == "2409.TW":
         #     return "⚪ 區間震盪\n，資產效率負值\n，建議將資金轉向 1306.T / 1655.T"
-        return "區間震盪\n價值回歸中"
+        return "⚪ 區間震盪價值回歸中"
 
 
 # RS & 百分位：解決了「現在相對於台股，誰便宜、誰貴？」（相對位階）
@@ -361,7 +361,7 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                     continue
 
                 # 計算技術燈號與均線
-                ma20_str, ma60_str = "-", "數據不足"
+                ma20_str, ma60_str, ma120_str = "-", "數據不足", "數據不足"
                 tech_signal = "  "
                 bias_str = "-"
                 bias_numeric = 0.0
@@ -402,6 +402,11 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                     ma60_val = t_df_clean["Close"].rolling(60).mean().iloc[-1]
                     if pd.notnull(ma60_val):
                         ma60_str = f"{ma60_val:.2f}"
+
+                if len(t_df_clean) >= 120:
+                    ma120_val = t_df_clean["Close"].rolling(120).mean().iloc[-1]
+                    if pd.notnull(ma120_val):
+                        ma120_str = f"{ma120_val:.2f}"
 
                 t_col = "Adj Close" if "Adj Close" in t_df_clean.columns else "Close"
 
@@ -515,6 +520,7 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                         "狙擊位": sniper_pos,
                         "MA20": ma20_str,
                         "MA60": ma60_str,
+                        "MA120": ma120_str,
                         "當前 RS": round(curr_rs, 4),
                         "RS 百分位": f"{pct:.1f}%",
                         "狀態": "🔵 深水"

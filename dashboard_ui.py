@@ -134,7 +134,7 @@ def show_streamlit(df, radar_data):
                         c2.write(f"**技術回測點位:** {res['技術回測']}")
                         c3.write(f"**狙擊防守位:** {res['狙擊位']}")
                         st.caption(
-                            f"當前股價: {res['股價']} | MA20: {res['MA20']} | MA60: {res['MA60']}"
+                            f"當前股價: {res['股價']} | MA20: {res['MA20']} | MA60: {res['MA60']} | MA120: {res['MA120']}"
                         )
                 else:
                     st.warning("暫無進階數據（可能因歷史資料不足或抓取失敗）")
@@ -182,61 +182,118 @@ def show_console_rich(
 
     if advanced_results is not None and not advanced_results.empty:
         console.print("\n[bold cyan]--- 進階量化分析 ---[/bold cyan]")
-        adv_table = Table(box=box.SIMPLE_HEAD, show_header=True)
-        adv_table.add_column("指標", style="cyan", justify="left")
 
         for _, row in advanced_results.iterrows():
-            adv_table.add_column(str(row["代碼"]), justify="left", style="bold white")
+            ticker = str(row["代碼"])
+            console.print(f"\n[bold yellow]== {ticker} ==[/bold yellow]")
+            console.print(
+                f"\n狀態:{row.get('狀態', '-')}  燈號:{row.get('技術燈號', '-')} "
+            )
 
-        # 定義指標順序與顯示名稱
-        metrics = [
-            ("MA20", "MA20", "dim"),
-            ("MA60", "MA60", "dim"),
-            ("股價", "股價", "bold white"),
-            ("日常波段", "日常波段", "magenta"),
-            ("技術回測", "技術回測", "magenta"),
-            ("狙擊位", "狙擊位", "magenta"),
-            ("當前 RS", "當前RS", "white"),
-            ("RS 百分位", "RS%", "bold"),
-            ("Alpha 勝率", "α勝率", "magenta"),
-            ("月度 Alpha", "月度α", "bold"),
-            ("夏普值", "夏普值", "white"),
-            ("乖離率 (Bias)", "乖離率", "white"),
-            ("狀態", "狀態", "white"),
-            ("技術燈號", "燈號", "white"),
-            ("技術診斷", "技術診斷", "white"),
-        ]
+            # 針對單一標的建立小型水平指標表
+            mini_table = Table(box=box.SIMPLE, show_header=True)
+            mini_table.add_column("股價", justify="right")
+            mini_table.add_column("RS", justify="right")
+            mini_table.add_column("RS%", justify="right")
+            mini_table.add_column("α勝率", justify="right")
+            mini_table.add_column("月度α", justify="right")
+            mini_table.add_column("夏普值", justify="right")
+            mini_table.add_column("乖離率", justify="right")
+            mini_table.add_column("MA20", justify="right")
+            mini_table.add_column("MA60", justify="right")
+            mini_table.add_column("MA120", justify="right")
+            mini_table.add_column("日常波段", justify="right", style="magenta")
+            mini_table.add_column("技術回測", justify="right", style="magenta")
+            mini_table.add_column("狙擊位", justify="right", style="magenta")
 
-        for internal_key, display_name, style_opt in metrics:
-            row_data = [f"[{style_opt}]{display_name}[/{style_opt}]"]
-            for _, row in advanced_results.iterrows():
-                val = row.get(internal_key, "-")
+            val_alpha = row.get("月度 Alpha", "-")
+            alpha_color = (
+                "red"
+                if "+" in str(val_alpha)
+                else "green"
+                if "-" in str(val_alpha)
+                else "white"
+            )
 
-                # 特殊處理顏色邏輯
-                formatted = str(val)
-                if internal_key == "月度 Alpha":
-                    alpha_color = (
-                        "red"
-                        if "+" in str(val)
-                        else "green"
-                        if "-" in str(val)
-                        else "white"
-                    )
-                    formatted = f"[{alpha_color}]{val}[/{alpha_color}]"
-                elif "[" not in str(formatted) and style_opt:
-                    formatted = f"[{style_opt}]{val}[/{style_opt}]"
+            mini_table.add_row(
+                f"{row.get('股價', '-'):.2f}"
+                if isinstance(row.get("股價"), (float, int))
+                else str(row.get("股價", "-")),
+                f"{row.get('當前 RS', '-'):.4f}"
+                if isinstance(row.get("當前 RS"), (float, int))
+                else str(row.get("當前 RS", "-")),
+                str(row.get("RS 百分位", "-")),
+                str(row.get("Alpha 勝率", "-")),
+                f"[{alpha_color}]{val_alpha}[/{alpha_color}]",
+                f"{row.get('夏普值', '-'):.2f}"
+                if isinstance(row.get("夏普值"), (float, int))
+                else str(row.get("夏普值", "-")),
+                str(row.get("乖離率 (Bias)", "-")),
+                str(row.get("MA20", "-")),
+                str(row.get("MA60", "-")),
+                str(row.get("MA120", "-")),
+                str(row.get("日常波段", "-")),
+                str(row.get("技術回測", "-")),
+                str(row.get("狙擊位", "-")),
+            )
+            console.print(mini_table)
 
-                if internal_key in ["狀態", "技術燈號", "技術診斷"]:
-                    # 已是靠左 (Column justify=left)，不需特別處理
-                    pass
-                else:
-                    # 其他數字類、MA、RS 等指標改為靠右顯示
-                    formatted = Align(formatted, align="right")
-                row_data.append(formatted)
-            adv_table.add_row(*row_data)
+            console.print(f"技術診斷:{row.get('技術診斷', '-')}")
 
-        console.print(adv_table)
-        console.print("")
+            # 2 MA 位階表 & 建議掛單表
+            # ma_bid_table = Table(box=box.SIMPLE, show_header=True)
+            # ma_bid_table.add_column("MA20", justify="right")
+            # ma_bid_table.add_column("MA60", justify="right")
+            # ma_bid_table.add_column("MA120", justify="right")
+            # ma_bid_table.add_column("日常波段", justify="right", style="magenta")
+            # ma_bid_table.add_column("技術回測", justify="right", style="magenta")
+            # ma_bid_table.add_column("狙擊位", justify="right", style="magenta")
+            # ma_bid_table.add_row(
+            #     str(row.get("MA20", "-")),
+            #     str(row.get("MA60", "-")),
+            #     str(row.get("MA120", "-")),
+            #     str(row.get("日常波段", "-")),
+            #     str(row.get("技術回測", "-")),
+            #     str(row.get("狙擊位", "-")),
+            # )
+            # console.print(ma_bid_table)
+
+            # # 2. MA 位階表
+            # ma_table = Table(box=box.SIMPLE, show_header=True)
+            # ma_table.add_column("MA20", justify="right")
+            # ma_table.add_column("MA60", justify="right")
+            # ma_table.add_column("MA120", justify="right")
+            # ma_table.add_row(
+            #     str(row.get("MA20", "-")),
+            #     str(row.get("MA60", "-")),
+            #     str(row.get("MA120", "-")),
+            # )
+            # console.print(ma_table)
+
+            # # 3. 建議掛單表
+            # bid_table = Table(box=box.SIMPLE, show_header=True)
+            # bid_table.add_column("日常波段", justify="right", style="magenta")
+            # bid_table.add_column("技術回測", justify="right", style="magenta")
+            # bid_table.add_column("狙擊位", justify="right", style="magenta")
+            # bid_table.add_row(
+            #     str(row.get("日常波段", "-")),
+            #     str(row.get("技術回測", "-")),
+            #     str(row.get("狙擊位", "-")),
+            # )
+            # console.print(bid_table)
+
+            # 4. 技術診斷表 (無標題，採兩欄式佈局)
+            # diag_table = Table(box=box.SIMPLE, show_header=False)
+            # diag_table.add_column("項目", style="bold cyan", width=12)
+            # diag_table.add_column("內容")
+            # diag_table.add_row("狀態", str(row.get("狀態", "-")))
+            # diag_table.add_row("燈號", str(row.get("技術燈號", "-")))
+            # diag_table.add_row(
+            #     "診斷", str(row.get("技術診斷", "-")).replace("\n", " ").strip()
+            # )
+            # console.print(diag_table)
+
+            console.print("\n" + "=" * 73)
 
     if show_report:
         # 顯示資產表
