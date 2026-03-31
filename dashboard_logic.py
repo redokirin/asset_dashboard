@@ -370,7 +370,7 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                 price_val = float(t_df_clean["Close"].iloc[-1])
 
                 # tech_signal 說明：
-                # strong = "🔵"  # 極度價值區 (低於月線 -7%，強力加碼)
+                # strong = "🟠"  # 極度價值區 (低於月線 -7%，強力加碼)
                 # rebound = "💧" # 跌深反彈區 (低於月線 -4%~-7%，注意反彈)
                 # buy = "🟡"     # 價值區 (低於月線，二線買點)
                 # warning = "🔴"  # 過熱區 (高於月線 +7%，暫緩加碼)
@@ -384,7 +384,7 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                         bias_str = f"{bias_numeric:.2f}%"
 
                         if bias_numeric <= -7:
-                            tech_signal = "🔵 極度價值區"
+                            tech_signal = "🟠 極度價值區"
                             diag_text = "🔥 技術性低點\n，買入勝率極高"
                         elif -7 < bias_numeric <= -4:
                             tech_signal = "💧 跌深反彈區"

@@ -50,7 +50,9 @@ if __name__ == "__main__":
     if args.ai:
         dashboard_logic.export_for_ai(df_res)
     else:
-        advanced_results = dashboard_logic.run_advanced_analysis(df_res) if args.analyze else None
+        advanced_results = (
+            dashboard_logic.run_advanced_analysis(df_res) if args.analyze else None
+        )
         show_console_rich(
             df_res,
             radar,
