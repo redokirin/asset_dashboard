@@ -5,7 +5,7 @@
     "python.analysis.extraPaths": [
         "${workspaceFolder}"
     ],
-    "python.defaultInterpreterPath": ".venv\\Scripts\\python.exe",
+    "python.defaultInterpreterPath": ".venv\\Scripts\\activate",
     "files.associations": {
         "*.mustache": "html",
         "*.ipynb": "python"
@@ -15,4 +15,6 @@
     },
     "python.analysis.typeCheckingMode": "standard",
     "editor.formatOnSave": true,
+    "python-envs.defaultEnvManager": "ms-python.python:poetry",
+    "python-envs.defaultPackageManager": "ms-python.python:poetry",
 }

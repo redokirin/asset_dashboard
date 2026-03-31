@@ -4,7 +4,7 @@ ASSETS = {
     "funds": {
         "18488469A": {
             "market": "台股",
-            "enabled": False,
+            "enabled": True,
             "get_value": True,
             "id": "0P00006AKV.TW",
             "isin": "TW000T3207Y5",
@@ -45,7 +45,7 @@ ASSETS = {
             "isin": "LU0235639324",
             "name": "JPM日本股票基金",
             "ccy": "JPY",
-            "nav": 2960.0000,
+            "nav": 2860.0000,
             "units": 164.921,
             "cost": 500000,
             # "investment": [
@@ -100,6 +100,7 @@ ASSETS = {
             "get_value": True,
             "id": "00985A.TW",
             "name": "主動野村台灣50",
+            "start": "2025-07-21",  # 00985A 上市日期
             "ccy": "TWD",
             "shares": 5000,
             "cost": 78020,
@@ -119,6 +120,7 @@ ASSETS = {
             "get_value": True,
             "id": "00981A.TW",
             "name": "主動統一台股增長",
+            "start": "2025-05-27",  # 00981A 上市日期
             "ccy": "TWD",
             "shares": 1000,
             "cost": 19950,
