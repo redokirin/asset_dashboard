@@ -262,7 +262,7 @@ def generate_advanced_diagnosis(bias, sharpe, rs_percentile, ticker):
     # 1. 首先檢查是否為「過熱強勢股」
     if rs_percentile > 80:
         # return "強勢股\n不宜掛單\n(RS過熱)"
-        return "⚠️ 強勢股 不宜掛單(RS過熱)"
+        return "⚠️ 強勢股 不宜掛單 (RS過熱)"
 
     # 2. 檢查資產品質 (夏普值)
     is_low_quality = sharpe < 0.5  # 設定夏普值門檻，低於 0.5 視為低效率資產
@@ -271,7 +271,7 @@ def generate_advanced_diagnosis(bias, sharpe, rs_percentile, ticker):
     if bias <= -7:
         if is_low_quality:
             # return f"🔵 極端負乖離\n，夏普值極低({sharpe:.2f})\n，僅限極短線反彈\n，勿長抱！"
-            return "🔵 極端負乖離，夏普值極低，僅限極短線反彈，勿長抱！"
+            return f"🔵 極端負乖離，夏普值極低({sharpe:.2f})，僅限極短線反彈，勿長抱！"
         else:
             return "🔥 技術性低點，買入勝率極高，(高效率資產優選)"
 
@@ -302,7 +302,7 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
 
     if not active_tickers or not HAS_SCIPY:
         if not active_tickers:
-            print("警告：沒有適合進行進階分析的 ETF Ticker")
+            logging.warning("沒有找到適合進行進階分析的標的代碼")
         return pd.DataFrame()
 
     results = []
@@ -385,18 +385,18 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
 
                         if bias_numeric <= -7:
                             tech_signal = "🟠 極度價值區"
-                            diag_text = "🔥 技術性低點\n，買入勝率極高"
+                            # diag_text = "🔥 技術性低點\n，買入勝率極高"
                         elif -7 < bias_numeric <= -4:
                             tech_signal = "💧 跌深反彈區"
-                            diag_text = "🌊 短線跌深\n，注意反彈機會"
+                            # diag_text = "🌊 短線跌深\n，注意反彈機會"
                         elif bias_numeric >= 7:
                             tech_signal = "🔴 過熱區"
-                            diag_text = "⚠️ 短線過熱\n，嚴禁追高"
+                            # diag_text = "⚠️ 短線過熱\n，嚴禁追高"
                         else:
                             tech_signal = (
                                 "🟢 趨勢區" if price_val >= ma20_val else "🟡 價值區"
                             )
-                            diag_text = "區間震盪"
+                            # diag_text = "區間震盪"
 
                 if len(t_df_clean) >= 60:
                     ma60_val = t_df_clean["Close"].rolling(60).mean().iloc[-1]

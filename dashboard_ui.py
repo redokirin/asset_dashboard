@@ -193,10 +193,10 @@ def show_console_rich(
             # 針對單一標的建立小型水平指標表
             mini_table = Table(box=box.SIMPLE, show_header=True)
             mini_table.add_column("股價", justify="right")
-            mini_table.add_column("RS", justify="right")
-            mini_table.add_column("RS%", justify="right")
-            mini_table.add_column("α勝率", justify="right")
-            mini_table.add_column("月度α", justify="right")
+            mini_table.add_column("RS 指標", justify="right")
+            mini_table.add_column("RS 百分比", justify="right")
+            mini_table.add_column("alpha 勝率", justify="right")
+            mini_table.add_column("月度 alpha", justify="right")
             mini_table.add_column("夏普值", justify="right")
             mini_table.add_column("乖離率", justify="right")
             mini_table.add_column("MA20", justify="right")
@@ -204,7 +204,7 @@ def show_console_rich(
             mini_table.add_column("MA120", justify="right")
             mini_table.add_column("日常波段", justify="right", style="magenta")
             mini_table.add_column("技術回測", justify="right", style="magenta")
-            mini_table.add_column("狙擊位", justify="right", style="magenta")
+            mini_table.add_column("狙擊價位", justify="right", style="magenta")
 
             val_alpha = row.get("月度 Alpha", "-")
             alpha_color = (
