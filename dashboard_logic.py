@@ -7,6 +7,9 @@ import importlib.util
 import requests_cache
 from assets_config import ASSETS, RADAR_TICKERS
 
+# 使用 lru_cache 進行簡單的記憶體快取，配合 requests_cache 達成雙重效能優化
+from functools import lru_cache
+
 # 設定 1 小時 (3600 秒) 的 Requests 快取，減輕 API 負擔並加速執行
 requests_cache.install_cache("asset_tracking_cache", expire_after=3600)
 
@@ -22,6 +25,23 @@ except ImportError:
     HAS_SCIPY = False
 
 
+@lru_cache(maxsize=128)
+def get_ticker_fundamental_info(ticker_symbol):
+    """獲取 Ticker 的基本面與即時數據，並提供安全性處理"""
+    try:
+        t = yf.Ticker(ticker_symbol)
+        info = t.info
+        # 由於台日股數據常缺失，使用 get 確保安全性
+        return {
+            "eps": info.get("trailingEps", 0) or 0,
+            "pe": info.get("trailingPE", 0) or 0,
+            "volume": info.get("volume", 0) or 0,
+            "avg_volume": info.get("averageVolume", 0) or 1,  # 避免除以 0
+        }
+    except Exception:
+        return {"eps": 0, "pe": 0, "volume": 0, "avg_volume": 1}
+
+
 # 定義資料抓取器註冊表，允許從外部注入 (例如 Streamlit 快取版本)
 FETCHERS = {
     "historical": lambda *args, **kwargs: yf.download(
@@ -29,17 +49,88 @@ FETCHERS = {
         period=kwargs.get("period", "2y"),
         progress=kwargs.get("progress", False),
         group_by=kwargs.get("group_by", "ticker"),
+        auto_adjust=True,  # 自動處理股票拆分與除息，確保技術指標不失真
     ),
     "common": lambda *args, **kwargs: yf.download(
         list(args[0]),
         period=kwargs.get("period", "2y"),
         progress=kwargs.get("progress", False),
+        auto_adjust=True,  # 確保 Benchmark 與匯率同樣經過調整
     ),
 }
 
 
 def fetch_historical_data(tickers, period="2y", group_by="ticker"):
-    return FETCHERS["historical"](tickers, period=period, group_by=group_by)
+    df_all = FETCHERS["historical"](tickers, period=period, group_by=group_by)
+
+    # --- 1306.T 特殊數據修正邏輯 (Yahoo Finance 暫時性錯誤 Patch) ---
+    # 當 1306.T 發生乖離率絕對值超過 50% 的異常時，自動除以 10 修正
+    target_ticker = "1306.T"
+    has_target = False
+    if isinstance(df_all.columns, pd.MultiIndex):
+        has_target = target_ticker in df_all.columns.get_level_values(0)
+    else:
+        # 如果不是 MultiIndex，檢查單一 Ticker 是否匹配
+        check_list = [tickers] if isinstance(tickers, str) else list(tickers)
+        if target_ticker in check_list and "Close" in df_all.columns:
+            has_target = True
+
+    if has_target:
+        try:
+            target_df = (
+                df_all[target_ticker]
+                if isinstance(df_all.columns, pd.MultiIndex)
+                else df_all
+            )
+            current_price = target_df["Close"].iloc[-1]
+            if pd.notnull(current_price):
+                # 修正邏輯：1306.T 在 2024/07 執行 1:10 分割。
+                # Yahoo Finance 偶發回傳未調整數據，導致歷史價格比現價高 10 倍。
+                # 1. 檢測全域單位錯誤 (若連現價都 > 10000，代表整個序列都錯了)
+                if current_price > 10000:
+                    print(
+                        f"\n[bold red]偵測到 {target_ticker} 全域單位異常 (價格 {current_price:.0f})，執行 1:10 修正...[/]"
+                    )
+                    cols_to_fix = ["Open", "High", "Low", "Close"]
+                    if isinstance(df_all.columns, pd.MultiIndex):
+                        for col in cols_to_fix:
+                            if col in df_all[target_ticker].columns:
+                                df_all.loc[:, (target_ticker, col)] /= 10
+                        if "Volume" in df_all[target_ticker].columns:
+                            df_all.loc[:, (target_ticker, "Volume")] *= 10
+                    else:
+                        df_all.loc[:, cols_to_fix] /= 10
+                        if "Volume" in df_all.columns:
+                            df_all["Volume"] *= 10
+                # 2. 檢測局部調整異常 (現價正常，但歷史中有極高值，會嚴重扭曲 MA 與乖離率)
+                else:
+                    # 只要歷史中存在高於現價 5 倍以上的數值，就判定為未調整部分並進行 1:10 修正
+                    threshold = current_price * 5
+                    high_price_dates = target_df.index[target_df["Close"] > threshold]
+
+                    if not high_price_dates.empty:
+                        print(
+                            f"\n[bold red]偵測到 {target_ticker} 歷史分割數據未對齊，修正 {len(high_price_dates)} 筆異常資料...[/]"
+                        )
+                        cols_to_scale = ["Open", "High", "Low", "Close"]
+                        if isinstance(df_all.columns, pd.MultiIndex):
+                            for col in cols_to_scale:
+                                if (target_ticker, col) in df_all.columns:
+                                    df_all.loc[
+                                        high_price_dates, (target_ticker, col)
+                                    ] /= 10
+                            if "Volume" in df_all[target_ticker].columns:
+                                # 分割後股數增加，故歷史成交量需乘以 10 以維持對齊
+                                df_all.loc[
+                                    high_price_dates, (target_ticker, "Volume")
+                                ] *= 10
+                        else:
+                            df_all.loc[high_price_dates, cols_to_scale] /= 10
+                            if "Volume" in df_all.columns:
+                                df_all.loc[high_price_dates, "Volume"] *= 10
+        except Exception:
+            pass
+    return df_all
 
 
 def fetch_common_data(tickers, period="2y"):
@@ -162,8 +253,8 @@ def calculate_assets_data(exchange_rates):
     batch_changes = {}
     if tickers_to_fetch:
         try:
-            # 獲取近兩天資料以計算昨日收盤
-            hist_data = fetch_historical_data(tuple(tickers_to_fetch), period="2d")
+            # 獲取近一月資料以確保昨日收盤計算正確，並支援 1306.T 的乖離率數據檢查
+            hist_data = fetch_historical_data(tuple(tickers_to_fetch), period="1mo")
             for ticker in tickers_to_fetch:
                 try:
                     df = (
@@ -215,38 +306,44 @@ def calculate_assets_data(exchange_rates):
     return df, market_share
 
 
-def calculate_buffered_entries(df, ma20, current_price, rs_p10_price):
-    if "High" not in df.columns or "Low" not in df.columns:
+def calculate_buffered_entries(df, ma20, ma250, current_price, rs_p10_price):
+    if "High" not in df.columns or "Low" not in df.columns or len(df) < 14:
         return None
 
-    # 1. 計算 ATR (取 14 天平均波動)
+    # 1. 計算 ATR (加入數據長度檢查)
     high_low = df["High"] - df["Low"]
     atr = high_low.rolling(window=14).mean().iloc[-1]
     if pd.isna(atr):
         return None
 
-    # 2. 計算加入成交緩衝區 (Execution Buffer) 的建議買價
-    BUFFER_PERCENT = 0.005  # 0.5%
+    # 2. 設定參數
+    BUFFER_PERCENT = 0.005  # 0.5% 讓利緩衝
+    MIN_GAP = 0.015  # 1.5% 強制價格階梯間隔
 
-    # 1. 日常波段位 (ATR 支撐線) -> 稍微往上墊高，增加日常掛單成交率
-    raw_daily_swing = current_price - (1.0 * atr)
-    buffered_daily_swing = raw_daily_swing * (1 + BUFFER_PERCENT)
+    # --- 原始價位計算 ---
+    # 日常位：以現價為基準 (反應最快)
+    raw_daily = current_price - (1.0 * atr)
 
-    # 2. 技術回測位 (MA20 負乖離區) -> 避免差一元沒買到的遺憾
-    raw_technical_retracement = ma20 * 0.97
-    buffered_technical_retracement = raw_technical_retracement * (1 + BUFFER_PERCENT)
+    # 技術位與狙擊位：以均線為基準 (反應趨勢)
+    raw_tech = ma20 * 0.97
 
-    # 3. 狙擊位 (大掃把 / RS 地核區) -> 即使是極端低點，也要稍微讓利確保入袋
-    raw_sniper_entry = min(ma20 * 0.95, rs_p10_price)
-    buffered_sniper_entry = raw_sniper_entry * (1 + BUFFER_PERCENT)
+    # --- 終極地板 Fallback 邏輯 ---
+    # 若無 MA250 (掛牌未滿一年)，則不強制引入長線地板，回歸 MA20 與 RS 評價
+    long_term_floor = ma250 * 0.98 if ma250 is not None else 999999.0
+    raw_sniper = min(ma20 * 0.95, rs_p10_price, long_term_floor)
 
-    # 安全檢查：確保緩衝後的建議買價「絕對不會」高於當前市價 (避免變成追高)
-    # 我們設定建議價至少要比現價低 0.5%
-    MAX_ALLOWED_PRICE = current_price * 0.995
+    # --- 強制階梯邏輯 (The Fix) ---
+    # 安全天花板：建議價最高不得超過現價的 99.5%
+    ceiling = current_price * 0.995
 
-    final_daily = min(buffered_daily_swing, MAX_ALLOWED_PRICE)
-    final_tech = min(buffered_technical_retracement, MAX_ALLOWED_PRICE)
-    final_sniper = min(buffered_sniper_entry, MAX_ALLOWED_PRICE)
+    # 1. 最終日常位
+    final_daily = min(raw_daily * (1 + BUFFER_PERCENT), ceiling)
+
+    # 2. 最終技術位：必須低於日常位至少一個 MIN_GAP
+    final_tech = min(raw_tech * (1 + BUFFER_PERCENT), final_daily * (1 - MIN_GAP))
+
+    # 3. 最終狙擊位：必須低於技術位至少一個 MIN_GAP
+    final_sniper = min(raw_sniper * (1 + BUFFER_PERCENT), final_tech * (1 - MIN_GAP))
 
     return {
         "日常波段": round(final_daily, 2),
@@ -255,39 +352,44 @@ def calculate_buffered_entries(df, ma20, current_price, rs_p10_price):
     }
 
 
-def generate_advanced_diagnosis(bias, sharpe, rs_percentile, ticker):
+def generate_advanced_diagnosis(
+    bias, sharpe, rs_percentile, ticker, price_change_pct=0, vol_ratio=1.0
+):
     """
     綜合判斷：技術乖離 (Bias) + 資產效率 (Sharpe) + RS 強度
     """
     # 1. 首先檢查是否為「過熱強勢股」
     if rs_percentile > 80:
-        # return "強勢股\n不宜掛單\n(RS過熱)"
-        return "⚠️ 強勢股 不宜掛單 (RS過熱)"
+        return "🔥 強勢股 不宜掛單 (RS過熱)"
 
+    diag = ""
     # 2. 檢查資產品質 (夏普值)
     is_low_quality = sharpe < 0.5  # 設定夏普值門檻，低於 0.5 視為低效率資產
 
     # 3. 技術面：極端負乖離 (🔵 燈)
     if bias <= -7:
         if is_low_quality:
-            # return f"🔵 極端負乖離\n，夏普值極低({sharpe:.2f})\n，僅限極短線反彈\n，勿長抱！"
-            return f"🔵 極端負乖離，夏普值極低({sharpe:.2f})，僅限極短線反彈，勿長抱！"
+            diag = f"🔵 極端負乖離，夏普值極低({sharpe:.2f})，僅限極短線反彈，勿長抱！"
         else:
-            return "🔥 技術性低點，買入勝率極高，(高效率資產優選)"
+            diag = "🔥 技術性低點，買入勝率極高，(高效率資產優選)"
 
     # 4. 技術面：一般負乖離 (🌊 燈)
     elif bias <= -4:
         if is_low_quality:
-            return "🌊 短線跌深，但長期效率差，不建議在此建立主要倉位"
+            diag = "🌊 短線跌深，但長期效率差，不建議在此建立主要倉位"
         else:
-            return "🌊 短線跌深，優質資產分批進場點"
+            diag = "🌊 短線跌深，優質資產分批進場點"
 
     # 5. 一般區間 (🟡 燈)
     else:
-        # 特別針對 2409 這類資產在區間震盪時的警示
-        # if is_low_quality and ticker == "2409.TW":
-        #     return "⚪ 區間震盪\n，資產效率負值\n，建議將資金轉向 1306.T / 1655.T"
-        return "⚪ 區間震盪價值回歸中"
+        diag = "⚪ 區間震盪價值回歸中"
+
+    # --- 新增量價背離邏輯 ---
+    # 若今日漲幅 > 1.5% 但 成交量比率 < 0.75，加上警示
+    if price_change_pct > 1.5 and vol_ratio < 0.75:
+        diag += "\n🔴 量能不足，注意反彈強度"
+
+    return diag
 
 
 # RS & 百分位：解決了「現在相對於台股，誰便宜、誰貴？」（相對位階）
@@ -369,6 +471,14 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                 ma20_val = None
                 price_val = float(t_df_clean["Close"].iloc[-1])
 
+                # 計算漲幅
+                prev_close = (
+                    float(t_df_clean["Close"].iloc[-2])
+                    if len(t_df_clean) >= 2
+                    else price_val
+                )
+                day_change_pct = ((price_val - prev_close) / prev_close) * 100
+
                 # tech_signal 說明：
                 # strong = "🟠"  # 極度價值區 (低於月線 -7%，強力加碼)
                 # rebound = "💧" # 跌深反彈區 (低於月線 -4%~-7%，注意反彈)
@@ -408,7 +518,15 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                     if pd.notnull(ma120_val):
                         ma120_str = f"{ma120_val:.2f}"
 
-                t_col = "Adj Close" if "Adj Close" in t_df_clean.columns else "Close"
+                ma250_val = None
+                ma250_str = "-"
+                if len(t_df_clean) >= 250:
+                    ma250_val = t_df_clean["Close"].rolling(250).mean().iloc[-1]
+                    if pd.notnull(ma250_val):
+                        ma250_str = f"{ma250_val:.2f}"
+
+                # 由於 FETCHERS 已設定 auto_adjust=True，Close 即為調整後價格
+                t_col = "Close"
 
                 # 自動判斷幣別
                 ccy = (
@@ -464,7 +582,7 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                 else:
                     if ma20_val is not None:
                         entries = calculate_buffered_entries(
-                            t_df_clean, ma20_val, price_val, rs_p10_price
+                            t_df_clean, ma20_val, ma250_val, price_val, rs_p10_price
                         )
                         if entries:
                             suggested_bid_str = f"{entries['日常波段']:.2f} | {entries['技術回測']:.2f} | {entries['狙擊位']:.2f}"
@@ -495,9 +613,22 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                         else 0.0
                     )
 
+                # --- 3. 獲取基本面與量能 ---
+                fundamentals = get_ticker_fundamental_info(ticker)
+                vol_ratio = (
+                    fundamentals["volume"] / fundamentals["avg_volume"]
+                    if fundamentals["avg_volume"] > 0
+                    else 1.0
+                )
+
                 # --- 3. 綜合診斷 ---
                 diag_text = generate_advanced_diagnosis(
-                    bias_numeric, sharpe, pct, ticker
+                    bias_numeric,
+                    sharpe,
+                    pct,
+                    ticker,
+                    price_change_pct=day_change_pct,
+                    vol_ratio=vol_ratio,
                 )
 
                 # --- 結合結果 ---
@@ -521,6 +652,7 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                         "MA20": ma20_str,
                         "MA60": ma60_str,
                         "MA120": ma120_str,
+                        "MA250": ma250_str,
                         "當前 RS": round(curr_rs, 4),
                         "RS 百分位": f"{pct:.1f}%",
                         "狀態": "🔵 深水"
@@ -529,6 +661,10 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                         "Alpha 勝率": f"{bat_avg:.1f}%" if len(m_ret) >= 2 else "-",
                         "月度 Alpha": f"{avg_alpha:+.2f}%" if len(m_ret) >= 2 else "-",
                         "夏普值": f"{sharpe:.2f}" if len(m_ret) >= 2 else "-",
+                        "EPS": fundamentals["eps"],
+                        "PE": fundamentals["pe"],
+                        "量比": f"{vol_ratio:.2f}x",
+                        "_vol_ratio_raw": vol_ratio,
                         "_score": pct,
                     }
                 )
@@ -547,7 +683,16 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
 
 def export_for_ai(df):
     """導出 AI 分析文本"""
-    print("--- AI 分析專用數據摘要 ---")
-    cols = ["代碼", "股價", "漲跌", "平均成本", "單位數", "報酬率", "建議掛單"]
-    print(df[cols].to_markdown(index=False))
-    print("-" * 30)
+    report = ["--- AI 分析專用數據摘要 ---"]
+    for _, row in df.iterrows():
+        # 使用列表方式呈現，確保數據完整不截斷
+        pl_pct = f"{row['報酬率']:.2f}%" if pd.notnull(row["報酬率"]) else "0%"
+        change = f"{row['漲跌']:+.2f}" if pd.notnull(row["漲跌"]) else "0"
+        line = (
+            f"- {row['代碼']}: 股價 {row['股價']} ({change}), "
+            f"平均成本 {row['平均成本']}, 單位數 {row['單位數']}, "
+            f"報酬率 {pl_pct}, 建議掛單 {row['建議掛單']}"
+        )
+        report.append(line)
+    report.append("-" * 30)
+    return "\n".join(report)

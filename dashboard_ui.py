@@ -145,12 +145,18 @@ def show_streamlit(df, radar_data):
 
 
 def show_console_rich(
-    df, radar_data, market_share_data, advanced_results=None, show_report=True
+    df,
+    radar_data,
+    market_share_data,
+    advanced_results=None,
+    show_report=True,
+    console=None,
+    is_list_mode=False,
 ):
     if not HAS_RICH:
         print(df.to_string())
         return
-    console = Console()
+    console = console or Console()
     # 1. 顯示雷達
     console.print("\n[bold cyan]--- 全球市場即時雷達 ---[/bold cyan]")
     radar_table = Table(box=box.SIMPLE_HEAD)
@@ -186,112 +192,82 @@ def show_console_rich(
         for _, row in advanced_results.iterrows():
             ticker = str(row["代碼"])
             console.print(f"\n[bold yellow]== {ticker} ==[/bold yellow]")
+
             console.print(
-                f"\n狀態:{row.get('狀態', '-')}  燈號:{row.get('技術燈號', '-')} "
+                f"EPS:{row.get('EPS', 0):.2f} 本益比:{row.get('PE', 0):.1f} 成交量比率:{row.get('量比', '-')}"
             )
 
-            # 針對單一標的建立小型水平指標表
-            mini_table = Table(box=box.SIMPLE, show_header=True)
-            mini_table.add_column("股價", justify="right")
-            mini_table.add_column("RS 指標", justify="right")
-            mini_table.add_column("RS 百分比", justify="right")
-            mini_table.add_column("alpha 勝率", justify="right")
-            mini_table.add_column("月度 alpha", justify="right")
-            mini_table.add_column("夏普值", justify="right")
-            mini_table.add_column("乖離率", justify="right")
-            mini_table.add_column("MA20", justify="right")
-            mini_table.add_column("MA60", justify="right")
-            mini_table.add_column("MA120", justify="right")
-            mini_table.add_column("日常波段", justify="right", style="magenta")
-            mini_table.add_column("技術回測", justify="right", style="magenta")
-            mini_table.add_column("狙擊價位", justify="right", style="magenta")
-
-            val_alpha = row.get("月度 Alpha", "-")
-            alpha_color = (
-                "red"
-                if "+" in str(val_alpha)
-                else "green"
-                if "-" in str(val_alpha)
-                else "white"
+            console.print(
+                f"\n股價位置:{row.get('狀態', '-')} 燈號:{row.get('技術燈號', '-')} "
             )
 
-            mini_table.add_row(
-                f"{row.get('股價', '-'):.2f}"
-                if isinstance(row.get("股價"), (float, int))
-                else str(row.get("股價", "-")),
-                f"{row.get('當前 RS', '-'):.4f}"
-                if isinstance(row.get("當前 RS"), (float, int))
-                else str(row.get("當前 RS", "-")),
-                str(row.get("RS 百分位", "-")),
-                str(row.get("Alpha 勝率", "-")),
-                f"[{alpha_color}]{val_alpha}[/{alpha_color}]",
-                f"{row.get('夏普值', '-'):.2f}"
-                if isinstance(row.get("夏普值"), (float, int))
-                else str(row.get("夏普值", "-")),
-                str(row.get("乖離率 (Bias)", "-")),
-                str(row.get("MA20", "-")),
-                str(row.get("MA60", "-")),
-                str(row.get("MA120", "-")),
-                str(row.get("日常波段", "-")),
-                str(row.get("技術回測", "-")),
-                str(row.get("狙擊位", "-")),
-            )
-            console.print(mini_table)
+            if is_list_mode:
+                # 列表模式：直接輸出關鍵數值，確保 AI 讀取不截斷
+                val_alpha = (
+                    str(row.get("月度 Alpha", "-"))
+                    .replace("[red]", "")
+                    .replace("[green]", "")
+                    .replace("[/]", "")
+                )
+                metrics = [
+                    f"  > 股價: {row.get('股價', '-')} | RS: {row.get('當前 RS', '-')} ({row.get('RS 百分位', '-')})",
+                    f"  > Alpha勝率: {row.get('Alpha 勝率', '-')} | 月度Alpha: {val_alpha} | 夏普值: {row.get('夏普值', '-')}",
+                    f"  > 乖離率: {row.get('乖離率 (Bias)', '-')} | MA20: {row.get('MA20', '-')} | MA250: {row.get('MA250', '-')}",
+                    f"  > 建議位階: 波段 {row.get('日常波段', '-')} / 回測 {row.get('技術回測', '-')} / 狙擊 {row.get('狙擊位', '-')}",
+                ]
+                for line in metrics:
+                    console.print(line)
+            else:
+                # 原始表格模式 (適用於終端機寬螢幕顯示)
+                mini_table = Table(box=box.SIMPLE, show_header=True)
+                cols = [
+                    "股價",
+                    "RS",
+                    "RS%",
+                    "α勝率",
+                    "月度α",
+                    "夏普值",
+                    "乖離率",
+                    "MA20",
+                    "MA60",
+                    "MA120",
+                    "MA250",
+                    "波段",
+                    "回測",
+                    "狙擊",
+                ]
+                for col in cols:
+                    style = "magenta" if col in ["波段", "回測", "狙擊"] else None
+                    mini_table.add_column(col, justify="right", style=style)
 
-            console.print(f"技術診斷:{row.get('技術診斷', '-')}")
+                val_alpha = row.get("月度 Alpha", "-")
+                alpha_color = (
+                    "red"
+                    if "+" in str(val_alpha)
+                    else "green"
+                    if "-" in str(val_alpha)
+                    else "white"
+                )
 
-            # 2 MA 位階表 & 建議掛單表
-            # ma_bid_table = Table(box=box.SIMPLE, show_header=True)
-            # ma_bid_table.add_column("MA20", justify="right")
-            # ma_bid_table.add_column("MA60", justify="right")
-            # ma_bid_table.add_column("MA120", justify="right")
-            # ma_bid_table.add_column("日常波段", justify="right", style="magenta")
-            # ma_bid_table.add_column("技術回測", justify="right", style="magenta")
-            # ma_bid_table.add_column("狙擊位", justify="right", style="magenta")
-            # ma_bid_table.add_row(
-            #     str(row.get("MA20", "-")),
-            #     str(row.get("MA60", "-")),
-            #     str(row.get("MA120", "-")),
-            #     str(row.get("日常波段", "-")),
-            #     str(row.get("技術回測", "-")),
-            #     str(row.get("狙擊位", "-")),
-            # )
-            # console.print(ma_bid_table)
+                mini_table.add_row(
+                    str(row.get("股價", "-")),
+                    str(row.get("當前 RS", "-")),
+                    str(row.get("RS 百分位", "-")),
+                    str(row.get("Alpha 勝率", "-")),
+                    f"[{alpha_color}]{val_alpha}[/{alpha_color}]",
+                    str(row.get("夏普值", "-")),
+                    str(row.get("乖離率 (Bias)", "-")),
+                    str(row.get("MA20", "-")),
+                    str(row.get("MA60", "-")),
+                    str(row.get("MA120", "-")),
+                    str(row.get("MA250", "-")),
+                    str(row.get("日常波段", "-")),
+                    str(row.get("技術回測", "-")),
+                    str(row.get("狙擊位", "-")),
+                )
+                console.print(mini_table)
 
-            # # 2. MA 位階表
-            # ma_table = Table(box=box.SIMPLE, show_header=True)
-            # ma_table.add_column("MA20", justify="right")
-            # ma_table.add_column("MA60", justify="right")
-            # ma_table.add_column("MA120", justify="right")
-            # ma_table.add_row(
-            #     str(row.get("MA20", "-")),
-            #     str(row.get("MA60", "-")),
-            #     str(row.get("MA120", "-")),
-            # )
-            # console.print(ma_table)
-
-            # # 3. 建議掛單表
-            # bid_table = Table(box=box.SIMPLE, show_header=True)
-            # bid_table.add_column("日常波段", justify="right", style="magenta")
-            # bid_table.add_column("技術回測", justify="right", style="magenta")
-            # bid_table.add_column("狙擊位", justify="right", style="magenta")
-            # bid_table.add_row(
-            #     str(row.get("日常波段", "-")),
-            #     str(row.get("技術回測", "-")),
-            #     str(row.get("狙擊位", "-")),
-            # )
-            # console.print(bid_table)
-
-            # 4. 技術診斷表 (無標題，採兩欄式佈局)
-            # diag_table = Table(box=box.SIMPLE, show_header=False)
-            # diag_table.add_column("項目", style="bold cyan", width=12)
-            # diag_table.add_column("內容")
-            # diag_table.add_row("狀態", str(row.get("狀態", "-")))
-            # diag_table.add_row("燈號", str(row.get("技術燈號", "-")))
-            # diag_table.add_row(
-            #     "診斷", str(row.get("技術診斷", "-")).replace("\n", " ").strip()
-            # )
-            # console.print(diag_table)
+            console.print(f"{row.get('技術診斷', '-')}")
 
             console.print("\n" + "=" * 73)
 

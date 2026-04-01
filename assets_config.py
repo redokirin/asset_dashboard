@@ -66,7 +66,7 @@ ASSETS = {
             "name": "iShares S&P 500",
             "ccy": "JPY",
             "shares": 2200,
-            "cost": 1674747,  # +145600
+            "cost": 1674747,
             # "investment": [
             #     {"shares": 500, "cost": 765},   # 02/12
             #     {"shares": 200, "cost": 750},   # 02/23
