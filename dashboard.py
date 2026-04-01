@@ -40,6 +40,7 @@ if __name__ == "__main__":
         exchange_rates = dashboard_logic.exchange_rate(radar)
         df_res, _ = dashboard_logic.calculate_assets_data(exchange_rates)
         show_jupyter(df_res, radar, exchange_rates)
-    else:
+
+    if env == "console":
         # 調用 CLI 模式
         dashboard_cli.run_cli()

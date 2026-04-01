@@ -119,22 +119,52 @@ def show_streamlit(df, radar_data):
 
                 if not adv_results.empty:
                     res = adv_results.iloc[0]
-                    col1, col2, col3, col4 = st.columns(4)
-                    col1.metric("RS 百分位", res["RS 百分位"], res["狀態"])
-                    col2.metric("Alpha 勝率", res["Alpha 勝率"])
-                    col3.metric("月度 Alpha", res["月度 Alpha"])
-                    col4.metric("夏普值 (Sharpe)", res["夏普值"])
 
-                    # 診斷與掛單區塊
-                    st.info(f"**技術診斷：**\n{res['技術診斷']}")
+                    # --- 第一區塊：核心績效指標 ---
+                    st.write("**📊 核心量化指標 (vs 大盤)**")
+                    m1, m2, m3, m4 = st.columns(4)
+                    m1.metric("RS 百分位", res["RS 百分位"], res["狀態"])
+                    m2.metric("Alpha 勝率", res["Alpha 勝率"])
+                    m3.metric("月度 Alpha", res["月度 Alpha"])
+                    m4.metric("夏普值 (Sharpe)", res["夏普值"])
 
-                    with st.expander("📊 技術位階與建議掛單", expanded=True):
+                    # --- 第二區塊：基本面與量能 ---
+                    st.write("**💎 基本面與量能監控**")
+                    f1, f2, f3, f4 = st.columns(4)
+
+                    # 格式化 EPS 與 PE
+                    eps_val = res.get("EPS", "-")
+                    pe_val = res.get("PE", "-")
+                    eps_str = (
+                        f"{eps_val:.2f}"
+                        if isinstance(eps_val, (int, float))
+                        else str(eps_val)
+                    )
+                    pe_str = (
+                        f"{pe_val:.1f}"
+                        if isinstance(pe_val, (int, float))
+                        else str(pe_val)
+                    )
+
+                    f1.metric("每股盈餘 (EPS)", eps_str)
+                    f2.metric("本益比 (PE)", pe_str)
+                    f3.metric("成交量比 (量比)", res.get("量比", "-"))
+                    f4.metric("乖離率 (Bias)", res.get("乖離率 (Bias)", "-"))
+
+                    # --- 第三區塊：診斷與位階 ---
+                    st.markdown("---")
+                    st.info(f"**💡 技術診斷：**\n{res['技術診斷']}")
+
+                    with st.expander("🎯 技術位階與建議掛單價", expanded=True):
                         c1, c2, c3 = st.columns(3)
-                        c1.write(f"**日常波段點位:** {res['日常波段']}")
-                        c2.write(f"**技術回測點位:** {res['技術回測']}")
-                        c3.write(f"**狙擊防守位:** {res['狙擊位']}")
+                        c1.metric("日常波段點位", res["日常波段"])
+                        c2.metric("技術回測點位", res["技術回測"])
+                        c3.metric("狙擊防守位", res["狙擊位"])
+
                         st.caption(
-                            f"當前股價: {res['股價']} | MA20: {res['MA20']} | MA60: {res['MA60']} | MA120: {res['MA120']}"
+                            f"**當前參考值：** 股價: {res['股價']} | "
+                            f"MA20: {res['MA20']} | MA60: {res['MA60']} | "
+                            f"MA120: {res['MA120']} | MA250: {res['MA250']}"
                         )
                 else:
                     st.warning("暫無進階數據（可能因歷史資料不足或抓取失敗）")

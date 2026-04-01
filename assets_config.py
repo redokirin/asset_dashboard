@@ -183,7 +183,7 @@ ASSETS = {
 RADAR_TICKERS = {
     "^TWII": "台灣加權指數",
     "ES=F": "S&P500 期貨",
-    "VOO": "VOO",
+    # "VOO": "VOO",
     "2330.TW": "台積電",
     "JPY=X": "美元/日圓",
     "JPYTWD=X": "日圓/台幣",
