@@ -35,11 +35,20 @@ def get_ticker_fundamental_info(ticker_symbol):
         return {
             "eps": info.get("trailingEps", 0) or 0,
             "pe": info.get("trailingPE", 0) or 0,
+            "dividendYield": info.get("dividendYield", 0) or 0,
+            "pegRatio": info.get("trailingPegRatio", 0) or info.get("pegRatio", 0) or 0,
             "volume": info.get("volume", 0) or 0,
-            "avg_volume": info.get("averageVolume", 0) or 1,  # 避免除以 0
+            "avg_volume": info.get("averageVolume", 1) or 1,  # 避免除以 0
         }
     except Exception:
-        return {"eps": 0, "pe": 0, "volume": 0, "avg_volume": 1}
+        return {
+            "eps": 0,
+            "pe": 0,
+            "dividendYield": 0,
+            "pegRatio": 0,
+            "volume": 0,
+            "avg_volume": 1,
+        }
 
 
 # 定義資料抓取器註冊表，允許從外部注入 (例如 Streamlit 快取版本)
@@ -316,13 +325,17 @@ def calculate_buffered_entries(df, ma20, ma250, current_price, rs_p10_price):
     if pd.isna(atr):
         return None
 
+    # 定義參考基準價 (Reference Price)：錨定昨日收盤，避免買點隨今日開盤跳空而追高
+    # 註：因 df.iloc[-1] 為包含今日變動的現價，故取 iloc[-2] 作為昨日靜態收盤基準
+    prev_close = df["Close"].iloc[-2] if len(df) >= 2 else current_price
+
     # 2. 設定參數
     BUFFER_PERCENT = 0.005  # 0.5% 讓利緩衝
     MIN_GAP = 0.015  # 1.5% 強制價格階梯間隔
 
     # --- 原始價位計算 ---
-    # 日常位：以現價為基準 (反應最快)
-    raw_daily = current_price - (1.0 * atr)
+    # 日常位：改以「昨日收盤」為計算基準，確保支撐位階不隨今日跳空而上移
+    raw_daily = prev_close - (1.0 * atr)
 
     # 技術位與狙擊位：以均線為基準 (反應趨勢)
     raw_tech = ma20 * 0.97
@@ -352,44 +365,190 @@ def calculate_buffered_entries(df, ma20, ma250, current_price, rs_p10_price):
     }
 
 
-def generate_advanced_diagnosis(
-    bias, sharpe, rs_percentile, ticker, price_change_pct=0, vol_ratio=1.0
+def generate_objective_diagnosis(
+    price,
+    ma20,
+    ma250,
+    vol_ratio,
+    price_change_pct,
+    rs_percentile,
+    sharpe,
+    eps=None,
+    pe_ratio=None,
+    dividend_yield=None,
+    peg_ratio=None,
 ):
     """
-    綜合判斷：技術乖離 (Bias) + 資產效率 (Sharpe) + RS 強度
+    核心客觀診斷邏輯 (基本面 + 技術位階 + 股息護城河 + PEG 成長平衡器)
     """
-    # 1. 首先檢查是否為「過熱強勢股」
-    if rs_percentile > 80:
-        return "🔥 強勢股 不宜掛單 (RS過熱)"
-
-    diag = ""
-    # 2. 檢查資產品質 (夏普值)
-    is_low_quality = sharpe < 0.5  # 設定夏普值門檻，低於 0.5 視為低效率資產
-
-    # 3. 技術面：極端負乖離 (🔵 燈)
-    if bias <= -7:
-        if is_low_quality:
-            diag = f"🔵 極端負乖離，夏普值極低({sharpe:.2f})，僅限極短線反彈，勿長抱！"
-        else:
-            diag = "🔥 技術性低點，買入勝率極高，(高效率資產優選)"
-
-    # 4. 技術面：一般負乖離 (🌊 燈)
-    elif bias <= -4:
-        if is_low_quality:
-            diag = "🌊 短線跌深，但長期效率差，不建議在此建立主要倉位"
-        else:
-            diag = "🌊 短線跌深，優質資產分批進場點"
-
-    # 5. 一般區間 (🟡 燈)
+    # 1. 長線格局 (Long-term Context)
+    if ma250 is None or math.isnan(ma250):
+        lt_context = "LONG_UNKNOWN"
+        lt_desc = "長線趨勢數據不足"
+    elif price > ma250:
+        lt_context = "BULLISH"
+        lt_desc = "維持長線多頭格局"
     else:
-        diag = "⚪ 區間震盪價值回歸中"
+        lt_context = "BEARISH"
+        lt_desc = "處於長線空頭排列"
 
-    # --- 新增量價背離邏輯 ---
-    # 若今日漲幅 > 1.5% 但 成交量比率 < 0.75，加上警示
-    if price_change_pct > 1.5 and vol_ratio < 0.75:
-        diag += "\n🔴 量能不足，注意反彈強度"
+    # 2. 短線動能 (Short-term Momentum)
+    if ma20 is None or math.isnan(ma20):
+        st_momentum = "MOM_UNKNOWN"
+    elif price > ma20:
+        st_momentum = "STRONG"
+    else:
+        st_momentum = "WEAK"
 
-    return diag
+    # 3. 綜合格局標籤 (Professional Research Tone)
+    match (lt_context, st_momentum):
+        case ("BULLISH", "STRONG"):
+            summary = "🔥 極致強勢"
+            advice_base = "標的處於長短線多頭共振，向上動能極強。"
+        case ("BULLISH", "WEAK"):
+            summary = "🟢 長線多頭"
+            advice_base = "標的維持長線多頭格局，但短線動能出現技術性背離（跌破月線），目前正進行結構性回測。"
+        case ("BEARISH", "STRONG"):
+            summary = "💧 弱勢反彈"
+            advice_base = "長線空頭趨勢未變，當前價格運動僅屬超跌後的短線乖離修正。"
+        case ("BEARISH", "WEAK"):
+            summary = "🔵 長線偏弱"
+            advice_base = "長短線均受制於下行均線，技術面承壓，尚未見止跌訊號。"
+        case _:
+            summary = "⚪ 中性整理"
+            advice_base = "趨勢動能不明，建議於關鍵支撐位階觀察。"
+
+    # 4. 基本面、股息護城河與 PEG 診斷
+    fund_advice = ""
+    tags = []
+
+    # 4.1 估值診斷
+    if eps is not None and not math.isnan(eps) and eps > 0:
+        tags.append("📊 盈利穩健")
+        if pe_ratio is not None and not math.isnan(pe_ratio) and pe_ratio > 0:
+            pe_desc = (
+                "低估值"
+                if pe_ratio < 15
+                else "合理估值"
+                if pe_ratio <= 30
+                else "高成長溢價"
+            )
+            fund_advice += f"基本面 EPS 正向，反映{pe_desc}。"
+
+    # 4.2 股息護城河 (Dividend Moat)
+    if (
+        dividend_yield is not None
+        and not math.isnan(dividend_yield)
+        and dividend_yield > 0.035
+    ):
+        if rs_percentile < 20 or lt_context == "BEARISH":
+            tags.append("🛡️ 息收護城河")
+            fund_advice += (
+                f"具備高股息殖利率({dividend_yield:.1%})，在深水區提供強大下行支撐。\n"
+            )
+
+    # 4.3 PEG Validator
+    if peg_ratio is not None and not math.isnan(peg_ratio) and peg_ratio > 0:
+        if peg_ratio < 1.0:
+            tags.append("💎 估值極具吸引力 (PEG < 1)")
+            fund_advice += "成長估值極其便宜 (PEG < 1)。"
+        elif peg_ratio > 2.0:
+            tags.append("⚠️ 成長溢價過高 (PEG > 2)")
+            if lt_context == "BULLISH":
+                fund_advice += "雖然趨勢向上，但成長估值已顯過熱 (PEG > 2)。"
+
+    if sharpe > 1.2:
+        tags.append("💎 高效率資產")
+
+    # 5. 量價驗證與結構性換手偵測
+    vp_advice = ""
+    if price_change_pct > 1.5:
+        if vol_ratio > 1.5:
+            vp_advice = "今日價量齊揚，主動性買盤積極介入。"
+        elif vol_ratio < 0.75:
+            vp_advice = "⚠️ 注意價漲量縮現象，反彈動能缺乏量能支撐，慎防追高風險。"
+    elif price_change_pct < -1.5:
+        if vol_ratio > 2.0:
+            vp_advice = "😱 偵測到結構性換手或恐慌拋售（異常爆量 2.0x+），\n技術支撐可能失效，建議暫緩接單，優先觀察更深層的防守位。"
+        elif vol_ratio > 1.5:
+            vp_advice = "😱 帶量下殺，恐慌性賣壓持續湧現，建議先觀察狙擊防守位。"
+        elif vol_ratio < 0.8:
+            vp_advice = "量縮下跌，顯示賣壓已出現竭盡跡象，利於短線止跌企穩。"
+
+    # 組合最終建議
+    fund_display = f"\n{fund_advice}" if fund_advice else ""
+    full_advice = f"『{lt_desc}。{advice_base}{fund_display}{vp_advice}』"
+    final_summary = f"{summary}  {' '.join(tags)}" if tags else summary
+
+    return final_summary, full_advice
+
+
+def generate_advanced_diagnosis(
+    bias,
+    sharpe,
+    rs_percentile,
+    ticker,
+    price_change_pct=0,
+    vol_ratio=1.0,
+    rsi=0,
+    price=None,
+    ma20=None,
+    ma250=None,
+    eps=None,
+    pe_ratio=None,
+    dividend_yield=None,
+    peg_ratio=None,
+):
+    """
+    綜合診斷：調用客觀診斷函式並整合原有邏輯
+    """
+    # 預設值，防止 NameError
+    obj_summary = "⚪ 正常"
+    obj_advice = "『數據分析中...』"
+
+    # 調用核心診斷
+    try:
+        obj_summary, obj_advice = generate_objective_diagnosis(
+            price,
+            ma20,
+            ma250,
+            vol_ratio,
+            price_change_pct,
+            rs_percentile,
+            sharpe,
+            eps,
+            pe_ratio,
+            dividend_yield,
+            peg_ratio,
+        )
+    except Exception as e:
+        logging.warning(f"Objective diagnosis failed for {ticker}: {e}")
+
+    tech_signal_text = "  "
+    rs_status_text = "⚪ 正常區"
+
+    # RS 狀態判斷
+    if rs_percentile > 85:
+        rs_status_text = "🔥 過熱區"
+    elif rs_percentile <= 15:
+        rs_status_text = "🔵 深水區"
+
+    # 技術燈號判斷
+    if bias is not None and not math.isnan(bias):
+        if bias <= -7:
+            tech_signal_text = "🟠 極度價值區 (低於月線 -7%，強力加碼)"
+        elif -7 < bias <= -4:
+            tech_signal_text = "💧 跌深反彈區 (低於月線 -4%~-7%，注意反彈)"
+        elif bias >= 7:
+            tech_signal_text = "🔴 過熱區 (高於月線 +7%，注意獲利了結)"
+        else:
+            tech_signal_text = (
+                "🟢 趨勢區 (沿月線上漲，定期定額)"
+                if bias >= 0
+                else "🟡 價值區 (低於月線，二線買點)"
+            )
+
+    return obj_advice, tech_signal_text, f"{rs_status_text}  {obj_summary}"
 
 
 # RS & 百分位：解決了「現在相對於台股，誰便宜、誰貴？」（相對位階）
@@ -464,10 +623,8 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
 
                 # 計算技術燈號與均線
                 ma20_str, ma60_str, ma120_str = "-", "數據不足", "數據不足"
-                tech_signal = "  "
                 bias_str = "-"
                 bias_numeric = 0.0
-                diag_text = "數據不足"
                 ma20_val = None
                 price_val = float(t_df_clean["Close"].iloc[-1])
 
@@ -479,34 +636,12 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                 )
                 day_change_pct = ((price_val - prev_close) / prev_close) * 100
 
-                # tech_signal 說明：
-                # strong = "🟠"  # 極度價值區 (低於月線 -7%，強力加碼)
-                # rebound = "💧" # 跌深反彈區 (低於月線 -4%~-7%，注意反彈)
-                # buy = "🟡"     # 價值區 (低於月線，二線買點)
-                # warning = "🔴"  # 過熱區 (高於月線 +7%，暫緩加碼)
-                # healthy = "🟢"  # 趨勢區 (沿月線上漲，定期定額)
-
                 if len(t_df_clean) >= 20:
                     ma20_val = t_df_clean["Close"].rolling(20).mean().iloc[-1]
                     if pd.notnull(ma20_val) and ma20_val > 0:
                         ma20_str = f"{ma20_val:.2f}"
                         bias_numeric = ((price_val - ma20_val) / ma20_val) * 100
                         bias_str = f"{bias_numeric:.2f}%"
-
-                        if bias_numeric <= -7:
-                            tech_signal = "🟠 極度價值區"
-                            # diag_text = "🔥 技術性低點\n，買入勝率極高"
-                        elif -7 < bias_numeric <= -4:
-                            tech_signal = "💧 跌深反彈區"
-                            # diag_text = "🌊 短線跌深\n，注意反彈機會"
-                        elif bias_numeric >= 7:
-                            tech_signal = "🔴 過熱區"
-                            # diag_text = "⚠️ 短線過熱\n，嚴禁追高"
-                        else:
-                            tech_signal = (
-                                "🟢 趨勢區" if price_val >= ma20_val else "🟡 價值區"
-                            )
-                            # diag_text = "區間震盪"
 
                 if len(t_df_clean) >= 60:
                     ma60_val = t_df_clean["Close"].rolling(60).mean().iloc[-1]
@@ -567,6 +702,27 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                 curr_rs = float(rs_series.iloc[-1])
                 pct = stats.percentileofscore(rs_series.values.flatten(), curr_rs)
 
+                # --- 1.5 RSI 計算 (14日週期) ---
+                rsi_val = 0.0
+                if len(t_df_clean) >= 15:
+                    delta = t_df_clean[t_col].diff()
+                    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+                    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+                    with np.errstate(divide="ignore", invalid="ignore"):
+                        rs_val = gain / loss
+                        rsi_series = 100 - (100 / (1 + rs_val))
+                    rsi_val = (
+                        float(rsi_series.iloc[-1])
+                        if not pd.isna(rsi_series.iloc[-1])
+                        else 0.0
+                    )
+
+                rsi_status = "-"
+                if rsi_val > 70:
+                    rsi_status = "超買"
+                elif rsi_val < 30:
+                    rsi_status = "超賣"
+
                 # 計算 RS 第 10 百分位值對應的股價 (Deep Water 價格)
                 # RS = (Asset_Price * Rate) / Benchmark_Price
                 # Asset_Price = (RS * Benchmark_Price) / Rate
@@ -576,19 +732,19 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                 # --- 建議掛單價計算 (多重位階) ---
                 suggested_bid_str = "-"
                 daily_wave, tech_retest, sniper_pos = "-", "-", "-"
-                if pct > 80:
-                    suggested_bid_str = "-"
-                    daily_wave, tech_retest, sniper_pos = "-", "-", "-"
-                else:
-                    if ma20_val is not None:
-                        entries = calculate_buffered_entries(
-                            t_df_clean, ma20_val, ma250_val, price_val, rs_p10_price
-                        )
-                        if entries:
-                            suggested_bid_str = f"{entries['日常波段']:.2f} | {entries['技術回測']:.2f} | {entries['狙擊位']:.2f}"
-                            daily_wave = f"{entries['日常波段']:.2f}"
-                            tech_retest = f"{entries['技術回測']:.2f}"
-                            sniper_pos = f"{entries['狙擊位']:.2f}"
+                # if pct > 80:
+                #     suggested_bid_str = "-"
+                #     daily_wave, tech_retest, sniper_pos = "-", "-", "-"
+                # else:
+                if ma20_val is not None:
+                    entries = calculate_buffered_entries(
+                        t_df_clean, ma20_val, ma250_val, price_val, rs_p10_price
+                    )
+                    if entries:
+                        suggested_bid_str = f"{entries['日常波段']:.2f} | {entries['技術回測']:.2f} | {entries['狙擊位']:.2f}"
+                        daily_wave = f"{entries['日常波段']:.2f}"
+                        tech_retest = f"{entries['技術回測']:.2f}"
+                        sniper_pos = f"{entries['狙擊位']:.2f}"
 
                 # --- 2. Alpha 穩定性與夏普計算 ---
                 # 在換算為 TWD 基準下重新取樣至月底
@@ -622,13 +778,23 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                 )
 
                 # --- 3. 綜合診斷 ---
-                diag_text = generate_advanced_diagnosis(
-                    bias_numeric,
-                    sharpe,
-                    pct,
-                    ticker,
-                    price_change_pct=day_change_pct,
-                    vol_ratio=vol_ratio,
+                full_diag_text, tech_signal_output, rs_status_output = (
+                    generate_advanced_diagnosis(
+                        bias_numeric,
+                        sharpe,
+                        pct,
+                        ticker,
+                        price_change_pct=day_change_pct,
+                        vol_ratio=vol_ratio,
+                        rsi=rsi_val,
+                        price=price_val,
+                        ma20=ma20_val,
+                        ma250=ma250_val,
+                        eps=fundamentals.get("eps"),
+                        pe_ratio=fundamentals.get("pe"),
+                        dividend_yield=fundamentals.get("dividendYield"),
+                        peg_ratio=fundamentals.get("pegRatio"),
+                    )
                 )
 
                 # --- 結合結果 ---
@@ -642,9 +808,9 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                         "代碼": ticker,
                         "名稱": asset_name,
                         "股價": f"{price_val:.2f}",
-                        "技術燈號": tech_signal,
-                        "乖離率 (Bias)": bias_str,
-                        "技術診斷": diag_text,
+                        "技術燈號": tech_signal_output,  # 使用 generate_advanced_diagnosis 的輸出
+                        "乖離率 (Bias)": bias_str,  # 乖離率數值仍保留
+                        "技術診斷": full_diag_text,  # 使用 generate_advanced_diagnosis 的輸出
                         "建議掛單": suggested_bid_str,
                         "日常波段": daily_wave,
                         "技術回測": tech_retest,
@@ -655,15 +821,15 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                         "MA250": ma250_str,
                         "當前 RS": round(curr_rs, 4),
                         "RS 百分位": f"{pct:.1f}%",
-                        "狀態": "🔵 深水"
-                        if pct <= 15
-                        else ("🔥 過熱" if pct >= 85 else "⚪ 正常"),
+                        "RSI": rsi_val,
+                        "RSI狀態": rsi_status,  # 新增 RSI 狀態欄位
+                        "狀態": rs_status_output,  # 使用 generate_advanced_diagnosis 的輸出
                         "Alpha 勝率": f"{bat_avg:.1f}%" if len(m_ret) >= 2 else "-",
                         "月度 Alpha": f"{avg_alpha:+.2f}%" if len(m_ret) >= 2 else "-",
                         "夏普值": f"{sharpe:.2f}" if len(m_ret) >= 2 else "-",
                         "EPS": fundamentals["eps"],
                         "PE": fundamentals["pe"],
-                        "量比": f"{vol_ratio:.2f}x",
+                        "量比": f"{vol_ratio:.2f}",
                         "_vol_ratio_raw": vol_ratio,
                         "_score": pct,
                     }

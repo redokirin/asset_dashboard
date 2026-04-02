@@ -45,7 +45,7 @@ ASSETS = {
             "isin": "LU0235639324",
             "name": "JPM日本股票基金",
             "ccy": "JPY",
-            "nav": 2860.0000,
+            "nav": 2971.0000,
             "units": 164.921,
             "cost": 500000,
             # "investment": [
@@ -148,18 +148,21 @@ ASSETS = {
         },
         "2409": {
             "market": "台股",
-            "enabled": True,
+            "enabled": False,
             "market_type": "TW_ETF",
             "discount": 0.985,
             "get_value": True,
             "id": "2409.TW",
             "name": "友達光電",
             "ccy": "TWD",
-            "shares": 2000,
-            "cost": 30850,
+            "shares": 0,
+            "cost": 0,
             # "investment": [
             #     {"shares": 1000, "cost": 15.65},  # 03/03
             #     {"shares": 1000, "cost": 15.20},  # 03/04
+            # ],
+            #  "sold": [
+            #     {"shares": 2000, "price": 16.85},  # 04/02
             # ],
         },
         "2330": {

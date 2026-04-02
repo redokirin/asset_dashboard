@@ -122,8 +122,11 @@ def show_streamlit(df, radar_data):
 
                     # --- 第一區塊：核心績效指標 ---
                     st.write("**📊 核心量化指標 (vs 大盤)**")
-                    m1, m2, m3, m4 = st.columns(4)
+                    m1, m2, rsi_col, m3, m4 = st.columns(5)
                     m1.metric("RS 百分位", res["RS 百分位"], res["狀態"])
+                    rsi_val = res.get("RSI", 0)
+                    # 直接使用 dashboard_logic.py 計算出的 RSI狀態
+                    rsi_col.metric("RSI (14)", f"{rsi_val:.1f}", res.get("RSI狀態"))
                     m2.metric("Alpha 勝率", res["Alpha 勝率"])
                     m3.metric("月度 Alpha", res["月度 Alpha"])
                     m4.metric("夏普值 (Sharpe)", res["夏普值"])
@@ -227,10 +230,6 @@ def show_console_rich(
                 f"EPS:{row.get('EPS', 0):.2f} 本益比:{row.get('PE', 0):.1f} 成交量比率:{row.get('量比', '-')}"
             )
 
-            console.print(
-                f"\n股價位置:{row.get('狀態', '-')} 燈號:{row.get('技術燈號', '-')} "
-            )
-
             if is_list_mode:
                 # 列表模式：直接輸出關鍵數值，確保 AI 讀取不截斷
                 val_alpha = (
@@ -240,7 +239,7 @@ def show_console_rich(
                     .replace("[/]", "")
                 )
                 metrics = [
-                    f"  > 股價: {row.get('股價', '-')} | RS: {row.get('當前 RS', '-')} ({row.get('RS 百分位', '-')})",
+                    f"  > 股價: {row.get('股價', '-')} | RS%: {row.get('RS 百分位', '-')} | RSI: {row.get('RSI', 0):.1f} ({row.get('RSI狀態', '-')})",
                     f"  > Alpha勝率: {row.get('Alpha 勝率', '-')} | 月度Alpha: {val_alpha} | 夏普值: {row.get('夏普值', '-')}",
                     f"  > 乖離率: {row.get('乖離率 (Bias)', '-')} | MA20: {row.get('MA20', '-')} | MA250: {row.get('MA250', '-')}",
                     f"  > 建議位階: 波段 {row.get('日常波段', '-')} / 回測 {row.get('技術回測', '-')} / 狙擊 {row.get('狙擊位', '-')}",
@@ -254,6 +253,8 @@ def show_console_rich(
                     "股價",
                     "RS",
                     "RS%",
+                    "RSI",
+                    "RSI狀態",  # 新增 RSI狀態 欄位
                     "α勝率",
                     "月度α",
                     "夏普值",
@@ -262,12 +263,16 @@ def show_console_rich(
                     "MA60",
                     "MA120",
                     "MA250",
-                    "波段",
-                    "回測",
-                    "狙擊",
+                    "日常波段",
+                    "技術回測",
+                    "狙擊目標",
                 ]
                 for col in cols:
-                    style = "magenta" if col in ["波段", "回測", "狙擊"] else None
+                    style = (
+                        "magenta"
+                        if col in ["日常波段", "技術回測", "狙擊目標"]
+                        else None
+                    )
                     mini_table.add_column(col, justify="right", style=style)
 
                 val_alpha = row.get("月度 Alpha", "-")
@@ -283,6 +288,8 @@ def show_console_rich(
                     str(row.get("股價", "-")),
                     str(row.get("當前 RS", "-")),
                     str(row.get("RS 百分位", "-")),
+                    f"{row.get('RSI', 0):.1f}",
+                    str(row.get("RSI狀態", "-")),  # 顯示 RSI狀態
                     str(row.get("Alpha 勝率", "-")),
                     f"[{alpha_color}]{val_alpha}[/{alpha_color}]",
                     str(row.get("夏普值", "-")),
@@ -297,7 +304,9 @@ def show_console_rich(
                 )
                 console.print(mini_table)
 
-            console.print(f"{row.get('技術診斷', '-')}")
+            console.print(
+                f"{row.get('狀態', '-')} {row.get('技術燈號', '-')}\n{row.get('技術診斷', '-')}"
+            )
 
             console.print("\n" + "=" * 73)
 
