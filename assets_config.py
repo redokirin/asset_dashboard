@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
 # --- 資產數據配置區 ---
+APP_PASSWORD = "Mikuku1225"  # 請修改為你的自訂密碼
+
+USE_PASSWORD = False
+
 ASSETS = {
     "funds": {
         "18488469A": {
@@ -187,7 +191,9 @@ RADAR_TICKERS = {
     "^TWII": "台灣加權指數",
     "ES=F": "S&P500 期貨",
     # "VOO": "VOO",
-    "2330.TW": "台積電",
+    # "JP-TPX": "日經225",
+    "JP-TOPIX": "東證股價指數",
+    # "2330.TW": "台積電",
     "JPY=X": "美元/日圓",
     "JPYTWD=X": "日圓/台幣",
     "USDTWD=X": "美元/台幣",
