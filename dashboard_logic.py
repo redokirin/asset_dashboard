@@ -40,13 +40,22 @@ def get_config():
 
 # 初始化配置
 _config = get_config()
-ASSETS = _config.get("funds", {}) | _config.get("etfs", {}) # 為了相容性，這裡可能需要稍微調整邏輯
-# 實際上原有的 ASSETS 是 {"funds": {...}, "etfs": {...}}
-ASSETS = {
-    "funds": _config.get("funds", {}),
-    "etfs": _config.get("etfs", {})
-}
 RADAR_TICKERS = _config.get("radar_tickers", {})
+
+# 實際上原有的 ASSETS 是 {"funds": {...}, "etfs": {...}}
+# 增加防呆機制：如果項目中沒有定義 id，則以 Key 為預設 id
+def _ensure_id(config_dict):
+    result = {}
+    for key, val in config_dict.items():
+        if "id" not in val:
+            val["id"] = key
+        result[key] = val
+    return result
+
+ASSETS = {
+    "funds": _ensure_id(_config.get("funds", {})),
+    "etfs": _ensure_id(_config.get("etfs", {}))
+}
 
 # 使用 lru_cache 進行簡單的記憶體快取，配合 requests_cache 達成雙重效能優化
 from functools import lru_cache
