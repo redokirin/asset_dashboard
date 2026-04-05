@@ -187,7 +187,8 @@ def render_title_component(title):
 
 def render_profit_and_loss_component(df):
     total_pl = df["損益"].sum()
-    roi = total_pl / df["成本"].sum() * 100
+    total_cost = df["成本"].sum()
+    roi = (total_pl / total_cost * 100) if total_cost != 0 else 0
     render_inline_metric("💰 總損益", f"${total_pl:+,.0f}", f"{roi:+.2f}%")
 
 

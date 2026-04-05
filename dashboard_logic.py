@@ -16,7 +16,9 @@ def get_config():
     讀取資產配置。優先從本地 assets_config.toml 讀取，
     若檔案不存在，則讀取 Streamlit Secrets 中的 my_assets。
     """
-    toml_path = Path("assets_config.toml")
+    # 使用相對於檔案的路徑，增加在不同執行環境下的穩定性
+    current_dir = Path(__file__).parent
+    toml_path = current_dir / "assets_config.toml"
     
     # 1. 偵測本地檔案是否存在
     if toml_path.exists():
@@ -25,7 +27,8 @@ def get_config():
                 config = tomllib.load(f)
                 return config.get("my_assets", {})
         except Exception as e:
-            st.warning(f"本地配置讀取失敗: {e}")
+            # 避免在 import 時觸發 st 指令
+            logging.error(f"本地配置讀取失敗: {e}")
 
     # 2. 檔案不存在或讀取失敗，嘗試從 Streamlit Secrets 讀取
     try:
@@ -34,8 +37,7 @@ def get_config():
     except Exception:
         pass
 
-    # 3. 兩者皆無
-    st.error("🚨 配置缺失：未偵測到 assets_config.toml 或 st.secrets['my_assets']")
+    logging.error("🚨 配置缺失：未偵測到 assets_config.toml 或 st.secrets['my_assets']")
     return {}
 
 # 初始化配置
@@ -46,7 +48,10 @@ RADAR_TICKERS = _config.get("radar_tickers", {})
 # 增加防呆機制：如果項目中沒有定義 id，則以 Key 為預設 id
 def _ensure_id(config_dict):
     result = {}
+    if not isinstance(config_dict, dict):
+        return result
     for key, val in config_dict.items():
+        if not isinstance(val, dict): continue
         if "id" not in val:
             val["id"] = key
         result[key] = val
@@ -365,7 +370,9 @@ def calculate_assets_data(exchange_rates):
 
     df = pd.DataFrame(results)
     if df.empty:
-        return df, pd.Series(dtype=float)
+        # 建立一個有預期欄位的空 DataFrame
+        columns = ["市場", "類型", "名稱", "代碼", "幣別", "單位數", "平均成本", "漲跌", "股價", "建議掛單", "成本", "市值", "損益", "報酬率", "佔比"]
+        return pd.DataFrame(columns=columns), {}
 
     total_val = df["市值"].sum()
     df["佔比"] = df["市值"] / total_val * 100
