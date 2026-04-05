@@ -5,7 +5,48 @@ import math
 import logging
 import importlib.util
 import requests_cache
-from assets_config import ASSETS, RADAR_TICKERS
+import streamlit as st
+import tomllib
+from pathlib import Path
+
+# --- 配置讀取邏輯 ---
+@st.cache_data
+def get_config():
+    """
+    讀取資產配置。優先從本地 assets_config.toml 讀取，
+    若檔案不存在，則讀取 Streamlit Secrets 中的 my_assets。
+    """
+    toml_path = Path("assets_config.toml")
+    
+    # 1. 偵測本地檔案是否存在
+    if toml_path.exists():
+        try:
+            with open(toml_path, "rb") as f:
+                config = tomllib.load(f)
+                return config.get("my_assets", {})
+        except Exception as e:
+            st.warning(f"本地配置讀取失敗: {e}")
+
+    # 2. 檔案不存在或讀取失敗，嘗試從 Streamlit Secrets 讀取
+    try:
+        if "my_assets" in st.secrets:
+            return st.secrets["my_assets"]
+    except Exception:
+        pass
+
+    # 3. 兩者皆無
+    st.error("🚨 配置缺失：未偵測到 assets_config.toml 或 st.secrets['my_assets']")
+    return {}
+
+# 初始化配置
+_config = get_config()
+ASSETS = _config.get("funds", {}) | _config.get("etfs", {}) # 為了相容性，這裡可能需要稍微調整邏輯
+# 實際上原有的 ASSETS 是 {"funds": {...}, "etfs": {...}}
+ASSETS = {
+    "funds": _config.get("funds", {}),
+    "etfs": _config.get("etfs", {})
+}
+RADAR_TICKERS = _config.get("radar_tickers", {})
 
 # 使用 lru_cache 進行簡單的記憶體快取，配合 requests_cache 達成雙重效能優化
 from functools import lru_cache

@@ -3,7 +3,12 @@ import pandas as pd
 import yfinance as yf
 import dashboard_logic
 from dashboard_ui import show_streamlit
-from assets_config import APP_PASSWORD, USE_PASSWORD
+from dashboard_logic import get_config
+
+# --- 讀取配置 ---
+_config = get_config()
+APP_PASSWORD = _config.get("app_password", "")
+USE_PASSWORD = _config.get("use_password", False)
 
 # --- 1. Streamlit 頁面初步設定 (必須是第一個 st 指令) ---
 st.set_page_config(page_title="全球資產看板", layout="wide")

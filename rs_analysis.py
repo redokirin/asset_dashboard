@@ -1,5 +1,9 @@
 import numpy as np
+import pandas as pd
+import yfinance as yf
+import streamlit as st
 from scipy import stats
+from dashboard_logic import ASSETS
 
 
 @st.cache_data(ttl=3600)  # 每小時更新一次數據
