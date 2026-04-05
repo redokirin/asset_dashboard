@@ -131,7 +131,7 @@ def render_advanced_analysis_ui(res):
         m5.metric("月度 Alpha", res["月度 Alpha"])
         m6.metric("乖離率 (Bias)", res["乖離率 (Bias)"])
 
-        # st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def show_manual_analysis_page():
@@ -179,6 +179,132 @@ def show_manual_analysis_page():
                             render_advanced_analysis_ui(res)
 
 
+def render_title_component(title):
+    import streamlit as st
+
+    st.markdown(f"<div class='section-title'>{title}</div>", unsafe_allow_html=True)
+
+
+def render_profit_and_loss_component(df):
+    total_pl = df["損益"].sum()
+    roi = total_pl / df["成本"].sum() * 100
+    render_inline_metric("💰 總損益", f"${total_pl:+,.0f}", f"{roi:+.2f}%")
+
+
+# 市場指數區塊
+def render_market_index_component(radar_data):
+    import streamlit as st
+
+    # 市場指數：非匯率代碼 (不以 =X 結尾)
+    indices = [item for item in radar_data if not item["代碼"].endswith("=X")]
+    # 動態計算列數，最多每行 4 個
+    display_indices = indices
+    n_cols = min(len(display_indices), 4) if display_indices else 1
+    idx_cols = st.columns(n_cols)
+    for i, item in enumerate(display_indices):
+        with idx_cols[i % n_cols]:
+            with st.container(border=True, gap="xxsmall"):
+                render_inline_metric(
+                    item["名稱"],
+                    f"{item['數值']:,.2f}",
+                    f"{item['漲跌幅']:+.2f}%",
+                )
+
+
+# 匯率區塊
+def render_exchange_rate_component(radar_data):
+    import streamlit as st
+
+    # 匯率：代碼以 =X 結尾
+    major_rates = [item for item in radar_data if item["代碼"].endswith("=X")]
+    # 匯率橫向排列，最多每行 3 個
+    n_rate_cols = min(len(major_rates), 3) if major_rates else 1
+    rate_cols = st.columns(n_rate_cols)
+    for i, item in enumerate(major_rates):
+        with rate_cols[i % n_rate_cols]:
+            with st.container(border=True, gap="xxsmall"):
+                color = "#ff4b4b" if item["漲跌幅"] > 0 else "#00c853"
+                st.markdown(
+                    f"""
+                    <div style='text-align: left; margin-bottom: 2px;'>
+                        <div style='font-size: 0.75rem; color: #8b949e; line-height: 1.2;'>{item["名稱"]}</div>
+                        <div style='font-size: 1.1rem; font-weight: 600; color: white; margin: 1px 0;'>{item["數值"]:.2f}</div>
+                        <div style='font-size: 0.75rem; color: {color}; font-weight: 500;'>{item["漲跌幅"]:+.2f}%</div>
+                    </div>
+                """,
+                    unsafe_allow_html=True,
+                )
+
+
+# 持股明細區塊
+def render_dataframe_component(df):
+    import streamlit as st
+
+    df_view = df.copy()
+    df_view["標的"] = df_view["代碼"]  # 預設僅顯示代碼
+    cols_display = [
+        "標的",
+        "市場",
+        "單位數",
+        "平均成本",
+        "股價",
+        "漲跌",
+        # "成本",
+        "市值",
+        "損益",
+        "報酬率",
+        "佔比",
+    ]
+
+    event = st.dataframe(
+        df_view[cols_display]
+        .style.format(
+            {
+                "單位數": "{:,.0f}",
+                "平均成本": "{:,.2f}",
+                "股價": "{:,.2f}",
+                "漲跌": "{:+,.2f}",
+                # "成本": "${:,.0f}",
+                "市值": "${:,.0f}",
+                "損益": "${:+,.0f}",
+                "報酬率": "{:+.2f}%",
+                "佔比": "{:.1f}%",
+            }
+        )
+        .map(
+            lambda x: (
+                "color: #ff4b4b"
+                if (pd.notnull(x) and x > 0)
+                else ("color: #00c853" if (pd.notnull(x) and x < 0) else "")
+            ),
+            subset=["損益", "報酬率", "漲跌"],
+        ),
+        height=300,
+        width="stretch",
+        on_select="rerun",
+        selection_mode="single-row",
+        hide_index=True,
+        column_config={
+            "標的": st.column_config.TextColumn(
+                "標的", help="顯示代碼 (點選可看完整名稱與分析)"
+            )
+        },
+    )
+
+    if event and event.selection and event.selection.rows:
+        idx = event.selection.rows[0]
+        selected_row = df.iloc[idx]
+        st.markdown(f"#### 🔍 {selected_row['名稱']} 進階分析")
+        with st.container(border=True):
+            from dashboard_logic import run_advanced_analysis
+
+            with st.spinner("分析中..."):
+                adv_results = run_advanced_analysis(pd.DataFrame([selected_row]))
+                if not adv_results.empty:
+                    render_advanced_analysis_ui(adv_results.iloc[0])
+
+
+# 圓餅圖區塊
 def render_plotly_pie_charts(df, exchange_rates):
     """使用 Plotly 渲染互動式圓餅圖 (橫向並排，圖例在右側)"""
     import plotly.express as px
@@ -291,14 +417,9 @@ def show_streamlit(df, radar_data, exchange_rates):
 
     with col_left:
         with st.container(border=True):
-            total_pl = df["損益"].sum()
-            roi = total_pl / df["成本"].sum() * 100
-            render_inline_metric("💰 總損益", f"${total_pl:+,.0f}", f"{roi:+.2f}%")
+            render_profit_and_loss_component(df)
 
-        st.markdown(
-            "<div class='section-title'>📊 資產權重分佈</div>",
-            unsafe_allow_html=True,
-        )
+        render_title_component("📊 資產權重分佈")
         with st.container(border=False, gap="xxsmall"):
             render_plotly_pie_charts(df, exchange_rates)
 
@@ -306,123 +427,19 @@ def show_streamlit(df, radar_data, exchange_rates):
         # 3. 市場指數與匯率監控
         m_col1, m_col2 = st.columns([2.5, 1])
         with m_col1:
-            st.markdown(
-                "<div class='section-title'>📉 指數</div>",
-                unsafe_allow_html=True,
-            )
+            render_title_component("📉 指數")
             with st.container(border=False, height=100):
-                # 市場指數：非匯率代碼 (不以 =X 結尾)
-                indices = [
-                    item for item in radar_data if not item["代碼"].endswith("=X")
-                ]
-                # 動態計算列數，最多每行 4 個
-                display_indices = indices
-                n_cols = min(len(display_indices), 4) if display_indices else 1
-                idx_cols = st.columns(n_cols)
-                for i, item in enumerate(display_indices):
-                    with idx_cols[i % n_cols]:
-                        with st.container(border=True, gap="xxsmall"):
-                            render_inline_metric(
-                                item["名稱"],
-                                f"{item['數值']:,.2f}",
-                                f"{item['漲跌幅']:+.2f}%",
-                            )
+                render_market_index_component(radar_data)
 
         with m_col2:
-            st.markdown(
-                "<div class='section-title'>💱 匯率</div>",
-                unsafe_allow_html=True,
-            )
+            render_title_component("💱 匯率")
             with st.container(border=False, height=100, gap="xxsmall"):
                 # 匯率：代碼以 =X 結尾
-                major_rates = [
-                    item for item in radar_data if item["代碼"].endswith("=X")
-                ]
-                # 匯率橫向排列，最多每行 3 個
-                n_rate_cols = min(len(major_rates), 3) if major_rates else 1
-                rate_cols = st.columns(n_rate_cols)
-                for i, item in enumerate(major_rates):
-                    with rate_cols[i % n_rate_cols]:
-                        with st.container(border=True, gap="xxsmall"):
-                            color = "#ff4b4b" if item["漲跌幅"] > 0 else "#00c853"
-                            st.markdown(
-                                f"""
-                                <div style='text-align: left; margin-bottom: 2px;'>
-                                    <div style='font-size: 0.75rem; color: #8b949e; line-height: 1.2;'>{item["名稱"]}</div>
-                                    <div style='font-size: 1.1rem; font-weight: 600; color: white; margin: 1px 0;'>{item["數值"]:.2f}</div>
-                                    <div style='font-size: 0.75rem; color: {color}; font-weight: 500;'>{item["漲跌幅"]:+.2f}%</div>
-                                </div>
-                            """,
-                                unsafe_allow_html=True,
-                            )
+                render_exchange_rate_component(radar_data)
 
-        # st.markdown(
-        #     "<div style='font-size: 0.9rem; font-weight: 600; color: white; margin-bottom: 10px;'>📋 持倉明細</div>",
-        #     unsafe_allow_html=True,
-        # )
-        # with st.container(border=True):
-        df_view = df.copy()
-        df_view["標的"] = df_view["代碼"]  # 預設僅顯示代碼
-        cols_display = [
-            "標的",
-            "市場",
-            "單位數",
-            "平均成本",
-            "股價",
-            "漲跌",
-            # "成本",
-            "市值",
-            "損益",
-            "報酬率",
-            "佔比",
-        ]
-
-        event = st.dataframe(
-            df_view[cols_display]
-            .style.format(
-                {
-                    "單位數": "{:,.0f}",
-                    "平均成本": "{:,.2f}",
-                    "股價": "{:,.2f}",
-                    "漲跌": "{:+,.2f}",
-                    # "成本": "${:,.0f}",
-                    "市值": "${:,.0f}",
-                    "損益": "${:+,.0f}",
-                    "報酬率": "{:+.2f}%",
-                    "佔比": "{:.1f}%",
-                }
-            )
-            .map(
-                lambda x: (
-                    "color: #ff4b4b"
-                    if (pd.notnull(x) and x > 0)
-                    else ("color: #00c853" if (pd.notnull(x) and x < 0) else "")
-                ),
-                subset=["損益", "報酬率", "漲跌"],
-            ),
-            height=300,
-            width="stretch",
-            on_select="rerun",
-            selection_mode="single-row",
-            hide_index=True,
-            column_config={
-                "標的": st.column_config.TextColumn(
-                    "標的", help="顯示代碼 (點選可看完整名稱與分析)"
-                )
-            },
-        )
-
-        if event and event.selection and event.selection.rows:
-            idx = event.selection.rows[0]
-            selected_row = df.iloc[idx]
-            st.markdown(f"#### 🔍 {selected_row['名稱']} 進階分析")
-            with st.container(border=True):
-                from dashboard_logic import run_advanced_analysis
-
-                with st.spinner("分析中..."):
-                    adv_results = run_advanced_analysis(pd.DataFrame([selected_row]))
-                    if not adv_results.empty:
-                        render_advanced_analysis_ui(adv_results.iloc[0])
+        # render_title_component("📋 持倉明細")
+        with st.container(border=True):
+            render_dataframe_component(df)
 
 
 def show_console_rich(
