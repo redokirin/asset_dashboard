@@ -94,5 +94,5 @@ def show_rs_ranking_table():
                 max_value=100,
             )
         },
-        use_container_width=True,
+        width="stretch",
     )

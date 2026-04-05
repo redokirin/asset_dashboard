@@ -49,3 +49,9 @@ Thumbs.db
 *.wmv
 
 assets_config.py
+ai_report.md
+gemini.md
+assets.json
+__pycache__/
+.venv/
+.vscode/

@@ -306,7 +306,7 @@ def render_dataframe_component(df):
 
 # 圓餅圖區塊
 def render_plotly_pie_charts(df, exchange_rates):
-    """使用 Plotly 渲染互動式圓餅圖 (橫向並排，圖例在右側)"""
+    """使用 Plotly 渲染互動式圓餅圖"""
     import plotly.express as px
     import streamlit as st
 
@@ -330,7 +330,7 @@ def render_plotly_pie_charts(df, exchange_rates):
     )
     # with c1:
     with st.container(border=True):
-        st.plotly_chart(fig_market, use_container_width=True)
+        st.plotly_chart(fig_market, width="stretch")
 
     # 2. 項目別
     item_df = df.copy()
