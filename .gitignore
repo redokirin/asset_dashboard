@@ -48,10 +48,13 @@ Thumbs.db
 *.mov
 *.wmv
 
+.env
+assets.json
 assets_config.py
 ai_report.md
 gemini.md
 assets.json
 __pycache__/
 .venv/
-.vscode/
+.vscode/settings.json
+asset_tracking_cache.sqlite
