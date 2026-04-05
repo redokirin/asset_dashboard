@@ -33,9 +33,13 @@ def get_config():
     # 2. 檔案不存在或讀取失敗，嘗試從 Streamlit Secrets 讀取
     try:
         if "my_assets" in st.secrets:
-            return st.secrets["my_assets"]
-    except Exception:
-        pass
+            # 轉換為標準 dict 以避免序列化時的 RecursionError
+            secrets_data = st.secrets["my_assets"]
+            if hasattr(secrets_data, "to_dict"):
+                return secrets_data.to_dict()
+            return dict(secrets_data)
+    except Exception as e:
+        logging.error(f"Secrets 讀取失敗: {e}")
 
     logging.error("🚨 配置缺失：未偵測到 assets_config.toml 或 st.secrets['my_assets']")
     return {}
