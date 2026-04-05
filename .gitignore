@@ -58,3 +58,5 @@ __pycache__/
 .venv/
 .vscode/settings.json
 asset_tracking_cache.sqlite
+assets_config.toml
+read_assets.py

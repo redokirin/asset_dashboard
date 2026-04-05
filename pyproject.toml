@@ -1,5 +1,5 @@
 [project]
-name = "asset-tracking"
+name = "asset_dashboard"
 version = "0.1.0"
 description = ""
 authors = [
