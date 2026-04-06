@@ -60,3 +60,6 @@ __pycache__/
 asset_tracking_cache.sqlite
 assets_config.toml
 read_assets.py
+credentials.json
+migrate_to_gsheet.py
+verify_gsheet_load.py

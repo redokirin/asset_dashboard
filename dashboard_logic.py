@@ -8,26 +8,118 @@ import requests_cache
 import streamlit as st
 import tomllib
 from pathlib import Path
+import gspread
+from google.oauth2.service_account import Credentials
+import os
+
 
 # --- 配置讀取邏輯 ---
+# 優先從 Secrets 讀取 ID，否則使用預設值
+SPREADSHEET_ID = st.secrets.get("spreadsheet_id", "1xiuVw0fuuIdqVX0a-gGf0MkEZWmwWGnsRndCoNEc-4A")
+CREDENTIALS_PATH = Path(__file__).parent / "credentials.json"
+
+@st.cache_data(ttl=600)  # 每 10 分鐘快取一次
+def get_config_from_gsheets():
+    """從 Google Sheets 讀取資產配置，支援本地檔案與 Streamlit Secrets"""
+    creds = None
+    
+    # 1. 優先嘗試從 Streamlit Secrets 讀取 (適合 Cloud 部署)
+    if "gcp_service_account" in st.secrets:
+        try:
+            creds_info = st.secrets["gcp_service_account"]
+            # 確保是標準 dict
+            if hasattr(creds_info, "to_dict"):
+                creds_info = creds_info.to_dict()
+            else:
+                creds_info = dict(creds_info)
+            
+            scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+            creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+            logging.info("使用 Streamlit Secrets 載入 Google 憑證")
+        except Exception as e:
+            logging.error(f"從 Secrets 載入憑證失敗: {e}")
+
+    # 2. 如果 Secrets 沒有，嘗試讀取本地檔案 (適合本地開發)
+    if not creds and CREDENTIALS_PATH.exists():
+        try:
+            scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+            creds = Credentials.from_service_account_file(str(CREDENTIALS_PATH), scopes=scopes)
+            logging.info("使用本地 credentials.json 載入 Google 憑證")
+        except Exception as e:
+            logging.error(f"從本地檔案載入憑證失敗: {e}")
+
+    if not creds:
+        logging.warning("找不到有效的 Google 憑證 (Secrets 或本地檔案)")
+        return None
+
+    try:
+        gc = gspread.authorize(creds)
+        sh = gc.open_by_key(SPREADSHEET_ID)
+
+        config = {}
+
+        # 1. 讀取 radar_tickers
+        try:
+            ws_radar = sh.worksheet("radar_tickers")
+            radar_data = ws_radar.get_all_records()
+            config["radar_tickers"] = {row["Ticker"]: row["Name"] for row in radar_data if row["Ticker"]}
+        except Exception as e:
+            logging.error(f"讀取 radar_tickers 分頁失敗: {e}")
+
+        # 2. 讀取 funds (以 Key 為索引)
+        try:
+            ws_funds = sh.worksheet("funds")
+            funds_data = ws_funds.get_all_records()
+            funds_dict = {}
+            for row in funds_data:
+                key = str(row.pop("Key", ""))
+                if key:
+                    # 清理空的欄位
+                    cleaned_row = {k: v for k, v in row.items() if v != ""}
+                    funds_dict[key] = cleaned_row
+            config["funds"] = funds_dict
+        except Exception as e:
+            logging.error(f"讀取 funds 分頁失敗: {e}")
+
+        # 3. 讀取 etfs (以 Ticker 為索引)
+        try:
+            ws_etfs = sh.worksheet("etfs")
+            etfs_data = ws_etfs.get_all_records()
+            etfs_dict = {}
+            for row in etfs_data:
+                ticker = str(row.pop("Ticker", ""))
+                if ticker:
+                    cleaned_row = {k: v for k, v in row.items() if v != ""}
+                    etfs_dict[ticker] = cleaned_row
+            config["etfs"] = etfs_dict
+        except Exception as e:
+            logging.error(f"讀取 etfs 分頁失敗: {e}")
+
+        return config
+    except Exception as e:
+        logging.error(f"Google Sheets 讀取失敗: {e}")
+        return None
+
 @st.cache_data
 def get_config():
     """
-    讀取資產配置。優先從本地 assets_config.toml 讀取，
-    若檔案不存在，則讀取 Streamlit Secrets 中的 my_assets。
+    讀取資產配置。優先從 Google Sheets 讀取，其次本地 assets_config.toml，
+    最後為 Streamlit Secrets。
     """
-    # 使用相對於檔案的路徑，增加在不同執行環境下的穩定性
+    # 1. 優先從 Google Sheets 讀取
+    gs_config = get_config_from_gsheets()
+    if gs_config:
+        return gs_config
+
+    # 2. 偵測本地檔案是否存在
     current_dir = Path(__file__).parent
     toml_path = current_dir / "assets_config.toml"
-    
-    # 1. 偵測本地檔案是否存在
     if toml_path.exists():
         try:
             with open(toml_path, "rb") as f:
                 config = tomllib.load(f)
                 return config.get("my_assets", {})
         except Exception as e:
-            # 避免在 import 時觸發 st 指令
             logging.error(f"本地配置讀取失敗: {e}")
 
     # 2. 檔案不存在或讀取失敗，嘗試從 Streamlit Secrets 讀取
@@ -44,9 +136,11 @@ def get_config():
     logging.error("🚨 配置缺失：未偵測到 assets_config.toml 或 st.secrets['my_assets']")
     return {}
 
+
 # 初始化配置
 _config = get_config()
 RADAR_TICKERS = _config.get("radar_tickers", {})
+
 
 # 實際上原有的 ASSETS 是 {"funds": {...}, "etfs": {...}}
 # 增加防呆機制：如果項目中沒有定義 id，則以 Key 為預設 id
@@ -55,15 +149,17 @@ def _ensure_id(config_dict):
     if not isinstance(config_dict, dict):
         return result
     for key, val in config_dict.items():
-        if not isinstance(val, dict): continue
+        if not isinstance(val, dict):
+            continue
         if "id" not in val:
             val["id"] = key
         result[key] = val
     return result
 
+
 ASSETS = {
     "funds": _ensure_id(_config.get("funds", {})),
-    "etfs": _ensure_id(_config.get("etfs", {}))
+    "etfs": _ensure_id(_config.get("etfs", {})),
 }
 
 # 使用 lru_cache 進行簡單的記憶體快取，配合 requests_cache 達成雙重效能優化
@@ -375,7 +471,23 @@ def calculate_assets_data(exchange_rates):
     df = pd.DataFrame(results)
     if df.empty:
         # 建立一個有預期欄位的空 DataFrame
-        columns = ["市場", "類型", "名稱", "代碼", "幣別", "單位數", "平均成本", "漲跌", "股價", "建議掛單", "成本", "市值", "損益", "報酬率", "佔比"]
+        columns = [
+            "市場",
+            "類型",
+            "名稱",
+            "代碼",
+            "幣別",
+            "單位數",
+            "平均成本",
+            "漲跌",
+            "股價",
+            "建議掛單",
+            "成本",
+            "市值",
+            "損益",
+            "報酬率",
+            "佔比",
+        ]
         return pd.DataFrame(columns=columns), {}
 
     total_val = df["市值"].sum()
@@ -438,21 +550,21 @@ def calculate_buffered_entries(df, ma20, ma250, current_price, rs_p10_price):
 
 
 # ┌──────────────────┬──────────────────────┬───────────────────────────────────────────────────────┐
-# │ 參數名稱         │ 中文名稱                │ 診斷用途說明                                          │
+# │ 參數名稱          │ 中文名稱               │ 診斷用途說明                                          │
 # ├──────────────────┼──────────────────────┼───────────────────────────────────────────────────────┤
 # │ price            │ 現價                  │ 作為所有技術位階計算的基礎基準。                      │
 # │ ma20             │ 月線 (20日均線)      │ 定義「短線動能」與計算「乖離率」的核心指標。          │
 # │ ma250            │ 年線 (250日均線)     │ 定義「長線格局」多空的分水嶺。                        │
 # │ vol_ratio        │ 量比 (成交量比率)    │ 偵測異常動能（如爆量、窒息量）與驗證價格真偽。        │
 # │ price_change_pct │ 今日漲跌幅           │ 結合量比進行「量價驗證」判斷。                        │
-# │ rs_percentile    │ RS 百分位 (相對強度) │ 判斷標的在市場中的強度位階（如過熱區、深水區）。      │
-# │ sharpe           │ 夏普值 (風險效率)    │ 衡量資產的報酬/風險比，篩選高效率標的。               │
-# │ eps              │ 每股盈餘             │ 判斷企業基本面是否具備實質獲利支撐。                  │
-# │ pe_ratio         │ 本益比               │ 評估股價目前的「估值高低」區位。                      │
-# │ dividend_yield   │ 股息殖利率           │ 偵測是否具備「🛡️ 息收護城河」防禦屬性。               │
+# │ rs_percentile    │ RS 百分位 (相對強度)   │ 判斷標的在市場中的強度位階（如過熱區、深水區）。      │
+# │ sharpe           │ 夏普值 (風險效率)      │ 衡量資產的報酬/風險比，篩選高效率標的。               │
+# │ eps              │ 每股盈餘              │ 判斷企業基本面是否具備實質獲利支撐。                  │
+# │ pe_ratio         │ 本益比                │ 評估股價目前的「估值高低」區位。                      │
+# │ dividend_yield   │ 股息殖利率            │ 偵測是否具備「🛡️ 息收護城河」防禦屬性。               │
 # │ peg_ratio        │ PEG 比例             │ 結合成長性與估值的平衡指標（💎 PEG < 1 為超值成長）。 │
-# │ bias             │ 乖離率               │ 衡量股價偏離月線的程度，判斷「極度價值」或「過熱」。  │
-# │ rsi              │ RSI (相對強弱指數)   │ 輔助判斷短線的超買或超賣狀態。                        │
+# │ bias             │ 乖離率                │ 衡量股價偏離月線的程度，判斷「極度價值」或「過熱」。  │
+# │ rsi              │ RSI (相對強弱指數)     │ 輔助判斷短線的超買或超賣狀態。                        │
 # └──────────────────┴──────────────────────┴───────────────────────────────────────────────────────┘
 #   🔍 診斷邏輯中的標籤 (Tags) 說明：
 #    * 🛡️ 息收護城河：低位階且具備 3.5% 以上高殖利率。
