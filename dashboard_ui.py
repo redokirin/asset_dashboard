@@ -293,7 +293,10 @@ def render_dataframe_component(df):
     if event and event.selection and event.selection.rows:
         idx = event.selection.rows[0]
         selected_row = df.iloc[idx]
-        st.markdown(f"#### 🔍 {selected_row['名稱']} 進階分析")
+        title = f"🔍 {selected_row['名稱']} ({selected_row['代碼']}) 進階分析"
+
+        render_title_component(title)
+        # st.markdown(f"#### 🔍 {selected_row['名稱']} 進階分析")
         with st.container(border=True):
             from dashboard_logic import run_advanced_analysis
 
@@ -323,9 +326,9 @@ def render_plotly_pie_charts(df, exchange_rates):
     )
     fig_market.update_layout(
         showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+        legend=dict(orientation="h", yanchor="bottom", y=-0.5, xanchor="center", x=0.5),
         margin=dict(t=40, b=80, l=0, r=0),
-        height=320,
+        height=280,
     )
     # with c1:
     with st.container(border=True):
@@ -348,7 +351,7 @@ def render_plotly_pie_charts(df, exchange_rates):
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.5, xanchor="center", x=0.5),
         margin=dict(t=40, b=120, l=0, r=0),
-        height=480,
+        # height=480,
     )
 
     # with c2:
