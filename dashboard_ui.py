@@ -238,8 +238,17 @@ def render_horizontal_component(major_rates):
 # 持股明細區塊
 def render_dataframe_component(df):
     import streamlit as st
+    import pandas as pd
 
     df_view = df.copy()
+    
+    # 強制轉換數值欄位，避免 Styler 格式化非數值時報錯
+    numeric_cols = ["單位數", "平均成本", "股價", "漲跌", "市值", "損益", "報酬率", "佔比"]
+    for col in numeric_cols:
+        if col in df_view.columns:
+            # errors='coerce' 會將無法轉換的字串轉為 NaN
+            df_view[col] = pd.to_numeric(df_view[col], errors='coerce').fillna(0.0)
+
     df_view["標的"] = df_view["代碼"]  # 預設僅顯示代碼
     cols_display = [
         "標的",
@@ -248,27 +257,29 @@ def render_dataframe_component(df):
         "平均成本",
         "股價",
         "漲跌",
-        # "成本",
         "市值",
         "損益",
         "報酬率",
         "佔比",
     ]
 
+    # 確保 cols_display 內的欄位都存在
+    cols_to_use = [c for c in cols_display if c in df_view.columns]
+
     event = st.dataframe(
-        df_view[cols_display]
+        df_view[cols_to_use]
         .style.format(
             {
                 "單位數": "{:,.0f}",
                 "平均成本": "{:,.2f}",
                 "股價": "{:,.2f}",
                 "漲跌": "{:+,.2f}",
-                # "成本": "${:,.0f}",
                 "市值": "${:,.0f}",
                 "損益": "${:+,.0f}",
                 "報酬率": "{:+.2f}%",
                 "佔比": "{:.1f}%",
-            }
+            },
+            na_rep="0" # 增加對 NaN 的容錯處理
         )
         .map(
             lambda x: (
