@@ -191,16 +191,16 @@ def render_profit_and_loss_component(df):
 
 
 # 市場指數區塊
-def render_market_index_component(radar_data):
+def render_vertical_component(indices):
     import streamlit as st
 
     # 市場指數：非匯率代碼 (不以 =X 結尾)
-    indices = [item for item in radar_data if not item["代碼"].endswith("=X")]
+    # indices = [item for item in radar_data if not item["代碼"].endswith("=X")]
     # 動態計算列數，最多每行 4 個
-    display_indices = indices
-    n_cols = min(len(display_indices), 4) if display_indices else 1
+    # display_indices = indices
+    # n_cols = min(len(display_indices), 4) if display_indices else 1
     # idx_cols = st.columns(n_cols)
-    for i, item in enumerate(display_indices):
+    for i, item in enumerate(indices):
         # with idx_cols[i % n_cols]:
         with st.container(border=True, gap="xxsmall"):
             render_inline_metric(
@@ -211,11 +211,11 @@ def render_market_index_component(radar_data):
 
 
 # 匯率區塊
-def render_exchange_rate_component(radar_data):
+def render_horizontal_component(major_rates):
     import streamlit as st
 
     # 匯率：代碼以 =X 結尾
-    major_rates = [item for item in radar_data if item["代碼"].endswith("=X")]
+    # major_rates = [item for item in radar_data if item["代碼"].endswith("=X")]
     # 匯率橫向排列，最多每行 3 個
     n_rate_cols = min(len(major_rates), 3) if major_rates else 1
     rate_cols = st.columns(n_rate_cols)
@@ -385,20 +385,22 @@ def show_streamlit(df, radar_data, exchange_rates):
     load_css()
 
     # 2. 佈局：[左欄指標, 中欄內容]
-    col_left, col_mid, col_right = st.columns([0.7, 2, 0.5])
+    col_left, col_mid, col_right = st.columns([0.4, 1.8, 0.5])
 
     with col_left:
         with st.container(border=True):
             render_profit_and_loss_component(df)
 
-        render_title_component("📉 指數")
+        # render_title_component("📉 指數")
         with st.container(border=False):
-            render_market_index_component(radar_data)
+            indices = [item for item in radar_data if not item["代碼"].endswith("=X")]
+            render_vertical_component(indices)
 
-        render_title_component("💱 匯率")
+        # render_title_component("💱 匯率")
         with st.container(border=False, gap="xxsmall"):
             # 匯率：代碼以 =X 結尾
-            render_exchange_rate_component(radar_data)
+            major_rates = [item for item in radar_data if item["代碼"].endswith("=X")]
+            render_vertical_component(major_rates)
 
     with col_mid:
         # 3. 市場指數與匯率監控
@@ -407,12 +409,12 @@ def show_streamlit(df, radar_data, exchange_rates):
 
         # with m_col2:
 
-        render_title_component("📋 持倉明細")
+        # render_title_component("📋 持倉明細")
         with st.container(border=False):
             render_dataframe_component(df)
 
     with col_right:
-        render_title_component("📊 資產權重分佈")
+        # render_title_component("📊 資產權重分佈")
         with st.container(border=False, gap="xxsmall"):
             render_plotly_pie_charts(df, exchange_rates)
 
