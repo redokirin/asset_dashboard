@@ -14,8 +14,14 @@ import os
 
 
 # --- 配置讀取邏輯 ---
-# 優先從 Secrets 讀取 ID，否則使用預設值
-SPREADSHEET_ID = st.secrets.get("spreadsheet_id", "1xiuVw0fuuIdqVX0a-gGf0MkEZWmwWGnsRndCoNEc-4A")
+# 安全地讀取 Secrets，避免本地端報錯
+def get_secret(key, default=None):
+    try:
+        return st.secrets.get(key, default)
+    except Exception:
+        return default
+
+SPREADSHEET_ID = get_secret("spreadsheet_id", "1xiuVw0fuuIdqVX0a-gGf0MkEZWmwWGnsRndCoNEc-4A")
 CREDENTIALS_PATH = Path(__file__).parent / "credentials.json"
 
 @st.cache_data(ttl=600)  # 每 10 分鐘快取一次
@@ -24,9 +30,10 @@ def get_config_from_gsheets():
     creds = None
     
     # 1. 優先嘗試從 Streamlit Secrets 讀取 (適合 Cloud 部署)
-    if "gcp_service_account" in st.secrets:
+    gcp_info = get_secret("gcp_service_account")
+    if gcp_info:
         try:
-            creds_info = st.secrets["gcp_service_account"]
+            creds_info = gcp_info
             # 確保是標準 dict
             if hasattr(creds_info, "to_dict"):
                 creds_info = creds_info.to_dict()
@@ -38,6 +45,8 @@ def get_config_from_gsheets():
             logging.info("使用 Streamlit Secrets 載入 Google 憑證")
         except Exception as e:
             logging.error(f"從 Secrets 載入憑證失敗: {e}")
+
+    # ... (其餘讀取邏輯)
 
     # 2. 如果 Secrets 沒有，嘗試讀取本地檔案 (適合本地開發)
     if not creds and CREDENTIALS_PATH.exists():
@@ -71,23 +80,25 @@ def get_config_from_gsheets():
             ws_funds = sh.worksheet("funds")
             funds_data = ws_funds.get_all_records()
             funds_dict = {}
-            numeric_cols = ["nav", "units", "cost"]
+            numeric_cols = ["nav", "units", "cost", "shares"]
+            bool_cols = ["enabled", "get_value"]
             for row in funds_data:
-                key = str(row.pop("Key", ""))
+                key = str(row.pop("Key", "") or row.pop("key", "")).strip()
                 if key:
                     cleaned_row = {}
+                    cleaned_row["id"] = key 
                     for k, v in row.items():
-                        if k in numeric_cols:
+                        low_k = k.lower()
+                        if low_k in numeric_cols:
                             try:
-                                # 處理空值、逗號分隔的數字或字串格式
-                                if v == "" or v is None:
-                                    cleaned_row[k] = 0.0
-                                else:
-                                    cleaned_row[k] = float(str(v).replace(",", ""))
-                            except (ValueError, TypeError):
-                                cleaned_row[k] = 0.0
+                                cleaned_row[low_k] = float(str(v).replace(",", "")) if v != "" else 0.0
+                            except: cleaned_row[low_k] = 0.0
+                        elif low_k in bool_cols:
+                            # 強制轉為布林值 (處理 "TRUE", "FALSE", 1, 0, True, False)
+                            val_str = str(v).upper()
+                            cleaned_row[low_k] = val_str in ["TRUE", "1", "YES", "T"]
                         elif v != "":
-                            cleaned_row[k] = v
+                            cleaned_row[low_k] = v
                     funds_dict[key] = cleaned_row
             config["funds"] = funds_dict
         except Exception as e:
@@ -98,23 +109,25 @@ def get_config_from_gsheets():
             ws_etfs = sh.worksheet("etfs")
             etfs_data = ws_etfs.get_all_records()
             etfs_dict = {}
-            numeric_cols = ["shares", "cost", "discount"]
+            numeric_cols = ["shares", "cost", "discount", "units"]
+            bool_cols = ["enabled", "get_value"]
             for row in etfs_data:
-                ticker = str(row.pop("Ticker", ""))
-                if ticker:
+                ticker_key = str(row.pop("Ticker", "") or row.pop("ticker", "")).strip()
+                if ticker_key:
                     cleaned_row = {}
+                    cleaned_row["id"] = ticker_key
                     for k, v in row.items():
-                        if k in numeric_cols:
+                        low_k = k.lower()
+                        if low_k in numeric_cols:
                             try:
-                                if v == "" or v is None:
-                                    cleaned_row[k] = 0.0
-                                else:
-                                    cleaned_row[k] = float(str(v).replace(",", ""))
-                            except (ValueError, TypeError):
-                                cleaned_row[k] = 0.0
+                                cleaned_row[low_k] = float(str(v).replace(",", "")) if v != "" else 0.0
+                            except: cleaned_row[low_k] = 0.0
+                        elif low_k in bool_cols:
+                            val_str = str(v).upper()
+                            cleaned_row[low_k] = val_str in ["TRUE", "1", "YES", "T"]
                         elif v != "":
-                            cleaned_row[k] = v
-                    etfs_dict[ticker] = cleaned_row
+                            cleaned_row[low_k] = v
+                    etfs_dict[ticker_key] = cleaned_row
             config["etfs"] = etfs_dict
         except Exception as e:
             logging.error(f"讀取 etfs 分頁失敗: {e}")
@@ -441,41 +454,48 @@ def calculate_assets_data(exchange_rates):
             "報酬率": (pl_val / cost_twd * 100) if cost_twd != 0 else 0,
         }
 
-    # 批次下載價格與歷史資料
-    tickers_to_fetch = []
-    for cat_key in ["funds", "etfs"]:
-        for asset in ASSETS[cat_key].values():
-            if asset.get("enabled", True) and asset.get("get_value"):
-                tickers_to_fetch.append(asset["id"])
-
+    # 分開處理基金與 ETF 的價格抓取，避免相互干擾
     batch_prices = {}
     batch_changes = {}
-    if tickers_to_fetch:
-        try:
-            # 獲取近一月資料以確保昨日收盤計算正確，並支援 1306.T 的乖離率數據檢查
-            hist_data = fetch_historical_data(tuple(tickers_to_fetch), period="1mo")
-            for ticker in tickers_to_fetch:
-                try:
-                    df = (
-                        hist_data[ticker]
-                        if isinstance(hist_data.columns, pd.MultiIndex)
-                        else hist_data
-                    )
-                    if df is not None and not df.empty and "Close" in df.columns:
-                        df_clean = df.dropna(subset=["Close"])
-                        if len(df_clean) >= 1:
-                            current_price = float(df_clean["Close"].iloc[-1])
-                            change_val = 0.0
-                            if len(df_clean) >= 2:
-                                prev_close = float(df_clean["Close"].iloc[-2])
-                                change_val = current_price - prev_close
 
-                            batch_prices[ticker] = current_price
-                            batch_changes[ticker] = change_val
+    def fetch_batch_prices(cat_key):
+        tickers = []
+        for asset in ASSETS[cat_key].values():
+            # 強制檢查 enabled 和 get_value (相容布林值與字串)
+            is_enabled = asset.get("enabled") is True or str(asset.get("enabled")).upper() in ["TRUE", "1", "YES", "T"]
+            is_get_val = asset.get("get_value") is True or str(asset.get("get_value")).upper() in ["TRUE", "1", "YES", "T"]
+            
+            if is_enabled and is_get_val:
+                tickers.append(asset["id"])
+        
+        if not tickers:
+            return
+
+        try:
+            logging.info(f"正在抓取 {cat_key} 價格: {tickers}")
+            hist_data = fetch_historical_data(tuple(tickers), period="1mo")
+            
+            for t in tickers:
+                try:
+                    if isinstance(hist_data.columns, pd.MultiIndex):
+                        df = hist_data[t] if t in hist_data.columns.levels[0] else None
+                    else:
+                        df = hist_data if len(tickers) == 1 else None
+                    
+                    if df is not None and not df.empty and "Close" in df.columns:
+                        df_clean = df["Close"].dropna()
+                        if not df_clean.empty:
+                            batch_prices[t] = float(df_clean.iloc[-1])
+                            if len(df_clean) >= 2:
+                                batch_changes[t] = float(df_clean.iloc[-1] - df_clean.iloc[-2])
                 except Exception as e:
-                    logging.warning(f"解析 {ticker} 歷史資料失敗: {e}")
+                    logging.warning(f"解析 {t} 價格失敗: {e}")
         except Exception as e:
-            logging.error(f"批次下載價格資料失敗: {e}")
+            logging.error(f"批次抓取 {cat_key} 失敗: {e}")
+
+    # 執行抓取
+    fetch_batch_prices("funds")
+    fetch_batch_prices("etfs")
 
     for cat_key, cat_name in [("funds", "基金"), ("etfs", "ETF")]:
         for asset in ASSETS[cat_key].values():
