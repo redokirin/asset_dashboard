@@ -385,7 +385,7 @@ def show_streamlit(df, radar_data, exchange_rates):
     load_css()
 
     # 2. 佈局：[左欄指標, 中欄內容]
-    col_left, col_mid, col_right = st.columns([0.4, 1.8, 0.5])
+    col_left, col_mid, col_right = st.columns([0.5, 1.7, 0.5])
 
     with col_left:
         with st.container(border=True):
