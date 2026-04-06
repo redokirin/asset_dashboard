@@ -1,0 +1,52 @@
+/* 全域卡片容器樣式 */
+[data-testid="stVerticalBlock"] > div > div[data-testid="stVerticalBlockBorder"] {
+    background-color: #1e2130;
+    padding: 0.5rem;
+    border-radius: 12px;
+    border: 1px solid #2d323e;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    margin-bottom: 0.5rem;
+}
+
+/* 隱藏預設標題間距 */
+.block-container { 
+    padding-top: 2rem; 
+}
+
+/* 全域區塊標題樣式 */
+.section-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: white;
+    margin-bottom: 5px;
+}
+
+/* 針對所有垂直/水平區塊容器的間距微調 (強制 0.5rem) */
+[data-testid="stVerticalBlock"],
+[data-testid="stHorizontalBlock"] {
+    gap: 0.5rem !important;
+}
+
+/* 進階分析區/指標區字體縮小規則 */
+div[data-testid="stMetricValue"] > div { font-size: 1.1rem !important; }
+div[data-testid="stMetricLabel"] > div { font-size: 0.75rem !important; }
+div[data-testid="stMetricDelta"] > div { font-size: 0.75rem !important; }
+
+.small-metric p, .small-metric b { 
+    font-size: 0.8rem !important; 
+}
+
+/* 1. 調整容器外框的內邊距 (原為 1rem) */
+[data-testid="stVerticalBlockBorder"] {
+    padding: 0.4rem 0.6rem !important; /* 上下 0.4, 左右 0.6 */
+}
+
+/* 2. 確保容器內的組件間距也是 0.5rem */
+[data-testid="stVerticalBlock"] {
+    gap: 0.5rem !important;
+}
+  
+/* 3. 隱藏預設標題頂部過大的間距 */
+.block-container {
+    padding-top: 1.5rem !important;
+}

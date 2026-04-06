@@ -63,22 +63,20 @@ def plot_asset_allocation(df, exchange_rates):
     return fig
 
 
+def load_css():
+    """載入外部 CSS 檔案樣式"""
+    import streamlit as st
+    import os
+
+    css_file = os.path.join(os.path.dirname(__file__), "style.css")
+    if os.path.exists(css_file):
+        with open(css_file, "r", encoding="utf-8") as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
+
 def render_advanced_analysis_ui(res):
     """合併後的進階量化分析渲染組件 - 仿範例圖配置"""
     import streamlit as st
-
-    # 注入局部 CSS 縮小此區塊的 Metric 字體
-    st.markdown(
-        """
-        <style>
-        /* 使用更強大的選擇器並確保 !important */
-        div[data-testid="stMetricValue"] > div { font-size: 1.1rem !important; }
-        div[data-testid="stMetricLabel"] > div { font-size: 0.75rem !important; }
-        div[data-testid="stMetricDelta"] > div { font-size: 0.75rem !important; }
-        </style>
-    """,
-        unsafe_allow_html=True,
-    )
 
     # --- 1. 標籤雲 ---
     if "tags" in res and res["tags"]:
@@ -201,15 +199,15 @@ def render_market_index_component(radar_data):
     # 動態計算列數，最多每行 4 個
     display_indices = indices
     n_cols = min(len(display_indices), 4) if display_indices else 1
-    idx_cols = st.columns(n_cols)
+    # idx_cols = st.columns(n_cols)
     for i, item in enumerate(display_indices):
-        with idx_cols[i % n_cols]:
-            with st.container(border=True, gap="xxsmall"):
-                render_inline_metric(
-                    item["名稱"],
-                    f"{item['數值']:,.2f}",
-                    f"{item['漲跌幅']:+.2f}%",
-                )
+        # with idx_cols[i % n_cols]:
+        with st.container(border=True, gap="xxsmall"):
+            render_inline_metric(
+                item["名稱"],
+                f"{item['數值']:,.2f}",
+                f"{item['漲跌幅']:+.2f}%",
+            )
 
 
 # 匯率區塊
@@ -280,7 +278,7 @@ def render_dataframe_component(df):
             ),
             subset=["損益", "報酬率", "漲跌"],
         ),
-        height=300,
+        # height=300,
         width="stretch",
         on_select="rerun",
         selection_mode="single-row",
@@ -365,10 +363,10 @@ def render_inline_metric(label, value, delta):
     color = "#ff4b4b" if "+" in delta else "#00c853"
     st.markdown(
         f"""
-        <div style='margin-bottom: 6px;'>
-            <div style='font-size: 0.85rem; color: #8b949e; margin-bottom: 2px;'>{label}</div>
+        <div style='margin-bottom: 1px;'>
+            <div style='font-size: 0.85rem; color: #8b949e; margin-bottom: 1px;'>{label}</div>
             <div style='display: flex; align-items: baseline;'>
-                <span style='font-size: 1.6rem; font-weight: 600; color: white; margin-right: 10px;'>{value}</span>
+                <span style='font-size: 1.6rem; font-weight: 600; color: white; margin-right: 5px;'>{value}</span>
                 <span style='font-size: 0.85rem; color: {color}; background-color: {color}22; padding: 2px 8px; border-radius: 6px; font-weight: 500;'>{delta}</span>
             </div>
         </div>
@@ -380,67 +378,40 @@ def render_inline_metric(label, value, delta):
 def show_streamlit(df, radar_data, exchange_rates):
     import streamlit as st
 
-    # 1. 注入自定義 CSS (營造區塊感與深色背景卡片)
-    st.markdown(
-        """
-        <style>
-        /* 全域卡片容器樣式 */
-        [data-testid="stVerticalBlock"] > div > div[data-testid="stVerticalBlockBorder"] {
-            background-color: #1e2130;
-            padding: 0.5rem;
-            border-radius: 12px;
-            border: 1px solid #2d323e;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            margin-bottom: 0.5rem;
-        }
-        /* 隱藏預設標題間距 */
-        .block-container { padding-top: 2rem; }
-
-        /* 全域區塊標題樣式 */
-        .section-title {
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: white;
-            margin-bottom: 5px;
-        }
-
-        /* 進階分析區 (c1) 字體縮小規則 */
-        .small-metric [data-testid="stMetricValue"] { font-size: 1.1rem !important; }
-        .small-metric [data-testid="stMetricLabel"] { font-size: 0.75rem !important; }
-        .small-metric p, .small-metric b { font-size: 0.8rem !important; }
-        </style>
-    """,
-        unsafe_allow_html=True,
-    )
+    # 1. 載入 CSS 樣式
+    load_css()
 
     # 2. 佈局：[左欄指標, 中欄內容]
-    col_left, col_mid = st.columns([0.5, 2])
+    col_left, col_mid, col_right = st.columns([0.7, 2, 0.5])
 
     with col_left:
         with st.container(border=True):
             render_profit_and_loss_component(df)
 
-        render_title_component("📊 資產權重分佈")
+        render_title_component("📉 指數")
+        with st.container(border=False):
+            render_market_index_component(radar_data)
+
+        render_title_component("💱 匯率")
         with st.container(border=False, gap="xxsmall"):
-            render_plotly_pie_charts(df, exchange_rates)
+            # 匯率：代碼以 =X 結尾
+            render_exchange_rate_component(radar_data)
 
     with col_mid:
         # 3. 市場指數與匯率監控
-        m_col1, m_col2 = st.columns([2.5, 1])
-        with m_col1:
-            render_title_component("📉 指數")
-            with st.container(border=False, height=100):
-                render_market_index_component(radar_data)
+        # m_col1, m_col2 = st.columns([2.5, 1.5])
+        # with m_col1:
 
-        with m_col2:
-            render_title_component("💱 匯率")
-            with st.container(border=False, height=100, gap="xxsmall"):
-                # 匯率：代碼以 =X 結尾
-                render_exchange_rate_component(radar_data)
+        # with m_col2:
 
         # render_title_component("📋 持倉明細")
-        with st.container(border=True):
+        with st.container(border=False):
             render_dataframe_component(df)
+
+    with col_right:
+        render_title_component("📊 資產權重分佈")
+        with st.container(border=False, gap="xxsmall"):
+            render_plotly_pie_charts(df, exchange_rates)
 
 
 def show_console_rich(
