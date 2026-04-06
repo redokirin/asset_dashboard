@@ -407,7 +407,7 @@ def show_streamlit(df, radar_data, exchange_rates):
 
         # with m_col2:
 
-        # render_title_component("📋 持倉明細")
+        render_title_component("📋 持倉明細")
         with st.container(border=False):
             render_dataframe_component(df)
 
