@@ -71,11 +71,23 @@ def get_config_from_gsheets():
             ws_funds = sh.worksheet("funds")
             funds_data = ws_funds.get_all_records()
             funds_dict = {}
+            numeric_cols = ["nav", "units", "cost"]
             for row in funds_data:
                 key = str(row.pop("Key", ""))
                 if key:
-                    # 清理空的欄位
-                    cleaned_row = {k: v for k, v in row.items() if v != ""}
+                    cleaned_row = {}
+                    for k, v in row.items():
+                        if k in numeric_cols:
+                            try:
+                                # 處理空值、逗號分隔的數字或字串格式
+                                if v == "" or v is None:
+                                    cleaned_row[k] = 0.0
+                                else:
+                                    cleaned_row[k] = float(str(v).replace(",", ""))
+                            except (ValueError, TypeError):
+                                cleaned_row[k] = 0.0
+                        elif v != "":
+                            cleaned_row[k] = v
                     funds_dict[key] = cleaned_row
             config["funds"] = funds_dict
         except Exception as e:
@@ -86,10 +98,22 @@ def get_config_from_gsheets():
             ws_etfs = sh.worksheet("etfs")
             etfs_data = ws_etfs.get_all_records()
             etfs_dict = {}
+            numeric_cols = ["shares", "cost", "discount"]
             for row in etfs_data:
                 ticker = str(row.pop("Ticker", ""))
                 if ticker:
-                    cleaned_row = {k: v for k, v in row.items() if v != ""}
+                    cleaned_row = {}
+                    for k, v in row.items():
+                        if k in numeric_cols:
+                            try:
+                                if v == "" or v is None:
+                                    cleaned_row[k] = 0.0
+                                else:
+                                    cleaned_row[k] = float(str(v).replace(",", ""))
+                            except (ValueError, TypeError):
+                                cleaned_row[k] = 0.0
+                        elif v != "":
+                            cleaned_row[k] = v
                     etfs_dict[ticker] = cleaned_row
             config["etfs"] = etfs_dict
         except Exception as e:
