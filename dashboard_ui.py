@@ -249,6 +249,14 @@ def render_dataframe_component(df):
             # errors='coerce' 會將無法轉換的字串轉為 NaN
             df_view[col] = pd.to_numeric(df_view[col], errors='coerce').fillna(0.0)
 
+    # 確保字串欄位一致，避免 Arrow 序列化錯誤 (Mixed types in object column)
+    if "代碼" in df_view.columns:
+        df_view["代碼"] = df_view["代碼"].astype(str)
+    if "名稱" in df_view.columns:
+        df_view["名稱"] = df_view["名稱"].astype(str)
+    if "市場" in df_view.columns:
+        df_view["市場"] = df_view["市場"].astype(str)
+
     df_view["標的"] = df_view["代碼"]  # 預設僅顯示代碼
     cols_display = [
         "標的",

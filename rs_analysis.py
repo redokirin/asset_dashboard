@@ -87,8 +87,12 @@ def show_rs_ranking_table():
         df_rs = get_rs_percentile_rank(list(set(all_tickers)))
 
     # 顯示表格
+    df_display = df_rs.drop(columns=["score"]).copy()
+    if "代碼" in df_display.columns:
+        df_display["代碼"] = df_display["代碼"].astype(str)
+
     st.dataframe(
-        df_rs.drop(columns=["score"]),
+        df_display,
         column_config={
             "RS 百分位數": st.column_config.ProgressColumn(
                 "RS 強度位置",
