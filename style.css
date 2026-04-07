@@ -59,3 +59,14 @@ div[data-testid="stMetricDelta"] > div {
 .block-container {
 	padding-top: 1.5rem !important;
 }
+
+.light_tags {
+	background-color: #262730;
+	color: white;
+	padding: 3px 10px;
+	border-radius: 10px;
+	margin-right: 6px;
+	border: 1px solid #464646;
+	font-size: 0.8rem;
+	font-weight: 500;
+}

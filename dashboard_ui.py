@@ -81,10 +81,7 @@ def render_advanced_analysis_ui(res):
     # --- 1. 標籤雲 ---
     if "tags" in res and res["tags"]:
         tag_html = "".join(
-            [
-                f'<span style="background-color: #262730; color: white; padding: 3px 10px; border-radius: 10px; margin-right: 6px; border: 1px solid #464646; font-size: 0.8rem; font-weight: 500;">{tag}</span>'
-                for tag in res["tags"]
-            ]
+            [f'<span class="light_tags">{tag}</span>' for tag in res["tags"]]
         )
         st.markdown(tag_html, unsafe_allow_html=True)
         # st.write("**💡 技術診斷**")
@@ -190,18 +187,11 @@ def render_profit_and_loss_component(df):
     render_inline_metric("💰 總損益", f"${total_pl:+,.0f}", f"{roi:+.2f}%")
 
 
-# 市場指數區塊
+# 垂直排列區塊
 def render_vertical_component(indices):
     import streamlit as st
 
-    # 市場指數：非匯率代碼 (不以 =X 結尾)
-    # indices = [item for item in radar_data if not item["代碼"].endswith("=X")]
-    # 動態計算列數，最多每行 4 個
-    # display_indices = indices
-    # n_cols = min(len(display_indices), 4) if display_indices else 1
-    # idx_cols = st.columns(n_cols)
     for i, item in enumerate(indices):
-        # with idx_cols[i % n_cols]:
         with st.container(border=True, gap="xxsmall"):
             render_inline_metric(
                 item["名稱"],
@@ -210,28 +200,19 @@ def render_vertical_component(indices):
             )
 
 
-# 匯率區塊
+# 橫向排列區塊
 def render_horizontal_component(major_rates):
     import streamlit as st
 
-    # 匯率：代碼以 =X 結尾
-    # major_rates = [item for item in radar_data if item["代碼"].endswith("=X")]
-    # 匯率橫向排列，最多每行 3 個
     n_rate_cols = min(len(major_rates), 3) if major_rates else 1
     rate_cols = st.columns(n_rate_cols)
     for i, item in enumerate(major_rates):
         with rate_cols[i % n_rate_cols]:
             with st.container(border=True, gap="xxsmall"):
-                color = "#ff4b4b" if item["漲跌幅"] > 0 else "#00c853"
-                st.markdown(
-                    f"""
-                    <div style='text-align: left; margin-bottom: 2px;'>
-                        <div style='font-size: 0.75rem; color: #8b949e; line-height: 1.2;'>{item["名稱"]}</div>
-                        <div style='font-size: 1.1rem; font-weight: 600; color: white; margin: 1px 0;'>{item["數值"]:.2f}</div>
-                        <div style='font-size: 0.75rem; color: {color}; font-weight: 500;'>{item["漲跌幅"]:+.2f}%</div>
-                    </div>
-                """,
-                    unsafe_allow_html=True,
+                render_inline_metric(
+                    item["名稱"],
+                    f"{item['數值']:,.2f}",
+                    f"{item['漲跌幅']:+.2f}%",
                 )
 
 
@@ -241,13 +222,22 @@ def render_dataframe_component(df):
     import pandas as pd
 
     df_view = df.copy()
-    
+
     # 強制轉換數值欄位，避免 Styler 格式化非數值時報錯
-    numeric_cols = ["單位數", "平均成本", "股價", "漲跌", "市值", "損益", "報酬率", "佔比"]
+    numeric_cols = [
+        "單位數",
+        "平均成本",
+        "股價",
+        "漲跌",
+        "市值",
+        "損益",
+        "報酬率",
+        "佔比",
+    ]
     for col in numeric_cols:
         if col in df_view.columns:
             # errors='coerce' 會將無法轉換的字串轉為 NaN
-            df_view[col] = pd.to_numeric(df_view[col], errors='coerce').fillna(0.0)
+            df_view[col] = pd.to_numeric(df_view[col], errors="coerce").fillna(0.0)
 
     # 確保字串欄位一致，避免 Arrow 序列化錯誤 (Mixed types in object column)
     if "代碼" in df_view.columns:
@@ -259,15 +249,15 @@ def render_dataframe_component(df):
 
     df_view["標的"] = df_view["代碼"]  # 預設僅顯示代碼
     cols_display = [
-        "標的",
         "市場",
-        "單位數",
-        "平均成本",
+        "標的",
         "股價",
         "漲跌",
-        "市值",
         "損益",
         "報酬率",
+        "單位數",
+        "平均成本",
+        "市值",
         "佔比",
     ]
 
@@ -287,7 +277,7 @@ def render_dataframe_component(df):
                 "報酬率": "{:+.2f}%",
                 "佔比": "{:.1f}%",
             },
-            na_rep="0" # 增加對 NaN 的容錯處理
+            na_rep="0",  # 增加對 NaN 的容錯處理
         )
         .map(
             lambda x: (
@@ -347,7 +337,7 @@ def render_plotly_pie_charts(df, exchange_rates):
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.5, xanchor="center", x=0.5),
         margin=dict(t=40, b=80, l=0, r=0),
-        height=280,
+        height=300,
     )
     # with c1:
     with st.container(border=True):
@@ -369,8 +359,8 @@ def render_plotly_pie_charts(df, exchange_rates):
     fig_item.update_layout(
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.5, xanchor="center", x=0.5),
-        margin=dict(t=40, b=120, l=0, r=0),
-        # height=480,
+        margin=dict(t=40, b=80, l=0, r=0),
+        height=480,
     )
 
     # with c2:

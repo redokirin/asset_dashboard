@@ -21,14 +21,18 @@ def get_secret(key, default=None):
     except Exception:
         return default
 
-SPREADSHEET_ID = get_secret("spreadsheet_id", "1xiuVw0fuuIdqVX0a-gGf0MkEZWmwWGnsRndCoNEc-4A")
+
+SPREADSHEET_ID = get_secret(
+    "spreadsheet_id", "1xiuVw0fuuIdqVX0a-gGf0MkEZWmwWGnsRndCoNEc-4A"
+)
 CREDENTIALS_PATH = Path(__file__).parent / "credentials.json"
+
 
 @st.cache_data(ttl=600)  # 每 10 分鐘快取一次
 def get_config_from_gsheets():
     """從 Google Sheets 讀取資產配置，支援本地檔案與 Streamlit Secrets"""
     creds = None
-    
+
     # 1. 優先嘗試從 Streamlit Secrets 讀取 (適合 Cloud 部署)
     gcp_info = get_secret("gcp_service_account")
     if gcp_info:
@@ -39,8 +43,11 @@ def get_config_from_gsheets():
                 creds_info = creds_info.to_dict()
             else:
                 creds_info = dict(creds_info)
-            
-            scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+
+            scopes = [
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive",
+            ]
             creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
             logging.info("使用 Streamlit Secrets 載入 Google 憑證")
         except Exception as e:
@@ -51,8 +58,13 @@ def get_config_from_gsheets():
     # 2. 如果 Secrets 沒有，嘗試讀取本地檔案 (適合本地開發)
     if not creds and CREDENTIALS_PATH.exists():
         try:
-            scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-            creds = Credentials.from_service_account_file(str(CREDENTIALS_PATH), scopes=scopes)
+            scopes = [
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive",
+            ]
+            creds = Credentials.from_service_account_file(
+                str(CREDENTIALS_PATH), scopes=scopes
+            )
             logging.info("使用本地 credentials.json 載入 Google 憑證")
         except Exception as e:
             logging.error(f"從本地檔案載入憑證失敗: {e}")
@@ -71,7 +83,9 @@ def get_config_from_gsheets():
         try:
             ws_radar = sh.worksheet("radar_tickers")
             radar_data = ws_radar.get_all_records()
-            config["radar_tickers"] = {row["Ticker"]: row["Name"] for row in radar_data if row["Ticker"]}
+            config["radar_tickers"] = {
+                row["Ticker"]: row["Name"] for row in radar_data if row["Ticker"]
+            }
         except Exception as e:
             logging.error(f"讀取 radar_tickers 分頁失敗: {e}")
 
@@ -86,13 +100,16 @@ def get_config_from_gsheets():
                 key = str(row.pop("Key", "") or row.pop("key", "")).strip()
                 if key:
                     cleaned_row = {}
-                    cleaned_row["id"] = key 
+                    cleaned_row["id"] = key
                     for k, v in row.items():
                         low_k = k.lower()
                         if low_k in numeric_cols:
                             try:
-                                cleaned_row[low_k] = float(str(v).replace(",", "")) if v != "" else 0.0
-                            except: cleaned_row[low_k] = 0.0
+                                cleaned_row[low_k] = (
+                                    float(str(v).replace(",", "")) if v != "" else 0.0
+                                )
+                            except:
+                                cleaned_row[low_k] = 0.0
                         elif low_k in bool_cols:
                             # 強制轉為布林值 (處理 "TRUE", "FALSE", 1, 0, True, False)
                             val_str = str(v).upper()
@@ -120,8 +137,11 @@ def get_config_from_gsheets():
                         low_k = k.lower()
                         if low_k in numeric_cols:
                             try:
-                                cleaned_row[low_k] = float(str(v).replace(",", "")) if v != "" else 0.0
-                            except: cleaned_row[low_k] = 0.0
+                                cleaned_row[low_k] = (
+                                    float(str(v).replace(",", "")) if v != "" else 0.0
+                                )
+                            except:
+                                cleaned_row[low_k] = 0.0
                         elif low_k in bool_cols:
                             val_str = str(v).upper()
                             cleaned_row[low_k] = val_str in ["TRUE", "1", "YES", "T"]
@@ -136,6 +156,7 @@ def get_config_from_gsheets():
     except Exception as e:
         logging.error(f"Google Sheets 讀取失敗: {e}")
         return None
+
 
 @st.cache_data
 def get_config():
@@ -462,32 +483,38 @@ def calculate_assets_data(exchange_rates):
         tickers = []
         for asset in ASSETS[cat_key].values():
             # 強制檢查 enabled 和 get_value (相容布林值與字串)
-            is_enabled = asset.get("enabled") is True or str(asset.get("enabled")).upper() in ["TRUE", "1", "YES", "T"]
-            is_get_val = asset.get("get_value") is True or str(asset.get("get_value")).upper() in ["TRUE", "1", "YES", "T"]
-            
+            is_enabled = asset.get("enabled") is True or str(
+                asset.get("enabled")
+            ).upper() in ["TRUE", "1", "YES", "T"]
+            is_get_val = asset.get("get_value") is True or str(
+                asset.get("get_value")
+            ).upper() in ["TRUE", "1", "YES", "T"]
+
             if is_enabled and is_get_val:
                 tickers.append(asset["id"])
-        
+
         if not tickers:
             return
 
         try:
             logging.info(f"正在抓取 {cat_key} 價格: {tickers}")
             hist_data = fetch_historical_data(tuple(tickers), period="1mo")
-            
+
             for t in tickers:
                 try:
                     if isinstance(hist_data.columns, pd.MultiIndex):
                         df = hist_data[t] if t in hist_data.columns.levels[0] else None
                     else:
                         df = hist_data if len(tickers) == 1 else None
-                    
+
                     if df is not None and not df.empty and "Close" in df.columns:
                         df_clean = df["Close"].dropna()
                         if not df_clean.empty:
                             batch_prices[t] = float(df_clean.iloc[-1])
                             if len(df_clean) >= 2:
-                                batch_changes[t] = float(df_clean.iloc[-1] - df_clean.iloc[-2])
+                                batch_changes[t] = float(
+                                    df_clean.iloc[-1] - df_clean.iloc[-2]
+                                )
                 except Exception as e:
                     logging.warning(f"解析 {t} 價格失敗: {e}")
         except Exception as e:
@@ -597,10 +624,10 @@ def calculate_buffered_entries(df, ma20, ma250, current_price, rs_p10_price):
 # │ 參數名稱          │ 中文名稱               │ 診斷用途說明                                          │
 # ├──────────────────┼──────────────────────┼───────────────────────────────────────────────────────┤
 # │ price            │ 現價                  │ 作為所有技術位階計算的基礎基準。                      │
-# │ ma20             │ 月線 (20日均線)      │ 定義「短線動能」與計算「乖離率」的核心指標。          │
-# │ ma250            │ 年線 (250日均線)     │ 定義「長線格局」多空的分水嶺。                        │
-# │ vol_ratio        │ 量比 (成交量比率)    │ 偵測異常動能（如爆量、窒息量）與驗證價格真偽。        │
-# │ price_change_pct │ 今日漲跌幅           │ 結合量比進行「量價驗證」判斷。                        │
+# │ ma20             │ 月線 (20日均線)       │ 定義「短線動能」與計算「乖離率」的核心指標。          │
+# │ ma250            │ 年線 (250日均線)       │ 定義「長線格局」多空的分水嶺。                        │
+# │ vol_ratio        │ 量比 (成交量比率)      │ 偵測異常動能（如爆量、窒息量）與驗證價格真偽。        │
+# │ price_change_pct │ 今日漲跌幅            │ 結合量比進行「量價驗證」判斷。                        │
 # │ rs_percentile    │ RS 百分位 (相對強度)   │ 判斷標的在市場中的強度位階（如過熱區、深水區）。      │
 # │ sharpe           │ 夏普值 (風險效率)      │ 衡量資產的報酬/風險比，篩選高效率標的。               │
 # │ eps              │ 每股盈餘              │ 判斷企業基本面是否具備實質獲利支撐。                  │
@@ -757,7 +784,6 @@ def generate_advanced_diagnosis(
     綜合診斷：調用客觀診斷函式並整合原有邏輯
     """
     # 預設值，防止 NameError
-    obj_summary = "⚪ 正常"
     obj_advice = "『數據分析中...』"
 
     # 調用核心診斷
