@@ -132,7 +132,7 @@ def render_advanced_analysis_ui(res):
 def show_manual_analysis_page():
     import streamlit as st
     import pandas as pd
-    from dashboard_logic import run_advanced_analysis
+    import dashboard_logic
 
     st.info("請在此輸入標的代碼，系統將執行深度量化診斷。")
     manual_codes = st.text_input(
@@ -165,7 +165,12 @@ def show_manual_analysis_page():
                 ]
             )
             with st.spinner("分析中..."):
-                adv_manual = run_advanced_analysis(manual_df)
+                # 清除快取，確保手動輸入時獲取最新數據
+                if hasattr(dashboard_logic, "clear_ticker_cache"):
+                    for c in codes:
+                        dashboard_logic.clear_ticker_cache(c)
+
+                adv_manual = dashboard_logic.run_advanced_analysis(manual_df)
                 if not adv_manual.empty:
                     for _, res in adv_manual.iterrows():
                         with st.expander(
@@ -220,99 +225,93 @@ def render_horizontal_component(major_rates):
 def render_dataframe_component(df):
     import streamlit as st
     import pandas as pd
+    import dashboard_logic
 
-    df_view = df.copy()
+    # 1. 標題與簡介
+    # render_title_component("📋 持倉資產清單")
 
-    # 強制轉換數值欄位，避免 Styler 格式化非數值時報錯
-    numeric_cols = [
-        "單位數",
-        "平均成本",
-        "股價",
-        "漲跌",
-        "市值",
-        "損益",
-        "報酬率",
-        "佔比",
-    ]
-    for col in numeric_cols:
-        if col in df_view.columns:
-            # errors='coerce' 會將無法轉換的字串轉為 NaN
-            df_view[col] = pd.to_numeric(df_view[col], errors="coerce").fillna(0.0)
-
-    # 確保字串欄位一致，避免 Arrow 序列化錯誤 (Mixed types in object column)
-    if "代碼" in df_view.columns:
-        df_view["代碼"] = df_view["代碼"].astype(str)
-    if "名稱" in df_view.columns:
-        df_view["名稱"] = df_view["名稱"].astype(str)
-    if "市場" in df_view.columns:
-        df_view["市場"] = df_view["市場"].astype(str)
-
-    df_view["標的"] = df_view["代碼"]  # 預設僅顯示代碼
-    cols_display = [
-        "市場",
-        "標的",
-        "股價",
-        "漲跌",
-        "損益",
-        "報酬率",
-        "單位數",
-        "平均成本",
-        "市值",
-        "佔比",
-    ]
-
-    # 確保 cols_display 內的欄位都存在
-    cols_to_use = [c for c in cols_display if c in df_view.columns]
-
-    event = st.dataframe(
-        df_view[cols_to_use]
-        .style.format(
-            {
-                "單位數": "{:,.0f}",
-                "平均成本": "{:,.2f}",
-                "股價": "{:,.2f}",
-                "漲跌": "{:+,.2f}",
-                "市值": "${:,.0f}",
-                "損益": "${:+,.0f}",
-                "報酬率": "{:+.2f}%",
-                "佔比": "{:.1f}%",
-            },
-            na_rep="0",  # 增加對 NaN 的容錯處理
-        )
-        .map(
-            lambda x: (
-                "color: #ff4b4b"
-                if (pd.notnull(x) and x > 0)
-                else ("color: #00c853" if (pd.notnull(x) and x < 0) else "")
-            ),
-            subset=["損益", "報酬率", "漲跌"],
-        ),
-        # height=300,
-        width="stretch",
-        on_select="rerun",
-        selection_mode="single-row",
-        hide_index=True,
-        column_config={
-            "標的": st.column_config.TextColumn(
-                "標的", help="顯示代碼 (點選可看完整名稱與分析)"
-            )
-        },
-    )
-
-    if event and event.selection and event.selection.rows:
-        idx = event.selection.rows[0]
-        selected_row = df.iloc[idx]
-        title = f"🔍 {selected_row['名稱']} ({selected_row['代碼']}) 進階分析"
-
-        render_title_component(title)
-        # st.markdown(f"#### 🔍 {selected_row['名稱']} 進階分析")
+    # 2. 迭代渲染每一個資產卡片
+    for idx, row in df.iterrows():
         with st.container(border=True):
-            from dashboard_logic import run_advanced_analysis
+            # 佈局：[左：基本資訊] [中：股價漲跌] [右：損益與佔比] [末：分析按鈕]
+            c1, c2, c3, c4 = st.columns([1.2, 1.2, 1.2, 0.4])
 
-            with st.spinner("分析中..."):
-                adv_results = run_advanced_analysis(pd.DataFrame([selected_row]))
-                if not adv_results.empty:
-                    render_advanced_analysis_ui(adv_results.iloc[0])
+            with c1:
+                # 標的名稱與市場
+                st.markdown(
+                    f"""
+                    <div style='margin-bottom: 2px;'>
+                        <div style='font-size: 0.8rem; color: #8b949e;'>{row['市場']} | {row['代碼']}</div>
+                        <div style='font-size: 1.1rem; font-weight: 600; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>{row['名稱']}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+            with c2:
+                # 股價與漲跌 (比照 render_inline_metric 格式)
+                price = row["股價"]
+                change = row["漲跌"]
+                change_val = float(change) if pd.notnull(change) and change != "-" else 0.0
+                color = "#ff4b4b" if change_val > 0 else "#00c853" if change_val < 0 else "#8b949e"
+                bg_opacity = "22" if change_val != 0 else "11"
+                
+                st.markdown(
+                    f"""
+                    <div>
+                        <div style='font-size: 0.8rem; color: #8b949e;'>現價 / 漲跌</div>
+                        <div style='display: flex; align-items: baseline;'>
+                            <span style='font-size: 1.3rem; font-weight: 600; color: white; margin-right: 8px;'>{price:,.2f}</span>
+                            <span style='font-size: 0.8rem; color: {color}; background-color: {color}{bg_opacity}; padding: 1px 6px; border-radius: 4px; font-weight: 500;'>{change_val:+,.2f}</span>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+            with c3:
+                # 損益與報酬率
+                pl = row["損益"]
+                roi = row["報酬率"]
+                pl_color = "#ff4b4b" if pl > 0 else "#00c853" if pl < 0 else "white"
+                st.markdown(
+                    f"""
+                    <div>
+                        <div style='font-size: 0.8rem; color: #8b949e;'>損益 / 報酬</div>
+                        <div style='font-size: 1rem; font-weight: 500; color: {pl_color};'>
+                            ${pl:+,.0f} <span style='font-size: 0.85rem;'>({roi:+.2f}%)</span>
+                        </div>
+                        <div style='font-size: 0.75rem; color: #8b949e;'>佔比: {row['佔比']:.1f}%</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+            with c4:
+                # 分析按鈕
+                st.write("") # 垂直對齊調整
+                if st.button("🔍", key=f"btn_{row['代碼']}_{idx}", help="點擊執行進階量化分析"):
+                    st.session_state[f"analyze_{row['代碼']}"] = True
+
+        # 如果該標的被點擊分析，則在下方展開分析內容
+        if st.session_state.get(f"analyze_{row['代碼']}", False):
+            ticker = row["代碼"]
+            title = f"📈 {row['名稱']} ({ticker}) 深度量化診斷"
+            render_title_component(title)
+            
+            with st.container(border=True):
+                # 根據使用者需求：點擊分析時重寫 cache
+                if hasattr(dashboard_logic, "clear_ticker_cache"):
+                    dashboard_logic.clear_ticker_cache(ticker)
+
+                with st.spinner("正在進行深度數據穿透..."):
+                    adv_results = dashboard_logic.run_advanced_analysis(pd.DataFrame([row]))
+                    if not adv_results.empty:
+                        render_advanced_analysis_ui(adv_results.iloc[0])
+                    
+                if st.button("收合報告", key=f"close_{row['代碼']}"):
+                    st.session_state[f"analyze_{row['代碼']}"] = False
+                    st.rerun()
 
 
 # 圓餅圖區塊
@@ -573,10 +572,10 @@ def show_console_rich(
             bid_str = f"{row['建議掛單']:,.2f}" if row["建議掛單"] > 0 else "-"
 
             table.add_row(
-                row["市場"],
-                row["名稱"],
-                row["代碼"],
-                row["幣別"],
+                str(row["市場"]),
+                str(row["名稱"]),
+                str(row["代碼"]),
+                str(row["幣別"]),
                 f"{row['單位數']:,.2f}",
                 f"{row['平均成本']:,.2f}",
                 change_str,

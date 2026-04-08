@@ -41,18 +41,104 @@ def login_form():
 
 # --- 2. 注入受 Streamlit 管理的快取抓取器 ---
 @st.cache_data(ttl=3600)
-def streamlit_historical_fetcher(tickers, period="2y", group_by="ticker"):
-    return yf.download(list(tickers), period=period, progress=False, group_by=group_by)
+def fetch_single_ticker_historical_flat(ticker, period="2y"):
+    """單獨抓取並快取單一標的的歷史數據 (單層索引)"""
+    # 傳入字串 ticker (不帶 list) 以確保返回單層 Index
+    df = yf.download(
+        ticker,
+        period=period,
+        progress=False,
+        auto_adjust=True
+    )
+    # 強制轉換索引為無時區的 DatetimeIndex
+    if not df.empty:
+        df.index = pd.to_datetime(df.index)
+        if hasattr(df.index, "tz") and df.index.tz is not None:
+            df.index = df.index.tz_localize(None)
+    return df
 
 
 @st.cache_data(ttl=3600)
+def fetch_single_ticker_common_flat(ticker, period="2y"):
+    """單獨抓取並快取單一標的的共用數據 (單層索引)"""
+    df = yf.download(
+        ticker,
+        period=period,
+        progress=False,
+        auto_adjust=True,
+    )
+    if not df.empty:
+        df.index = pd.to_datetime(df.index)
+        if hasattr(df.index, "tz") and df.index.tz is not None:
+            df.index = df.index.tz_localize(None)
+    return df
+
+
+def streamlit_historical_fetcher(tickers, period="2y", group_by="ticker"):
+    """封裝層：將單層快取數據組合成 MultiIndex 結構"""
+    if isinstance(tickers, str):
+        return fetch_single_ticker_historical_flat(tickers, period)
+
+    ticker_list = list(tickers)
+    dfs = []
+    for t in ticker_list:
+        df = fetch_single_ticker_historical_flat(t, period)
+        if not df.empty:
+            # 在快取之外手動建立 MultiIndex
+            df_m = df.copy()
+            if isinstance(df_m.columns, pd.MultiIndex):
+                # 如果已經是 MultiIndex (yfinance 0.2.40+)，先降維再接起來
+                df_m.columns = df_m.columns.get_level_values(0)
+            df_m.columns = pd.MultiIndex.from_product([[t], df_m.columns])
+            dfs.append(df_m)
+
+    if not dfs:
+        return pd.DataFrame()
+    return pd.concat(dfs, axis=1)
+
+
 def streamlit_common_fetcher(tickers, period="2y"):
-    return yf.download(list(tickers), period=period, progress=False)
+    """封裝層：將單層快取數據組合"""
+    if isinstance(tickers, str):
+        return fetch_single_ticker_common_flat(tickers, period)
+
+    ticker_list = list(tickers)
+    dfs = []
+    for t in ticker_list:
+        df = fetch_single_ticker_common_flat(t, period)
+        if not df.empty:
+            df_m = df.copy()
+            if isinstance(df_m.columns, pd.MultiIndex):
+                df_m.columns = df_m.columns.get_level_values(0)
+            df_m.columns = pd.MultiIndex.from_product([[t], df_m.columns])
+            dfs.append(df_m)
+
+    if not dfs:
+        return pd.DataFrame()
+
+    if len(dfs) == 1:
+        res = dfs[0].copy()
+        res.columns = res.columns.get_level_values(1)
+        return res
+
+    return pd.concat(dfs, axis=1)
 
 
 # 替換邏輯層中的抓取器
 dashboard_logic.FETCHERS["historical"] = streamlit_historical_fetcher
 dashboard_logic.FETCHERS["common"] = streamlit_common_fetcher
+
+
+def clear_ticker_cache(ticker):
+    """清除特定 Ticker 的快取，確保重新抓取最新數據"""
+    # 清除不同 period 的快取 (與業務邏輯中使用的參數一致)
+    fetch_single_ticker_historical_flat.clear(ticker, period="2y")
+    fetch_single_ticker_historical_flat.clear(ticker, period="1mo")
+    # fetch_single_ticker_common_flat.clear(ticker, period="2y")
+
+
+# 注入清除快取的函式到邏輯層，供 UI 層調用
+dashboard_logic.clear_ticker_cache = clear_ticker_cache
 
 # --- 3. 執行主程式邏輯 ---
 if __name__ == "__main__":
