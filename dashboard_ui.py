@@ -365,9 +365,9 @@ def render_shareholding_component(df):
 
                 st.markdown(
                     f"""
-                    <div>
+                    <div style='display: flex; align-items: baseline; justify-content: flex-end;'
                         <div style='font-size: 0.8rem; color: #8b949e;'>現價 / 漲跌</div>
-                        <div style='display: flex; align-items: baseline;'>
+                        <div style='display: flex; align-items: baseline; justify-content: flex-end;'>
                             <span style='font-size: 1.3rem; font-weight: 600; color: white; margin-right: 8px;'>{price:,.2f}</span>
                             <span style='font-size: 0.8rem; color: {color}; background-color: {color}{bg_opacity}; padding: 1px 6px; border-radius: 4px; font-weight: 500;'>{change_val:+,.2f}</span>
                         </div>
@@ -383,7 +383,7 @@ def render_shareholding_component(df):
                 pl_color = "#ff4b4b" if pl > 0 else "#00c853" if pl < 0 else "white"
                 st.markdown(
                     f"""
-                    <div>
+                    <div style='display: flex; align-items: baseline; justify-content: flex-end;'>
                         <div style='font-size: 0.8rem; color: #8b949e;'>損益 / 報酬</div>
                         <div style='font-size: 1rem; font-weight: 500; color: {pl_color};'>
                             ${pl:+,.0f} <span style='font-size: 0.85rem;'>({roi:+.2f}%)</span>
@@ -487,7 +487,7 @@ def render_inline_metric(label, value, delta):
         f"""
         <div style='margin-bottom: 1px;'>
             <div style='font-size: 0.85rem; color: #8b949e; margin-bottom: 1px;'>{label}</div>
-            <div style='display: flex; align-items: baseline;'>
+            <div style='display: flex; align-items: baseline; justify-content: flex-end;'>
                 <span style='font-size: 1.6rem; font-weight: 600; color: white; margin-right: 5px;'>{value}</span>
                 <span style='font-size: 0.85rem; color: {color}; background-color: {color}22; padding: 2px 8px; border-radius: 6px; font-weight: 500;'>{delta}</span>
             </div>
@@ -530,8 +530,8 @@ def show_streamlit(df, radar_data, exchange_rates):
 
         # render_title_component("📋 持倉明細")
         with st.container(border=False):
-            render_dataframe_component(df)
-            # render_shareholding_component(df)
+            # render_dataframe_component(df)
+            render_shareholding_component(df)
 
     with col_right:
         # render_title_component("📊 資產權重分佈")

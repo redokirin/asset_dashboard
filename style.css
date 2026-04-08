@@ -70,3 +70,7 @@ div[data-testid="stMetricDelta"] > div {
 	font-size: 0.8rem;
 	font-weight: 500;
 }
+
+.stTabs {
+	padding-top: 2rem !important;
+}

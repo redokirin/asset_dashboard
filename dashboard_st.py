@@ -44,12 +44,7 @@ def login_form():
 def fetch_single_ticker_historical_flat(ticker, period="2y"):
     """單獨抓取並快取單一標的的歷史數據 (單層索引)"""
     # 傳入字串 ticker (不帶 list) 以確保返回單層 Index
-    df = yf.download(
-        ticker,
-        period=period,
-        progress=False,
-        auto_adjust=True
-    )
+    df = yf.download(ticker, period=period, progress=False, auto_adjust=True)
     # 強制轉換索引為無時區的 DatetimeIndex
     if not df.empty:
         df.index = pd.to_datetime(df.index)
