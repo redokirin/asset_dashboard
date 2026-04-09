@@ -332,75 +332,83 @@ def render_shareholding_component(df):
     # 2. 迭代渲染每一個資產卡片
     for idx, row in df.iterrows():
         with st.container(border=True):
-            # 佈局：[左：基本資訊] [中：股價漲跌] [右：損益與佔比] [末：分析按鈕]
-            c1, c2, c3, c4 = st.columns([1.2, 1.2, 1.2, 0.4])
+            # 退回使用原生 columns，但改為絕對平鋪 4 個欄位，不使用巢狀
+            with st.container():
+                c1, c2, c3, c4 = st.columns([0.65, 2.5, 2.2, 2.2])
 
-            with c1:
-                # 標的名稱與市場
-                st.markdown(
-                    f"""
-                    <div style='margin-bottom: 2px;'>
-                        <div style='font-size: 0.8rem; color: #8b949e;'>{row["市場"]} | {row["代碼"]}</div>
-                        <div style='font-size: 1.1rem; font-weight: 600; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>{row["名稱"]}</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                # 1. 分析按鈕
+                with c1:
+                    # 選取器信標：放在 c1 內，確保整個 HorizontalBlock 可被 `:has(.asset-card-beacon)` 精準選中
+                    st.markdown(
+                        '<div class="asset-card-beacon" style="display:none;"></div>',
+                        unsafe_allow_html=True,
+                    )
 
-            with c2:
-                # 股價與漲跌 (比照 render_inline_metric 格式)
-                price = row["股價"]
-                change = row["漲跌"]
-                change_val = (
-                    float(change) if pd.notnull(change) and change != "-" else 0.0
-                )
-                color = (
-                    "#ff4b4b"
-                    if change_val > 0
-                    else "#00c853"
-                    if change_val < 0
-                    else "#8b949e"
-                )
-                bg_opacity = "22" if change_val != 0 else "11"
+                    if st.button(
+                        "🔍",
+                        key=f"btn_{row['代碼']}_{idx}",
+                        help="點擊執行進階量化分析",
+                    ):
+                        st.session_state[f"analyze_{row['代碼']}"] = True
 
-                st.markdown(
-                    f"""
-                    <div style='display: flex; align-items: baseline; justify-content: flex-end;'
-                        <div style='font-size: 0.8rem; color: #8b949e;'>現價 / 漲跌</div>
-                        <div style='display: flex; align-items: baseline; justify-content: flex-end;'>
-                            <span style='font-size: 1.3rem; font-weight: 600; color: white; margin-right: 8px;'>{price:,.2f}</span>
-                            <span style='font-size: 0.8rem; color: {color}; background-color: {color}{bg_opacity}; padding: 1px 6px; border-radius: 4px; font-weight: 500;'>{change_val:+,.2f}</span>
+                # 2. 標的名稱與市場
+                with c2:
+                    st.markdown(
+                        f"""
+                        <div style='margin-bottom: 2px;'>
+                            <div style='font-size: 0.8rem; color: #8b949e; white-space: nowrap;'>{row["市場"]} | {row["代碼"]}</div>
+                            <div style='font-size: 1.1rem; font-weight: 600; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>{row["名稱"]}</div>
                         </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
-            with c3:
-                # 損益與報酬率
-                pl = row["損益"]
-                roi = row["報酬率"]
-                pl_color = "#ff4b4b" if pl > 0 else "#00c853" if pl < 0 else "white"
-                st.markdown(
-                    f"""
-                    <div style='display: flex; align-items: baseline; justify-content: flex-end;'>
-                        <div style='font-size: 0.8rem; color: #8b949e;'>損益 / 報酬</div>
-                        <div style='font-size: 1rem; font-weight: 500; color: {pl_color};'>
-                            ${pl:+,.0f} <span style='font-size: 0.85rem;'>({roi:+.2f}%)</span>
+                # 3. 股價與漲跌
+                with c3:
+                    price = row["股價"]
+                    change = row["漲跌"]
+                    change_val = (
+                        float(change) if pd.notnull(change) and change != "-" else 0.0
+                    )
+                    color = (
+                        "#ff4b4b"
+                        if change_val > 0
+                        else "#00c853"
+                        if change_val < 0
+                        else "#8b949e"
+                    )
+                    bg_opacity = "22" if change_val != 0 else "11"
+
+                    st.markdown(
+                        f"""
+                        <div style='display: flex; flex-direction: column; align-items: flex-end;'>
+                            <div style='font-size: 0.8rem; color: #8b949e;'>現價 / 漲跌</div>
+                            <div style='display: flex; align-items: baseline; justify-content: flex-end;'>
+                                <span style='font-size: 1.3rem; font-weight: 600; color: white; margin-right: 8px;'>{price:,.2f}</span>
+                                <span style='font-size: 0.8rem; color: {color}; background-color: {color}{bg_opacity}; padding: 1px 6px; border-radius: 4px; font-weight: 500;'>{change_val:+,.2f}</span>
+                            </div>
                         </div>
-                        <div style='font-size: 0.75rem; color: #8b949e;'>佔比: {row["佔比"]:.1f}%</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
-            with c4:
-                # 分析按鈕
-                st.write("")  # 垂直對齊調整
-                if st.button(
-                    "🔍", key=f"btn_{row['代碼']}_{idx}", help="點擊執行進階量化分析"
-                ):
-                    st.session_state[f"analyze_{row['代碼']}"] = True
+                # 4. 損益與報酬率
+                with c4:
+                    pl = row["損益"]
+                    roi = row["報酬率"]
+                    pl_color = "#ff4b4b" if pl > 0 else "#00c853" if pl < 0 else "white"
+                    st.markdown(
+                        f"""
+                        <div style='display: flex; flex-direction: column; align-items: flex-end;'>
+                            <div style='font-size: 0.8rem; color: #8b949e;'>損益 / 報酬</div>
+                            <div style='font-size: 1rem; font-weight: 500; color: {pl_color};'>
+                                ${pl:+,.0f} <span style='font-size: 0.85rem;'>({roi:+.2f}%)</span>
+                            </div>
+                            <div style='font-size: 0.75rem; color: #8b949e;'>佔比: {row["佔比"]:.1f}%</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
         # 如果該標的被點擊分析，則在下方展開分析內容
         if st.session_state.get(f"analyze_{row['代碼']}", False):

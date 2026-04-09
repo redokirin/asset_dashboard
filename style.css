@@ -74,3 +74,106 @@ div[data-testid="stMetricDelta"] > div {
 .stTabs {
 	padding-top: 2rem !important;
 }
+
+/* ---- 獨創 Flex 佈局：避開 st.columns 的限制 ---- */
+
+/* ---- RWD 佈局：強勢接管含有 Beacon 的列 (st.columns) ---- */
+/* 只要這個 HorizontalBlock 裡面含有我們放的 beacon (在 c1 內)，就無條件套用以下列設定！ */
+
+/* 桌機與平板：強制不換行，並依序分配寬度 */
+[data-testid="stHorizontalBlock"]:has(
+		> div[data-testid="stColumn"]:nth-of-type(4)
+	):has(.asset-card-beacon) {
+	display: flex !important;
+	align-items: center !important;
+	flex-wrap: nowrap !important;
+}
+
+/* c1 (按鈕) : 極小化 */
+[data-testid="stHorizontalBlock"]:has(
+		> div[data-testid="stColumn"]:nth-of-type(4)
+	):has(.asset-card-beacon)
+	> div[data-testid="stColumn"]:nth-of-type(1) {
+	width: 50px !important;
+	min-width: 50px !important;
+	flex: 0 0 50px !important;
+}
+
+/* c2 (名稱) : 彈性佔用大空間 */
+[data-testid="stHorizontalBlock"]:has(
+		> div[data-testid="stColumn"]:nth-of-type(4)
+	):has(.asset-card-beacon)
+	> div[data-testid="stColumn"]:nth-of-type(2) {
+	flex: 1 1 0% !important;
+	width: auto !important;
+}
+
+/* c3 (價格) 跟 c4 (損益) : 各自拿需要的大小，靠右排列 */
+[data-testid="stHorizontalBlock"]:has(
+		> div[data-testid="stColumn"]:nth-of-type(4)
+	):has(.asset-card-beacon)
+	> div[data-testid="stColumn"]:nth-of-type(3),
+[data-testid="stHorizontalBlock"]:has(
+		> div[data-testid="stColumn"]:nth-of-type(4)
+	):has(.asset-card-beacon)
+	> div[data-testid="stColumn"]:nth-of-type(4) {
+	flex: 0 0 auto !important;
+	width: auto !important;
+}
+
+/* ---- 行動裝置 (小於 768px) 強制兩樓層佈局 ---- */
+@media (max-width: 768px) {
+	/* 解除不換行限制，改採純粹的 Grid 佈局，精準控制每行元素 */
+	[data-testid="stHorizontalBlock"]:has(
+			> div[data-testid="stColumn"]:nth-of-type(4)
+		):has(.asset-card-beacon) {
+		display: grid !important;
+		grid-template-columns: 50px 1fr auto auto !important; /* 定義 4 個無形的導引欄位 */
+		gap: 0.5rem 1rem !important; /* row-gap: 0.5rem, column-gap: 1rem */
+	}
+
+	/* c1 (按鈕) : 第一樓第一欄 */
+	[data-testid="stHorizontalBlock"]:has(
+			> div[data-testid="stColumn"]:nth-of-type(4)
+		):has(.asset-card-beacon)
+		> div[data-testid="stColumn"]:nth-of-type(1) {
+		grid-column: 1 / 2 !important;
+		grid-row: 1 / 2 !important;
+		width: 100% !important;
+		min-width: unset !important;
+	}
+
+	/* c2 (名稱) : 第一樓，橫跨欄位2到4，確保它與按鈕並列在上方 */
+	[data-testid="stHorizontalBlock"]:has(
+			> div[data-testid="stColumn"]:nth-of-type(4)
+		):has(.asset-card-beacon)
+		> div[data-testid="stColumn"]:nth-of-type(2) {
+		grid-column: 2 / 5 !important;
+		grid-row: 1 / 2 !important;
+		width: 100% !important;
+		min-width: unset !important;
+	}
+
+	/* c3 (價格) : 第二樓第三欄 (被前方的 1fr 推擠而靠右) */
+	[data-testid="stHorizontalBlock"]:has(
+			> div[data-testid="stColumn"]:nth-of-type(4)
+		):has(.asset-card-beacon)
+		> div[data-testid="stColumn"]:nth-of-type(3) {
+		grid-column: 3 / 4 !important;
+		grid-row: 2 / 3 !important;
+		width: 100% !important;
+		min-width: unset !important;
+		margin-right: 0 !important;
+	}
+
+	/* c4 (損益) : 第二樓第四欄 (自然置於最右方) */
+	[data-testid="stHorizontalBlock"]:has(
+			> div[data-testid="stColumn"]:nth-of-type(4)
+		):has(.asset-card-beacon)
+		> div[data-testid="stColumn"]:nth-of-type(4) {
+		grid-column: 4 / 5 !important;
+		grid-row: 2 / 3 !important;
+		width: 100% !important;
+		min-width: unset !important;
+	}
+}
