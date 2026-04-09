@@ -14,7 +14,55 @@ def load_css():
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 
+def render_analysis_metrics_row(metrics_dict, title=None):
+    """根據傳入的 dictionary 迴圈產生 analysis-metric-box DIV tag"""
+    title_html = f'<div class="analysis-report-title">{title}</div>' if title else ""
+    items_html = ""
+    for label, value in metrics_dict.items():
+        items_html += f'<div class="analysis-metric-box"><div class="analysis-metric-label">{label}</div><div class="analysis-metric-value">{value}</div></div>'
+    return f'{title_html}<div class="analysis-metrics-flex">{items_html}</div>'
+
+
 def render_advanced_analysis_ui(res):
+
+    price_levels_dic = {
+        "股價": res["股價"],
+        "日常波段": res["日常波段"],
+        "技術回測": res["技術回測"],
+        "狙擊防守": res["狙擊位"],
+    }
+    ma_dic = {
+        "MA20": res["MA20"],
+        "MA60": res["MA60"],
+        "MA120": res["MA120"],
+        "MA250": res["MA250"],
+    }
+
+    fund_dic = {"EPS": res["EPS"], "P/E": f"{res['PE']:.1f}", "量比": res["量比"]}
+
+    analyze_1_dic = {
+        "RS%": res["RS 百分位"],
+        "RSI": f"{res.get('RSI', 0):.1f}",
+        "Sharpe": res["夏普值"],
+    }
+
+    analyze_2_dic = {
+        "α勝率": res["Alpha 勝率"],
+        "月度α": res["月度 Alpha"],
+        "Bias%": res["乖離率 (Bias)"],
+    }
+
+    # 使用自定義 DIV 代替 st.columns，移除縮排以避免 Markdown 誤解析
+    analysis_row_1 = render_analysis_metrics_row(price_levels_dic, "🎯 建議掛單位階")
+
+    analysis_row_2 = render_analysis_metrics_row(ma_dic, "📊 均線參考")
+
+    analysis_row_3 = render_analysis_metrics_row(fund_dic, "📊 財務與核心指標")
+
+    analysis_row_4 = render_analysis_metrics_row(analyze_1_dic)
+
+    analysis_row_5 = render_analysis_metrics_row(analyze_2_dic)
+
     """合併後的進階量化分析渲染組件"""
     if "tags" in res and res["tags"]:
         tag_html = "".join(
@@ -23,41 +71,20 @@ def render_advanced_analysis_ui(res):
         st.markdown(tag_html, unsafe_allow_html=True)
         st.info(f"{res['技術診斷']}")
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.write("**🎯 建議掛單位階**")
-        b1, b2, b3, b4 = st.columns(4)
-        b1.metric("股價", res["股價"])
-        b2.metric("日常波段", res["日常波段"])
-        b3.metric("技術回測", res["技術回測"])
-        b4.metric("狙擊防守", res["狙擊位"])
-
-        st.write("**📊 均線參考**")
-        sc1, sc2, sc3, sc4 = st.columns(4)
-        sc1.metric("MA20", res["MA20"])
-        sc2.metric("MA60", res["MA60"])
-        sc3.metric("MA120", res["MA120"])
-        sc4.metric("MA250", res["MA250"])
-
-    with c2:
-        st.markdown('<div class="small-metric">', unsafe_allow_html=True)
-        st.write("**📊 財務指標**")
-        f1, f2, f3 = st.columns(3)
-        f1.metric("每股盈餘 (EPS)", res["EPS"])
-        f2.metric("本益比 (PE)", f"{res['PE']:.1f}")
-        f3.metric("成交量比 (量比)", res["量比"])
-
-        st.write("**📊 量化核心指標**")
-        m1, m2, m3 = st.columns(3)
-        m1.metric("RS 百分位", res["RS 百分位"])
-        m2.metric("RSI (14)", f"{res.get('RSI', 0):.1f}")
-        m3.metric("夏普值 (Sharpe)", res["夏普值"])
-
-        m4, m5, m6 = st.columns(3)
-        m4.metric("Alpha 勝率", res["Alpha 勝率"])
-        m5.metric("月度 Alpha", res["月度 Alpha"])
-        m6.metric("乖離率 (Bias)", res["乖離率 (Bias)"])
-        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown(
+        f"""<div class="analysis-report-row">
+<div class="analysis-report-col">
+{analysis_row_1}
+{analysis_row_2}
+</div>
+<div class="analysis-report-col">
+{analysis_row_3}
+{analysis_row_4}
+{analysis_row_5}
+</div>
+</div>""",
+        unsafe_allow_html=True,
+    )
 
 
 def show_manual_analysis_page():
@@ -117,21 +144,21 @@ def render_profit_and_loss_component(df):
 
 def render_vertical_component(indices):
     for i, item in enumerate(indices):
-        with st.container(border=True, gap="xxsmall"):
-            render_inline_metric(
-                item["名稱"], f"{item['數值']:,.2f}", f"{item['漲跌幅']:+.2f}%"
-            )
+        # with st.container(border=True, gap="xxsmall"):
+        render_inline_metric(
+            item["名稱"], f"{item['數值']:,.2f}", f"{item['漲跌幅']:+.2f}%"
+        )
 
 
 def render_horizontal_component(major_rates):
-    n_rate_cols = min(len(major_rates), 3) if major_rates else 1
+    n_rate_cols = min(len(major_rates), 2) if major_rates else 1
     rate_cols = st.columns(n_rate_cols)
     for i, item in enumerate(major_rates):
         with rate_cols[i % n_rate_cols]:
-            with st.container(border=True, gap="xxsmall"):
-                render_inline_metric(
-                    item["名稱"], f"{item['數值']:,.2f}", f"{item['漲跌幅']:+.2f}%"
-                )
+            # with st.container(border=True, gap="xxsmall"):
+            render_inline_metric(
+                item["名稱"], f"{item['數值']:,.2f}", f"{item['漲跌幅']:+.2f}%"
+            )
 
 
 def render_dataframe_component(df):
@@ -340,29 +367,32 @@ def render_plotly_pie_charts(df, exchange_rates):
 
 
 def render_inline_metric(label, value, delta):
-    className_delta = "bg-red-tag" if "+" in delta else "bg-green-tag"
-    st.markdown(
-        f"""<div class='inline-metric-container'>
-        <div class='inline-metric-label'>{label}</div>
-        <div class='inline-metric-row'>
-        <span class='inline-metric-value'>{value}</span>
-        <span class='inline-metric-delta {className_delta}'>{delta}</span>
-        </div>
-        </div>""",
-        unsafe_allow_html=True,
-    )
+
+    with st.container(border=True, gap="xxsmall"):
+        className_delta = "bg-red-tag" if "+" in delta else "bg-green-tag"
+        st.markdown(
+            f"""<div class='inline-metric-container'>
+                <div class='inline-metric-label'>{label}</div>
+                <div class='inline-metric-row'>
+                    <span class='inline-metric-value'>{value}</span>
+                    <span class='inline-metric-delta {className_delta}'>{delta}</span>
+                </div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
 
 
 def show_streamlit(df, radar_data, exchange_rates):
     load_css()
-    col_left, col_mid, col_right = st.columns([0.5, 1.7, 0.5])
+    col_left, col_mid, col_right = st.columns([0.4, 1.2, 0.5])
     with col_left:
-        with st.container(border=True):
-            render_profit_and_loss_component(df)
         with st.container(border=False):
+            render_profit_and_loss_component(df)
+            # with st.container(border=False):
             # indices = [item for item in radar_data if not item["代碼"].endswith("=X")]
             indices = [item for item in radar_data]
             render_vertical_component(indices)
+            # render_horizontal_component(indices)
         # with st.container(border=False, gap="xxsmall"):
         #     major_rates = [item for item in radar_data if item["代碼"].endswith("=X")]
         #     render_vertical_component(major_rates)
