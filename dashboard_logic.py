@@ -222,6 +222,7 @@ def get_radar_tickers():
     """獲取最新的雷達標的"""
     return get_config().get("radar_tickers", {})
 
+
 # 使用 lru_cache 進行簡單的記憶體快取，配合 requests_cache 達成雙重效能優化
 from functools import lru_cache
 
@@ -248,6 +249,7 @@ def get_ticker_fundamental_info(ticker_symbol):
         info = t.info
         # 由於台日股數據常缺失，使用 get 確保安全性
         return {
+            "name": info.get("shortName") or info.get("longName") or ticker_symbol,
             "eps": info.get("trailingEps", 0) or 0,
             "pe": info.get("trailingPE", 0) or 0,
             "dividendYield": info.get("dividendYield", 0) or 0,
@@ -257,6 +259,7 @@ def get_ticker_fundamental_info(ticker_symbol):
         }
     except Exception:
         return {
+            "name": ticker_symbol,
             "eps": 0,
             "pe": 0,
             "dividendYield": 0,
@@ -293,7 +296,7 @@ def fetch_historical_data(tickers, period="2y", group_by="ticker"):
 
     if df_all is None or df_all.empty:
         return pd.DataFrame()
-    
+
     # --- 全域降維防禦 (避開 MultiIndex 內部方法) ---
     is_mi = False
     try:
@@ -305,8 +308,10 @@ def fetch_historical_data(tickers, period="2y", group_by="ticker"):
         try:
             # 暴力提取所有第一層標的名稱，不使用 get_level_values
             all_cols = df_all.columns.tolist()
-            tickers_in_df = list(set([c[0] if isinstance(c, tuple) else c for c in all_cols]))
-            
+            tickers_in_df = list(
+                set([c[0] if isinstance(c, tuple) else c for c in all_cols])
+            )
+
             # 如果只有一個標的，直接降維成單層 DataFrame
             if len(tickers_in_df) == 1:
                 t_name = tickers_in_df[0]
@@ -321,7 +326,11 @@ def fetch_historical_data(tickers, period="2y", group_by="ticker"):
         if isinstance(df_all.columns, pd.MultiIndex):
             has_target = any(c[0] == target_ticker for c in df_all.columns.tolist())
         else:
-            has_target = (target_ticker == df_all.name) if hasattr(df_all, "name") else (target_ticker in df_all.columns)
+            has_target = (
+                (target_ticker == df_all.name)
+                if hasattr(df_all, "name")
+                else (target_ticker in df_all.columns)
+            )
     except:
         pass
 
@@ -332,11 +341,15 @@ def fetch_historical_data(tickers, period="2y", group_by="ticker"):
                 target_df = df_all[target_ticker].copy()
             else:
                 target_df = df_all
-            
+
             if not target_df.empty and "Close" in target_df.columns:
                 last_p = target_df["Close"].iloc[-1]
-                current_price = float(last_p.iloc[0]) if isinstance(last_p, pd.Series) else float(last_p)
-                
+                current_price = (
+                    float(last_p.iloc[0])
+                    if isinstance(last_p, pd.Series)
+                    else float(last_p)
+                )
+
                 # ... (修正邏輯維持，但使用單層數據)
                 if current_price > 10000:
                     # 執行修正...
@@ -511,14 +524,22 @@ def calculate_assets_data(exchange_rates):
                         # 避開 dropna，改用 notnull 過濾
                         close_s = df["Close"]
                         df_clean = close_s[close_s.notnull()].copy()
-                        
+
                         if not df_clean.empty:
                             last_val = df_clean.iloc[-1]
-                            batch_prices[t] = float(last_val.iloc[0]) if isinstance(last_val, pd.Series) else float(last_val)
-                            
+                            batch_prices[t] = (
+                                float(last_val.iloc[0])
+                                if isinstance(last_val, pd.Series)
+                                else float(last_val)
+                            )
+
                             if len(df_clean) >= 2:
                                 prev_val = df_clean.iloc[-2]
-                                p_val = float(prev_val.iloc[0]) if isinstance(prev_val, pd.Series) else float(prev_val)
+                                p_val = (
+                                    float(prev_val.iloc[0])
+                                    if isinstance(prev_val, pd.Series)
+                                    else float(prev_val)
+                                )
                                 batch_changes[t] = float(batch_prices[t] - p_val)
                 except Exception as e:
                     logging.warning(f"解析 {t} 價格失敗: {e}")
@@ -864,7 +885,7 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
     try:
         # 取得共通數據 (Benchmark, 匯率)
         common_raw = fetch_common_data((benchmark, "JPYTWD=X", "USDTWD=X"), period="2y")
-        
+
         # 針對 MultiIndex 欄位提取特定數據列，並確保返回的是乾淨的 Series
         def get_clean_col(df, ticker_name, col_name):
             try:
@@ -875,14 +896,14 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                         s = df[col_name]
                 else:
                     s = df[col_name]
-                
+
                 # 強制轉換索引為單層 DatetimeIndex
                 if isinstance(s.index, pd.MultiIndex):
                     s.index = s.index.get_level_values(0)
                 s.index = pd.to_datetime(s.index)
                 if hasattr(s.index, "tz") and s.index.tz is not None:
                     s.index = s.index.tz_localize(None)
-                
+
                 # 確保返回的是 Series 而非 DataFrame
                 if isinstance(s, pd.DataFrame):
                     s = s.iloc[:, 0]
@@ -912,13 +933,13 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
 
                 if t_df is None or t_df.empty:
                     continue
-                
+
                 # 2. 強制簡化結構：移除任何剩餘的 MultiIndex
                 if isinstance(t_df.columns, pd.MultiIndex):
                     t_df.columns = t_df.columns.get_level_values(-1)
                 if isinstance(t_df.index, pd.MultiIndex):
                     t_df.index = t_df.index.get_level_values(0)
-                
+
                 # 確保日期格式一致
                 t_df.index = pd.to_datetime(t_df.index)
                 if hasattr(t_df.index, "tz") and t_df.index.tz is not None:
@@ -937,25 +958,37 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                 bias_str = "-"
                 bias_numeric = 0.0
                 ma20_val = None
-                
+
                 # 強制轉換為 float 避免 Series 傳入 metric
                 last_close_val = t_df_clean["Close"].iloc[-1]
-                price_val = float(last_close_val.iloc[0]) if isinstance(last_close_val, pd.Series) else float(last_close_val)
+                price_val = (
+                    float(last_close_val.iloc[0])
+                    if isinstance(last_close_val, pd.Series)
+                    else float(last_close_val)
+                )
 
                 # 計算漲幅
                 if len(t_df_clean) >= 2:
                     prev_close_val = t_df_clean["Close"].iloc[-2]
-                    prev_close = float(prev_close_val.iloc[0]) if isinstance(prev_close_val, pd.Series) else float(prev_close_val)
+                    prev_close = (
+                        float(prev_close_val.iloc[0])
+                        if isinstance(prev_close_val, pd.Series)
+                        else float(prev_close_val)
+                    )
                 else:
                     prev_close = price_val
-                    
+
                 day_change_pct = ((price_val - prev_close) / prev_close) * 100
 
                 if len(t_df_clean) >= 20:
                     ma20_series = t_df_clean["Close"].rolling(20).mean()
                     ma20_last = ma20_series.iloc[-1]
-                    ma20_val = float(ma20_last.iloc[0]) if isinstance(ma20_last, pd.Series) else float(ma20_last)
-                    
+                    ma20_val = (
+                        float(ma20_last.iloc[0])
+                        if isinstance(ma20_last, pd.Series)
+                        else float(ma20_last)
+                    )
+
                     if pd.notnull(ma20_val) and ma20_val > 0:
                         ma20_str = f"{ma20_val:.2f}"
                         bias_numeric = ((price_val - ma20_val) / ma20_val) * 100
@@ -963,13 +996,21 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
 
                 if len(t_df_clean) >= 60:
                     ma60_last = t_df_clean["Close"].rolling(60).mean().iloc[-1]
-                    ma60_val = float(ma60_last.iloc[0]) if isinstance(ma60_last, pd.Series) else float(ma60_last)
+                    ma60_val = (
+                        float(ma60_last.iloc[0])
+                        if isinstance(ma60_last, pd.Series)
+                        else float(ma60_last)
+                    )
                     if pd.notnull(ma60_val):
                         ma60_str = f"{ma60_val:.2f}"
 
                 if len(t_df_clean) >= 120:
                     ma120_last = t_df_clean["Close"].rolling(120).mean().iloc[-1]
-                    ma120_val = float(ma120_last.iloc[0]) if isinstance(ma120_last, pd.Series) else float(ma120_last)
+                    ma120_val = (
+                        float(ma120_last.iloc[0])
+                        if isinstance(ma120_last, pd.Series)
+                        else float(ma120_last)
+                    )
                     if pd.notnull(ma120_val):
                         ma120_str = f"{ma120_val:.2f}"
 
@@ -977,19 +1018,23 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                 ma250_str = "-"
                 if len(t_df_clean) >= 250:
                     ma250_last = t_df_clean["Close"].rolling(250).mean().iloc[-1]
-                    ma250_v = float(ma250_last.iloc[0]) if isinstance(ma250_last, pd.Series) else float(ma250_last)
+                    ma250_v = (
+                        float(ma250_last.iloc[0])
+                        if isinstance(ma250_last, pd.Series)
+                        else float(ma250_last)
+                    )
                     if pd.notnull(ma250_v):
                         ma250_val = ma250_v
                         ma250_str = f"{ma250_val:.2f}"
 
                 # 由於 FETCHERS 已設定 auto_adjust=True，Close 即為調整後價格
                 t_col = "Close"
-                
+
                 # 強制轉換為單一 Series 並移除索引中的 MultiIndex
                 p_series = t_df_clean[t_col].copy()
                 if isinstance(p_series, pd.DataFrame):
                     p_series = p_series.iloc[:, 0]
-                
+
                 # 確保索引是乾淨的 DatetimeIndex
                 if isinstance(p_series.index, pd.MultiIndex):
                     p_series.index = p_series.index.get_level_values(0)
@@ -1005,7 +1050,7 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                     if ".US" in ticker or ticker.isupper()
                     else "TWD"
                 )
-                
+
                 # 處理匯率 Series
                 if ccy == "JPY":
                     r_series = get_clean_col(common_raw, "JPYTWD=X", "Close")
@@ -1022,10 +1067,14 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                 else:
                     # 如果是常數，則在合併後補齊
                     pass
-                
+
                 comb = pd.DataFrame(comb_dict).ffill()
                 if "r" not in comb.columns:
-                    comb["r"] = 1.0 if not isinstance(r_series, (pd.Series, pd.DataFrame)) else r_series
+                    comb["r"] = (
+                        1.0
+                        if not isinstance(r_series, (pd.Series, pd.DataFrame))
+                        else r_series
+                    )
 
                 # 避開 dropna，改用 notnull 過濾
                 comb = comb[comb["p"].notnull() & comb["b"].notnull()]
@@ -1129,10 +1178,8 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                 )
 
                 # --- 結合結果 ---
-                asset_match = df_res[df_res["代碼"] == ticker]
-                asset_name = (
-                    asset_match["名稱"].iloc[0] if not asset_match.empty else ticker
-                )
+                # 優先使用 yfinance 抓取到的官方名稱
+                asset_name = fundamentals.get("name", ticker)
 
                 results.append(
                     {
