@@ -177,3 +177,113 @@ div[data-testid="stMetricDelta"] > div {
 		min-width: unset !important;
 	}
 }
+
+/* ---- 資產卡片內部元件樣式 ---- */
+
+/* 標的名稱區 */
+.asset-info-container {
+	margin-bottom: 2px;
+}
+.asset-info-meta {
+	font-size: 0.8rem;
+	color: #8b949e;
+	white-space: nowrap;
+}
+.asset-info-name {
+	font-size: 1.1rem;
+	font-weight: 600;
+	color: white;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* 價格/損益數值區 */
+.asset-value-container {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+}
+.asset-value-label {
+	font-size: 0.8rem;
+	color: #8b949e;
+}
+.asset-value-row {
+	display: flex;
+	align-items: baseline;
+	justify-content: flex-end;
+}
+.asset-price-main {
+	font-size: 1.3rem;
+	font-weight: 600;
+	color: white;
+	margin-right: 8px;
+}
+.asset-change-tag {
+	font-size: 0.8rem;
+	padding: 1px 6px;
+	border-radius: 4px;
+	font-weight: 500;
+}
+.asset-pl-main {
+	font-size: 1rem;
+	font-weight: 500;
+}
+.asset-pl-roi {
+	font-size: 0.85rem;
+}
+.asset-proportion {
+	font-size: 0.75rem;
+	color: #8b949e;
+}
+
+/* 漲跌動態色彩 Helper Classes */
+.text-red {
+	color: #ff4b4b !important;
+}
+.text-green {
+	color: #00c853 !important;
+}
+.text-grey {
+	color: #8b949e !important;
+}
+
+.bg-red-tag {
+	color: #ff4b4b !important;
+	background-color: rgba(255, 75, 75, 0.22) !important;
+}
+.bg-green-tag {
+	color: #00c853 !important;
+	background-color: rgba(0, 200, 83, 0.22) !important;
+}
+.bg-grey-tag {
+	color: #8b949e !important;
+	background-color: rgba(139, 148, 158, 0.11) !important;
+}
+
+/* 自定義橫向指標 (Inline Metric) 樣式 */
+.inline-metric-container {
+	margin-bottom: 1px;
+}
+.inline-metric-label {
+	font-size: 0.85rem;
+	color: #8b949e;
+	margin-bottom: 1px;
+}
+.inline-metric-row {
+	display: flex;
+	align-items: baseline;
+	justify-content: flex-end;
+}
+.inline-metric-value {
+	font-size: 1.2rem;
+	font-weight: 600;
+	color: white;
+	margin-right: 5px;
+}
+.inline-metric-delta {
+	font-size: 0.85rem;
+	padding: 2px 8px;
+	border-radius: 6px;
+	font-weight: 500;
+}

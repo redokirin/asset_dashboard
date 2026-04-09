@@ -1,0 +1,374 @@
+# -*- coding: utf-8 -*-
+import streamlit as st
+import pandas as pd
+import os
+import dashboard_logic
+import ui_common
+
+
+def load_css():
+    """載入外部 CSS 檔案樣式"""
+    css_file = os.path.join(os.path.dirname(__file__), "style.css")
+    if os.path.exists(css_file):
+        with open(css_file, "r", encoding="utf-8") as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
+
+def render_advanced_analysis_ui(res):
+    """合併後的進階量化分析渲染組件"""
+    if "tags" in res and res["tags"]:
+        tag_html = "".join(
+            [f'<span class="light_tags">{tag}</span>' for tag in res["tags"]]
+        )
+        st.markdown(tag_html, unsafe_allow_html=True)
+        st.info(f"{res['技術診斷']}")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.write("**🎯 建議掛單位階**")
+        b1, b2, b3, b4 = st.columns(4)
+        b1.metric("股價", res["股價"])
+        b2.metric("日常波段", res["日常波段"])
+        b3.metric("技術回測", res["技術回測"])
+        b4.metric("狙擊防守", res["狙擊位"])
+
+        st.write("**📊 均線參考**")
+        sc1, sc2, sc3, sc4 = st.columns(4)
+        sc1.metric("MA20", res["MA20"])
+        sc2.metric("MA60", res["MA60"])
+        sc3.metric("MA120", res["MA120"])
+        sc4.metric("MA250", res["MA250"])
+
+    with c2:
+        st.markdown('<div class="small-metric">', unsafe_allow_html=True)
+        st.write("**📊 財務指標**")
+        f1, f2, f3 = st.columns(3)
+        f1.metric("每股盈餘 (EPS)", res["EPS"])
+        f2.metric("本益比 (PE)", f"{res['PE']:.1f}")
+        f3.metric("成交量比 (量比)", res["量比"])
+
+        st.write("**📊 量化核心指標**")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("RS 百分位", res["RS 百分位"])
+        m2.metric("RSI (14)", f"{res.get('RSI', 0):.1f}")
+        m3.metric("夏普值 (Sharpe)", res["夏普值"])
+
+        m4, m5, m6 = st.columns(3)
+        m4.metric("Alpha 勝率", res["Alpha 勝率"])
+        m5.metric("月度 Alpha", res["月度 Alpha"])
+        m6.metric("乖離率 (Bias)", res["乖離率 (Bias)"])
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
+def show_manual_analysis_page():
+    st.info("請在此輸入標的代碼，系統將執行深度量化診斷。")
+    manual_codes = st.text_input(
+        "🔍 代碼輸入", placeholder="例如: 2330.TW 6284.TWO VOO"
+    )
+
+    if manual_codes:
+        codes = [c.strip().upper() for c in manual_codes.split() if c.strip()]
+        if codes:
+            manual_df = pd.DataFrame(
+                [
+                    {
+                        "市場": "手動",
+                        "類型": "ETF",
+                        "名稱": c,
+                        "代碼": c,
+                        "幣別": "TWD",
+                        "單位數": 0,
+                        "平均成本": 0.0,
+                        "漲跌": "-",
+                        "股價": 0.0,
+                        "建議掛單": 0.0,
+                        "成本": 0,
+                        "市值": 0,
+                        "損益": 0,
+                        "報酬率": 0.0,
+                        "佔比": 0.0,
+                    }
+                    for c in codes
+                ]
+            )
+            with st.spinner("分析中..."):
+                if hasattr(dashboard_logic, "clear_ticker_cache"):
+                    for c in codes:
+                        dashboard_logic.clear_ticker_cache(c)
+                adv_manual = dashboard_logic.run_advanced_analysis(manual_df)
+                if not adv_manual.empty:
+                    for _, res in adv_manual.iterrows():
+                        with st.expander(
+                            f"📈 {res['名稱']} ({res['代碼']}) 報告", expanded=True
+                        ):
+                            render_advanced_analysis_ui(res)
+
+
+def render_title_component(title):
+    st.markdown(f"<div class='section-title'>{title}</div>", unsafe_allow_html=True)
+
+
+def render_profit_and_loss_component(df):
+    total_pl = df["損益"].sum()
+    total_cost = df["成本"].sum()
+    roi = (total_pl / total_cost * 100) if total_cost != 0 else 0
+    render_inline_metric("💰 總損益", f"${total_pl:+,.0f}", f"{roi:+.2f}%")
+
+
+def render_vertical_component(indices):
+    for i, item in enumerate(indices):
+        with st.container(border=True, gap="xxsmall"):
+            render_inline_metric(
+                item["名稱"], f"{item['數值']:,.2f}", f"{item['漲跌幅']:+.2f}%"
+            )
+
+
+def render_horizontal_component(major_rates):
+    n_rate_cols = min(len(major_rates), 3) if major_rates else 1
+    rate_cols = st.columns(n_rate_cols)
+    for i, item in enumerate(major_rates):
+        with rate_cols[i % n_rate_cols]:
+            with st.container(border=True, gap="xxsmall"):
+                render_inline_metric(
+                    item["名稱"], f"{item['數值']:,.2f}", f"{item['漲跌幅']:+.2f}%"
+                )
+
+
+def render_dataframe_component(df):
+    df_view = df.copy()
+    numeric_cols = [
+        "單位數",
+        "平均成本",
+        "股價",
+        "漲跌",
+        "市值",
+        "損益",
+        "報酬率",
+        "佔比",
+    ]
+    for col in numeric_cols:
+        if col in df_view.columns:
+            df_view[col] = pd.to_numeric(df_view[col], errors="coerce").fillna(0.0)
+
+    for col in ["代碼", "名稱", "市場"]:
+        if col in df_view.columns:
+            df_view[col] = df_view[col].astype(str)
+
+    df_view["標的"] = df_view["代碼"]
+    cols_display = [
+        "市場",
+        "標的",
+        "股價",
+        "漲跌",
+        "損益",
+        "報酬率",
+        "單位數",
+        "平均成本",
+        "市值",
+        "佔比",
+    ]
+    cols_to_use = [c for c in cols_display if c in df_view.columns]
+
+    event = st.dataframe(
+        df_view[cols_to_use]
+        .style.format(
+            {
+                "單位數": "{:,.0f}",
+                "平均成本": "{:,.2f}",
+                "股價": "{:,.2f}",
+                "漲跌": "{:+,.2f}",
+                "市值": "${:,.0f}",
+                "損益": "${:+,.0f}",
+                "報酬率": "{:+.2f}%",
+                "佔比": "{:.1f}%",
+            },
+            na_rep="0",
+        )
+        .map(
+            lambda x: (
+                "color: #ff4b4b"
+                if (pd.notnull(x) and x > 0)
+                else ("color: #00c853" if (pd.notnull(x) and x < 0) else "")
+            ),
+            subset=["損益", "報酬率", "漲跌"],
+        ),
+        width="stretch",
+        on_select="rerun",
+        selection_mode="single-row",
+        hide_index=True,
+        column_config={
+            "標的": st.column_config.TextColumn(
+                "標的", help="顯示代碼 (點選可看完整名稱與分析)"
+            )
+        },
+    )
+
+    if event and event.selection and event.selection.rows:
+        idx = event.selection.rows[0]
+        selected_row = df.iloc[idx]
+        title = f"🔍 {selected_row['名稱']} ({selected_row['代碼']}) 進階分析"
+        render_title_component(title)
+        with st.container(border=True):
+            with st.spinner("分析中..."):
+                adv_results = dashboard_logic.run_advanced_analysis(
+                    pd.DataFrame([selected_row])
+                )
+                if not adv_results.empty:
+                    render_advanced_analysis_ui(adv_results.iloc[0])
+
+
+def render_shareholding_component(df):
+    for idx, row in df.iterrows():
+        with st.container(border=True):
+            with st.container():
+                c1, c2, c3, c4 = st.columns([0.65, 2.5, 2.2, 2.2])
+                with c1:
+                    st.markdown(
+                        '<div class="asset-card-beacon" style="display:none;"></div>',
+                        unsafe_allow_html=True,
+                    )
+                    if st.button(
+                        "🔍",
+                        key=f"btn_{row['代碼']}_{idx}",
+                        help="點擊執行進階量化分析",
+                    ):
+                        st.session_state[f"analyze_{row['代碼']}"] = True
+
+                with c2:
+                    st.markdown(
+                        f"""<div class='asset-info-container'>
+                        <div class='asset-info-meta'>{row["市場"]} | {row["代碼"]}</div>
+                        <div class='asset-info-name'>{row["名稱"]}</div>
+                        </div>""",
+                        unsafe_allow_html=True,
+                    )
+
+                with c3:
+                    price, change = row["股價"], row["漲跌"]
+                    change_val = (
+                        float(change) if pd.notnull(change) and change != "-" else 0.0
+                    )
+                    className_tag = (
+                        "bg-red-tag"
+                        if change_val > 0
+                        else "bg-green-tag"
+                        if change_val < 0
+                        else "bg-grey-tag"
+                    )
+                    st.markdown(
+                        f"""<div class='asset-value-container'>
+                        <div class='asset-value-label'>現價 / 漲跌</div>
+                        <div class='asset-value-row'>
+                        <span class='asset-price-main'>{price:,.2f}</span>
+                        <span class='asset-change-tag {className_tag}'>{change_val:+,.2f}</span>
+                        </div>
+                        </div>""",
+                        unsafe_allow_html=True,
+                    )
+
+                with c4:
+                    pl, roi = row["損益"], row["報酬率"]
+                    className_pl = (
+                        "text-red" if pl > 0 else "text-green" if pl < 0 else ""
+                    )
+                    st.markdown(
+                        f"""<div class='asset-value-container'>
+                        <div class='asset-value-label'>損益 / 報酬</div>
+                        <div class='asset-pl-main {className_pl}'>${pl:+,.0f} <span class='asset-pl-roi'>({roi:+.2f}%)</span></div>
+                        <div class='asset-proportion'>佔比: {row["佔比"]:.1f}%</div>
+                        </div>""",
+                        unsafe_allow_html=True,
+                    )
+
+        if st.session_state.get(f"analyze_{row['代碼']}", False):
+            ticker = row["代碼"]
+            render_title_component(f"📈 {row['名稱']} ({ticker}) 深度量化診斷")
+            with st.container(border=True):
+                if hasattr(dashboard_logic, "clear_ticker_cache"):
+                    dashboard_logic.clear_ticker_cache(ticker)
+                with st.spinner("正在進行深度數據穿透..."):
+                    adv_results = dashboard_logic.run_advanced_analysis(
+                        pd.DataFrame([row])
+                    )
+                    if not adv_results.empty:
+                        render_advanced_analysis_ui(adv_results.iloc[0])
+            if st.button("收合報告", key=f"close_{row['代碼']}"):
+                st.session_state[f"analyze_{row['代碼']}"] = False
+                st.rerun()
+
+
+def render_plotly_pie_charts(df, exchange_rates):
+    import plotly.express as px
+
+    market_df = df.groupby("市場")["市值"].sum().reset_index()
+    fig_market = px.pie(
+        market_df,
+        values="市值",
+        names="市場",
+        title="資產分析-市場別",
+        color_discrete_sequence=px.colors.qualitative.Pastel,
+    )
+    fig_market.update_layout(
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.5, xanchor="center", x=0.5),
+        margin=dict(t=40, b=80, l=0, r=0),
+        height=300,
+    )
+    with st.container(border=True):
+        st.plotly_chart(fig_market, use_container_width=True)
+
+    item_df = df.copy()
+    item_df["顯示名稱"] = (
+        item_df["名稱"].astype(str).str.replace(r"[🏆🚩]", "", regex=True)
+    )
+    fig_item = px.pie(
+        item_df,
+        values="市值",
+        names="顯示名稱",
+        title="資產分析-項目別",
+        hole=0.5,
+        color_discrete_sequence=px.colors.qualitative.Set3,
+    )
+    fig_item.update_layout(
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.5, xanchor="center", x=0.5),
+        margin=dict(t=40, b=80, l=0, r=0),
+        height=480,
+    )
+    with st.container(border=True):
+        st.plotly_chart(fig_item, use_container_width=True)
+
+
+def render_inline_metric(label, value, delta):
+    className_delta = "bg-red-tag" if "+" in delta else "bg-green-tag"
+    st.markdown(
+        f"""<div class='inline-metric-container'>
+        <div class='inline-metric-label'>{label}</div>
+        <div class='inline-metric-row'>
+        <span class='inline-metric-value'>{value}</span>
+        <span class='inline-metric-delta {className_delta}'>{delta}</span>
+        </div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+
+
+def show_streamlit(df, radar_data, exchange_rates):
+    load_css()
+    col_left, col_mid, col_right = st.columns([0.5, 1.7, 0.5])
+    with col_left:
+        with st.container(border=True):
+            render_profit_and_loss_component(df)
+        with st.container(border=False):
+            # indices = [item for item in radar_data if not item["代碼"].endswith("=X")]
+            indices = [item for item in radar_data]
+            render_vertical_component(indices)
+        # with st.container(border=False, gap="xxsmall"):
+        #     major_rates = [item for item in radar_data if item["代碼"].endswith("=X")]
+        #     render_vertical_component(major_rates)
+    with col_mid:
+        with st.container(border=False):
+            render_shareholding_component(df)
+    with col_right:
+        with st.container(border=False, gap="xxsmall"):
+            render_plotly_pie_charts(df, exchange_rates)
