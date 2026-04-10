@@ -23,6 +23,32 @@ def render_analysis_metrics_row(metrics_dict, title=None):
     return f'{title_html}<div class="analysis-metrics-flex">{items_html}</div>'
 
 
+def render_tracking_metrics_row(items, title=None):
+    """根據傳入的 list 迴圈產生 analysis-metric-box DIV tag"""
+    title_html = f'<div class="analysis-report-title">{title}</div>' if title else ""
+    items_html = ""
+    for item in items:
+        label = item.get("名稱", "")
+        val = item.get("數值", 0)
+        delta = item.get("漲跌幅", 0)
+        className_delta = (
+            "bg-red-tag"
+            if delta > 0
+            else "bg-green-tag"
+            if delta < 0
+            else "bg-grey-tag"
+        )
+        items_html += (
+            f'<div class="analysis-metric-box">'
+            f'<div class="analysis-metric-label">{label}</div>'
+            f'<div class="analysis-metric-value">{val:,.2f}</div>'
+            f'<div class="analysis-metric-delta {className_delta}">{delta:+.2f}%</div>'
+            f"</div>"
+        )
+    # 移除換行以避免 Markdown 誤解析
+    return f'{title_html}<div class="analysis-metrics-flex">{items_html}</div>'
+
+
 def render_advanced_analysis_ui(res):
 
     price_levels_dic = {
@@ -139,7 +165,24 @@ def render_profit_and_loss_component(df):
     total_pl = df["損益"].sum()
     total_cost = df["成本"].sum()
     roi = (total_pl / total_cost * 100) if total_cost != 0 else 0
-    render_inline_metric("💰 總損益", f"${total_pl:+,.0f}", f"{roi:+.2f}%")
+
+    value = f"${total_pl:+,.0f}"
+    delta = f"{roi:+.2f}%"
+
+    with st.container(border=True, gap="xxsmall"):
+        className_delta = "bg-red-tag" if "+" in delta else "bg-green-tag"
+        st.markdown(
+            f"""<div class='inline-metric-container'>
+                    <div class='inline-metric-label'>💰 總損益</div>
+                    <div class='inline-metric-row'>
+                        <span class='inline-metric-value'>{value}</span>
+                        <span class='inline-metric-delta {className_delta}'>{delta}</span>
+                    </div>
+                </div>""",
+            unsafe_allow_html=True,
+        )
+
+    # render_inline_metric("💰 總損益", f"${total_pl:+,.0f}", f"{roi:+.2f}%")
 
 
 def render_vertical_component(indices):
@@ -342,7 +385,7 @@ def render_plotly_pie_charts(df, exchange_rates):
         height=300,
     )
     with st.container(border=True):
-        st.plotly_chart(fig_market, use_container_width=True)
+        st.plotly_chart(fig_market, width="stretch")
 
     item_df = df.copy()
     item_df["顯示名稱"] = (
@@ -363,7 +406,7 @@ def render_plotly_pie_charts(df, exchange_rates):
         height=480,
     )
     with st.container(border=True):
-        st.plotly_chart(fig_item, use_container_width=True)
+        st.plotly_chart(fig_item, width="stretch")
 
 
 def render_inline_metric(label, value, delta):
@@ -384,21 +427,29 @@ def render_inline_metric(label, value, delta):
 
 def show_streamlit(df, radar_data, exchange_rates):
     load_css()
-    col_left, col_mid, col_right = st.columns([0.4, 1.2, 0.5])
-    with col_left:
-        with st.container(border=False):
-            render_profit_and_loss_component(df)
-            # with st.container(border=False):
-            # indices = [item for item in radar_data if not item["代碼"].endswith("=X")]
-            indices = [item for item in radar_data]
-            render_vertical_component(indices)
-            # render_horizontal_component(indices)
-        # with st.container(border=False, gap="xxsmall"):
-        #     major_rates = [item for item in radar_data if item["代碼"].endswith("=X")]
-        #     render_vertical_component(major_rates)
+    # col_left, col_mid, col_right = st.columns([0.5, 1.2, 0.5])
+    col_mid, col_right = st.columns([1.6, 0.5])
+    # with col_left:
+    # with st.container(border=False):
+    # with st.container(border=False):
+    # indices = [item for item in radar_data if not item["代碼"].endswith("=X")]
+
     with col_mid:
         with st.container(border=False):
+            # 總損益
+            render_profit_and_loss_component(df)
+        with st.container(border=False):
+            # 持股明細
             render_shareholding_component(df)
     with col_right:
+        with st.container(border=False):
+            # 指數
+            indices = [item for item in radar_data]
+            for i in range(0, len(indices), 3):
+                st.markdown(
+                    render_tracking_metrics_row(indices[i : i + 3]),
+                    unsafe_allow_html=True,
+                )
         with st.container(border=False, gap="xxsmall"):
+            # 圓餅圖
             render_plotly_pie_charts(df, exchange_rates)
