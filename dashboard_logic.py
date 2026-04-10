@@ -271,15 +271,15 @@ def get_ticker_fundamental_info(ticker_symbol):
 
 # 定義資料抓取器註冊表，允許從外部注入 (例如 Streamlit 快取版本)
 FETCHERS = {
-    "historical": lambda *args, **kwargs: yf.download(
-        list(args[0]),
+    "historical": lambda tickers, **kwargs: yf.download(
+        list(tickers),
         period=kwargs.get("period", "2y"),
         progress=kwargs.get("progress", False),
         group_by=kwargs.get("group_by", "ticker"),
         auto_adjust=True,  # 自動處理股票拆分與除息，確保技術指標不失真
     ),
-    "common": lambda *args, **kwargs: yf.download(
-        list(args[0]),
+    "common": lambda tickers, **kwargs: yf.download(
+        list(tickers),
         period=kwargs.get("period", "2y"),
         progress=kwargs.get("progress", False),
         auto_adjust=True,  # 確保 Benchmark 與匯率同樣經過調整
@@ -296,6 +296,74 @@ def fetch_historical_data(tickers, period="2y", group_by="ticker"):
 
     if df_all is None or df_all.empty:
         return pd.DataFrame()
+
+    # --- 1306.T 特殊數據修正邏輯 (Yahoo Finance 數據錯誤 Patch) ---
+    # 日本 1306.T 在 2024/07 執行了 1:10 分割，但 yfinance 的 auto_adjust=True 經常失效
+    target_ticker = "1306.T"
+    target_tickers = [tickers] if isinstance(tickers, str) else list(tickers)
+
+    if target_ticker in target_tickers:
+        try:
+            # 提取 1306.T 的數據進行檢查
+            if isinstance(df_all.columns, pd.MultiIndex):
+                t_df = df_all[target_ticker].copy()
+            else:
+                t_df = df_all.copy()
+
+            if not t_df.empty and "Close" in t_df.columns:
+                clean_close = t_df["Close"].dropna()
+                if not clean_close.empty:
+                    current_price = float(clean_close.iloc[-1])
+
+                    # 修正邏輯：若現價 > 10000 或 歷史有 5 倍以上突波，執行 1:10 修正
+                    threshold = current_price * 5
+                    is_global_bug = current_price > 10000
+                    high_price_dates = (
+                        t_df.index[t_df["Close"] > threshold]
+                        if not is_global_bug
+                        else t_df.index
+                    )
+
+                    if is_global_bug or not high_price_dates.empty:
+                        msg = (
+                            "全局未調整"
+                            if is_global_bug
+                            else f"歷史分割未對齊 ({len(high_price_dates)} 筆)"
+                        )
+                        logging.info(f"偵測到 {target_ticker} {msg}，執行 1:10 修正...")
+
+                        cols_to_fix = ["Open", "High", "Low", "Close"]
+                        if isinstance(df_all.columns, pd.MultiIndex):
+                            for col in cols_to_fix:
+                                if (target_ticker, col) in df_all.columns:
+                                    if is_global_bug:
+                                        df_all.loc[:, (target_ticker, col)] /= 10.0
+                                    else:
+                                        df_all.loc[
+                                            high_price_dates, (target_ticker, col)
+                                        ] /= 10.0
+                            if (target_ticker, "Volume") in df_all.columns:
+                                if is_global_bug:
+                                    df_all.loc[:, (target_ticker, "Volume")] *= 10.0
+                                else:
+                                    df_all.loc[
+                                        high_price_dates, (target_ticker, "Volume")
+                                    ] *= 10.0
+                        else:
+                            # 單一層級 DataFrame
+                            available_cols = [
+                                c for c in cols_to_fix if c in df_all.columns
+                            ]
+                            if is_global_bug:
+                                df_all.loc[:, available_cols] /= 10.0
+                                if "Volume" in df_all.columns:
+                                    df_all["Volume"] *= 10.0
+                            else:
+                                df_all.loc[high_price_dates, available_cols] /= 10.0
+                                if "Volume" in df_all.columns:
+                                    df_all.loc[high_price_dates, "Volume"] *= 10.0
+        except Exception as e:
+            logging.debug(f"1306.T 修正發生錯誤: {e}")
 
     # --- 全域降維防禦 (避開 MultiIndex 內部方法) ---
     is_mi = False
@@ -319,43 +387,6 @@ def fetch_historical_data(tickers, period="2y", group_by="ticker"):
         except Exception as e:
             logging.debug(f"降維處理跳過: {e}")
 
-    # --- 1306.T 特殊數據修正邏輯 (避開 MultiIndex 方法) ---
-    target_ticker = "1306.T"
-    has_target = False
-    try:
-        if isinstance(df_all.columns, pd.MultiIndex):
-            has_target = any(c[0] == target_ticker for c in df_all.columns.tolist())
-        else:
-            has_target = (
-                (target_ticker == df_all.name)
-                if hasattr(df_all, "name")
-                else (target_ticker in df_all.columns)
-            )
-    except:
-        pass
-
-    if has_target:
-        try:
-            # 穩健提取目標 DF
-            if isinstance(df_all.columns, pd.MultiIndex):
-                target_df = df_all[target_ticker].copy()
-            else:
-                target_df = df_all
-
-            if not target_df.empty and "Close" in target_df.columns:
-                last_p = target_df["Close"].iloc[-1]
-                current_price = (
-                    float(last_p.iloc[0])
-                    if isinstance(last_p, pd.Series)
-                    else float(last_p)
-                )
-
-                # ... (修正邏輯維持，但使用單層數據)
-                if current_price > 10000:
-                    # 執行修正...
-                    pass
-        except:
-            pass
     return df_all
 
 

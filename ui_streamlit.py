@@ -162,6 +162,7 @@ def render_title_component(title):
 
 
 def render_profit_and_loss_component(df):
+    # 計算總體數據
     total_pl = df["損益"].sum()
     total_cost = df["成本"].sum()
     roi = (total_pl / total_cost * 100) if total_cost != 0 else 0
@@ -169,20 +170,36 @@ def render_profit_and_loss_component(df):
     value = f"${total_pl:+,.0f}"
     delta = f"{roi:+.2f}%"
 
+    # 計算各市場損益明細
+    market_stats = df.groupby("市場").agg({"損益": "sum", "成本": "sum"})
+    market_stats = market_stats.sort_values("損益", ascending=False)
+
+    details_html = ""
+    for m, row in market_stats.iterrows():
+        m_pl = row["損益"]
+        m_roi = (m_pl / row["成本"] * 100) if row["成本"] != 0 else 0
+        color_class = "text-red" if m_pl >= 0 else "text-green"
+        details_html += f"""<div class='inline-metric-detail-row'>
+        <span class='inline-metric-detail-label'>{m}</span>
+        <span class='inline-metric-detail-val {color_class}'>${m_pl:+,.0f} ({m_roi:+.1f}%)</span>
+        </div>"""
+
+    # 顯示整合型卡片
     with st.container(border=True, gap="xxsmall"):
-        className_delta = "bg-red-tag" if "+" in delta else "bg-green-tag"
+        className_delta = "bg-red-tag" if total_pl >= 0 else "bg-green-tag"
         st.markdown(
             f"""<div class='inline-metric-container'>
-                    <div class='inline-metric-label'>💰 總損益</div>
-                    <div class='inline-metric-row'>
-                        <span class='inline-metric-value'>{value}</span>
-                        <span class='inline-metric-delta {className_delta}'>{delta}</span>
-                    </div>
-                </div>""",
+            <div class='inline-metric-label'>💰 帳戶總損益</div>
+            <div class='inline-metric-row'>
+            <span class='inline-metric-value'>{value}</span>
+            <span class='inline-metric-delta {className_delta}'>{delta}</span>
+            </div>
+            <div class='inline-metric-divider'>
+            <div class='inline-metric-details'>{details_html}</div>
+            </div>
+            </div>""",
             unsafe_allow_html=True,
         )
-
-    # render_inline_metric("💰 總損益", f"${total_pl:+,.0f}", f"{roi:+.2f}%")
 
 
 def render_vertical_component(indices):
@@ -307,8 +324,8 @@ def render_shareholding_component(df):
                 with c2:
                     st.markdown(
                         f"""<div class='asset-info-container'>
-                        <div class='asset-info-meta'>{row["市場"]} | {row["代碼"]}</div>
-                        <div class='asset-info-name'>{row["名稱"]}</div>
+                        <div class='asset-info-meta'>{row["市場"]} | {row["代碼"]} ({row["佔比"]:.1f}%)</div>
+                        <div class='asset-info-name'>{row["名稱"]} </div>
                         </div>""",
                         unsafe_allow_html=True,
                     )
@@ -345,7 +362,6 @@ def render_shareholding_component(df):
                         f"""<div class='asset-value-container'>
                         <div class='asset-value-label'>損益 / 報酬</div>
                         <div class='asset-pl-main {className_pl}'>${pl:+,.0f} <span class='asset-pl-roi'>({roi:+.2f}%)</span></div>
-                        <div class='asset-proportion'>佔比: {row["佔比"]:.1f}%</div>
                         </div>""",
                         unsafe_allow_html=True,
                     )

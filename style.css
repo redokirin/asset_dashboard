@@ -291,6 +291,35 @@ div[data-testid="stMetricDelta"] > div {
 	font-weight: 500;
 }
 
+.inline-metric-divider {
+	border-top: 1px solid rgba(255, 255, 255, 0.1);
+	margin: 10px 0 8px 0;
+}
+
+.inline-metric-details {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.inline-metric-detail-row {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	font-size: 0.75rem;
+	color: #8b949e;
+}
+
+.inline-metric-detail-label {
+	flex: 1;
+}
+
+.inline-metric-detail-val {
+	font-weight: 500;
+	color: #e6edf3;
+	text-align: right;
+}
+
 /* 進階分析報告 (Analysis Report) 內部佈局 */
 .analysis-report-row {
 	display: flex;
