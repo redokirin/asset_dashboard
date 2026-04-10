@@ -14,6 +14,34 @@ def load_css():
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 
+def get_color_class(val):
+    """獲取數值文字顏色 (紅漲綠跌)"""
+    if val > 0:
+        return "text-red"
+    elif val < 0:
+        return "text-green"
+    return ""
+
+
+def get_tag_class(val):
+    """獲取漲跌標籤背景色 (紅漲綠跌)"""
+    if isinstance(val, str):
+        if "+" in val:
+            return "bg-red-tag"
+        elif "-" in val:
+            # 排除只有 "-" 沒有數字的情況
+            if val.strip() == "-":
+                return "bg-grey-tag"
+            return "bg-green-tag"
+        return "bg-grey-tag"
+
+    if val > 0:
+        return "bg-red-tag"
+    elif val < 0:
+        return "bg-green-tag"
+    return "bg-grey-tag"
+
+
 def render_analysis_metrics_row(metrics_dict, title=None):
     """根據傳入的 dictionary 迴圈產生 analysis-metric-box DIV tag"""
     title_html = f'<div class="analysis-report-title">{title}</div>' if title else ""
@@ -27,22 +55,15 @@ def render_tracking_metrics_row(items, title=None):
     """根據傳入的 list 迴圈產生 analysis-metric-box DIV tag"""
     title_html = f'<div class="analysis-report-title">{title}</div>' if title else ""
     items_html = ""
+
     for item in items:
         label = item.get("名稱", "")
         val = item.get("數值", 0)
         delta = item.get("漲跌幅", 0)
-        className_delta = (
-            "bg-red-tag"
-            if delta > 0
-            else "bg-green-tag"
-            if delta < 0
-            else "bg-grey-tag"
-        )
         items_html += (
             f'<div class="analysis-metric-box">'
             f'<div class="analysis-metric-label">{label}</div>'
-            f'<div class="analysis-metric-value">{val:,.2f}</div>'
-            f'<div class="analysis-metric-delta {className_delta}">{delta:+.2f}%</div>'
+            f"{render_horizontal_value_tag_component(val, delta)}"
             f"</div>"
         )
     # 移除換行以避免 Markdown 誤解析
@@ -99,16 +120,16 @@ def render_advanced_analysis_ui(res):
 
     st.markdown(
         f"""<div class="analysis-report-row">
-<div class="analysis-report-col">
-{analysis_row_1}
-{analysis_row_2}
-</div>
-<div class="analysis-report-col">
-{analysis_row_3}
-{analysis_row_4}
-{analysis_row_5}
-</div>
-</div>""",
+            <div class="analysis-report-col">
+            {analysis_row_1}
+            {analysis_row_2}
+            </div>
+            <div class="analysis-report-col">
+            {analysis_row_3}
+            {analysis_row_4}
+            {analysis_row_5}
+            </div>
+            </div>""",
         unsafe_allow_html=True,
     )
 
@@ -161,45 +182,83 @@ def render_title_component(title):
     st.markdown(f"<div class='section-title'>{title}</div>", unsafe_allow_html=True)
 
 
+def render_horizontal_value_tag_component(value, tag):
+    """橫向組件 -> 依照使用者要求改為 垂直排列 (Value above Tag)"""
+    className_tag = get_tag_class(tag)
+
+    # 處理 value 格式
+    if isinstance(value, str):
+        display_val = value
+    else:
+        # 如果是純數字則加上 $ 與正負號格式
+        display_val = f"${value:+,.0f}" if value != 0 else f"${value:,.0f}"
+
+    # 處理 tag 格式
+    display_tag = f"{tag:+,.2f}%" if isinstance(tag, (int, float)) else str(tag)
+
+    return f"""<div class='asset-value-container' style='align-items: center;'>
+                <div class='asset-metric-value'>{display_val}</div>
+                <div class='asset-change-tag {className_tag}' style='font-size: 0.75rem; margin-top: 2px;'>{display_tag}</div>
+                </div>"""
+
+
+def render_vertical_value_tag_component(value, tag):
+    """縱向組件 -> 依照使用者要求改為 水平排列 (Value next to Tag)"""
+    className_tag = get_tag_class(tag)
+
+    # 處理 value 格式
+    if isinstance(value, str):
+        display_val = value
+    else:
+        # 股價通常不帶 $，且保留兩位小數
+        display_val = f"{value:,.2f}"
+
+    # 處理 tag 格式
+    display_tag = f"{tag:+,.2f}%" if isinstance(tag, (int, float)) else str(tag)
+
+    return f"""<div class='asset-value-row'>
+                <span class='asset-price-main'>{display_val}</span>
+                <span class='asset-change-tag {className_tag}'>{display_tag}</span>
+                </div>"""
+
+
 def render_profit_and_loss_component(df):
-    # 計算總體數據
-    total_pl = df["損益"].sum()
-    total_cost = df["成本"].sum()
-    roi = (total_pl / total_cost * 100) if total_cost != 0 else 0
-
-    value = f"${total_pl:+,.0f}"
-    delta = f"{roi:+.2f}%"
-
-    # 計算各市場損益明細
-    market_stats = df.groupby("市場").agg({"損益": "sum", "成本": "sum"})
-    market_stats = market_stats.sort_values("損益", ascending=False)
-
-    details_html = ""
-    for m, row in market_stats.iterrows():
-        m_pl = row["損益"]
-        m_roi = (m_pl / row["成本"] * 100) if row["成本"] != 0 else 0
-        color_class = "text-red" if m_pl >= 0 else "text-green"
-        details_html += f"""<div class='inline-metric-detail-row'>
-        <span class='inline-metric-detail-label'>{m}</span>
-        <span class='inline-metric-detail-val {color_class}'>${m_pl:+,.0f} ({m_roi:+.1f}%)</span>
-        </div>"""
-
     # 顯示整合型卡片
-    with st.container(border=True, gap="xxsmall"):
-        className_delta = "bg-red-tag" if total_pl >= 0 else "bg-green-tag"
-        st.markdown(
-            f"""<div class='inline-metric-container'>
-            <div class='inline-metric-label'>💰 帳戶總損益</div>
-            <div class='inline-metric-row'>
-            <span class='inline-metric-value'>{value}</span>
-            <span class='inline-metric-delta {className_delta}'>{delta}</span>
-            </div>
-            <div class='inline-metric-divider'>
-            <div class='inline-metric-details'>{details_html}</div>
-            </div>
-            </div>""",
-            unsafe_allow_html=True,
-        )
+    col_total, col_market = st.columns([0.5, 0.5])
+    with col_total:
+        with st.container(border=True, gap="xxsmall"):
+            # 計算總體數據
+            total_pl = df["損益"].sum()
+            total_cost = df["成本"].sum()
+            roi = (total_pl / total_cost * 100) if total_cost != 0 else 0
+
+            value = f"${total_pl:+,.0f}"
+
+            st.markdown(
+                f"""<div class='inline-metric-label'>💰 帳戶總損益</div>
+                    <div class='inline-metric-row'>
+                        <span class='inline-metric-value'>${df["市值"].sum():,}</span>
+                    </div>{render_vertical_value_tag_component(f"${total_pl:+,.0f}", roi)}
+                """,
+                unsafe_allow_html=True,
+            )
+    with col_market:
+        # 計算各市場損益明細
+        market_stats = df.groupby("市場").agg({"損益": "sum", "成本": "sum"})
+        market_stats = market_stats.sort_values("損益", ascending=False)
+
+        market_items = []
+        for m, row in market_stats.iterrows():
+            m_pl = row["損益"]
+            m_roi = (m_pl / row["成本"] * 100) if row["成本"] != 0 else 0
+            market_items.append({"名稱": m, "數值": m_pl, "漲跌幅": m_roi})
+
+        # 3 個為一列顯示 (使用既有的 render_tracking_metrics_row)
+        for i in range(0, len(market_items), 3):
+            st.markdown(
+                render_tracking_metrics_row(market_items[i : i + 3]),
+                unsafe_allow_html=True,
+            )
 
 
 def render_vertical_component(indices):
@@ -335,33 +394,21 @@ def render_shareholding_component(df):
                     change_val = (
                         float(change) if pd.notnull(change) and change != "-" else 0.0
                     )
-                    className_tag = (
-                        "bg-red-tag"
-                        if change_val > 0
-                        else "bg-green-tag"
-                        if change_val < 0
-                        else "bg-grey-tag"
-                    )
                     st.markdown(
                         f"""<div class='asset-value-container'>
                         <div class='asset-value-label'>現價 / 漲跌</div>
-                        <div class='asset-value-row'>
-                        <span class='asset-price-main'>{price:,.2f}</span>
-                        <span class='asset-change-tag {className_tag}'>{change_val:+,.2f}</span>
-                        </div>
+                        {render_vertical_value_tag_component(price, change_val)}
                         </div>""",
                         unsafe_allow_html=True,
                     )
 
                 with c4:
                     pl, roi = row["損益"], row["報酬率"]
-                    className_pl = (
-                        "text-red" if pl > 0 else "text-green" if pl < 0 else ""
-                    )
+                    # 也將損益（c4）改為調用 render_vertical_value_tag_component 以維持視覺一致性（水平排列）
                     st.markdown(
                         f"""<div class='asset-value-container'>
                         <div class='asset-value-label'>損益 / 報酬</div>
-                        <div class='asset-pl-main {className_pl}'>${pl:+,.0f} <span class='asset-pl-roi'>({roi:+.2f}%)</span></div>
+                        {render_vertical_value_tag_component(f"${pl:+,.0f}", roi)}
                         </div>""",
                         unsafe_allow_html=True,
                     )
@@ -383,7 +430,7 @@ def render_shareholding_component(df):
                 st.rerun()
 
 
-def render_plotly_pie_charts(df, exchange_rates):
+def render_plotly_pie_charts(df):
     import plotly.express as px
 
     market_df = df.groupby("市場")["市值"].sum().reset_index()
@@ -428,14 +475,10 @@ def render_plotly_pie_charts(df, exchange_rates):
 def render_inline_metric(label, value, delta):
 
     with st.container(border=True, gap="xxsmall"):
-        className_delta = "bg-red-tag" if "+" in delta else "bg-green-tag"
         st.markdown(
             f"""<div class='inline-metric-container'>
                 <div class='inline-metric-label'>{label}</div>
-                <div class='inline-metric-row'>
-                    <span class='inline-metric-value'>{value}</span>
-                    <span class='inline-metric-delta {className_delta}'>{delta}</span>
-                </div>
+                {render_horizontal_value_tag_component(value, delta)}
             </div>""",
             unsafe_allow_html=True,
         )
@@ -468,4 +511,4 @@ def show_streamlit(df, radar_data, exchange_rates):
                 )
         with st.container(border=False, gap="xxsmall"):
             # 圓餅圖
-            render_plotly_pie_charts(df, exchange_rates)
+            render_plotly_pie_charts(df)

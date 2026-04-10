@@ -222,6 +222,16 @@ div[data-testid="stMetricDelta"] > div {
 	color: white;
 	margin-right: 8px;
 }
+
+.asset-metric-value {
+	font-size: 1rem;
+	font-weight: 600;
+	color: white;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 .asset-change-tag {
 	font-size: 0.8rem;
 	padding: 1px 6px;
@@ -355,11 +365,12 @@ div[data-testid="stMetricDelta"] > div {
 .analysis-metric-box {
 	flex: 1;
 	background: rgba(255, 255, 255, 0.04);
-	padding: 8px 4px;
+	padding: 8px 6px;
 	border-radius: 8px;
-	text-align: center;
 	border: 1px solid rgba(255, 255, 255, 0.08);
-	min-width: 0; /* 允許縮小 */
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
 }
 
 .analysis-metric-label {
@@ -369,6 +380,8 @@ div[data-testid="stMetricDelta"] > div {
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+	text-align: center;
+	width: 100%;
 }
 
 .analysis-metric-value {
@@ -378,6 +391,8 @@ div[data-testid="stMetricDelta"] > div {
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+	text-align: right;
+	margin-right: 2px;
 }
 
 .analysis-metric-delta {
@@ -387,4 +402,5 @@ div[data-testid="stMetricDelta"] > div {
 	padding: 2px 6px;
 	border-radius: 4px;
 	display: inline-block;
+	align-self: flex-end;
 }
