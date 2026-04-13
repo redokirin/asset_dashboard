@@ -47,7 +47,12 @@ def render_analysis_metrics_row(metrics_dict, title=None):
     title_html = f'<div class="analysis-report-title">{title}</div>' if title else ""
     items_html = ""
     for label, value in metrics_dict.items():
-        items_html += f'<div class="analysis-metric-box"><div class="analysis-metric-label">{label}</div><div class="analysis-metric-value">{value}</div></div>'
+        items_html += (
+            f'<div class="analysis-metric-box">'
+            f'<div class="analysis-metric-label">{label}</div>'
+            f'<div class="analysis-metric-value">{value}</div>'
+            f"</div>"
+        )
     return f'{title_html}<div class="analysis-metrics-flex">{items_html}</div>'
 
 
@@ -242,13 +247,14 @@ def render_profit_and_loss_component(df):
                     <div class='total-pl-wrapper'>
                         <div class='inline-metric-row'>
                             <span class='inline-metric-value'>${df["市值"].sum():,}</span>
-                        </div>{render_vertical_value_tag_component(f"${total_pl:+,.0f}", roi)}
+                        </div>
+                        {render_vertical_value_tag_component(f"${total_pl:+,.0f}", roi)}
                     </div>
                 """,
                 unsafe_allow_html=True,
             )
         with col_market:
-            with st.container():
+            with st.container(gap="xxsmall"):
                 # 計算各市場損益明細
                 market_stats = df.groupby("市場").agg({"損益": "sum", "成本": "sum"})
                 market_stats = market_stats.sort_values("損益", ascending=False)

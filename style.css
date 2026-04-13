@@ -68,7 +68,8 @@ div[data-testid="stMetricDelta"] > div {
 	color: white;
 	padding: 3px 10px;
 	border-radius: 10px;
-	margin-right: 6px;
+	margin: 1.5px;
+	/* margin-bottom: 3px; */
 	border: 1px solid #464646;
 	font-size: 0.8rem;
 	font-weight: 500;
@@ -311,6 +312,7 @@ div[data-testid="stMetricDelta"] > div {
 	justify-content: space-between;
 	align-items: baseline;
 	width: 100%;
+	margin-bottom: 0.8rem;
 }
 
 .inline-metric-details {
@@ -391,7 +393,7 @@ div[data-testid="stMetricDelta"] > div {
 .analysis-metric-label {
 	font-size: 0.7rem;
 	color: #8b949e;
-	margin-bottom: 4px;
+	/* margin-bottom: 4px; */
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
