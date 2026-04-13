@@ -67,8 +67,8 @@ def render_tracking_metrics_row(items, title=None):
         delta = item.get("漲跌幅", 0)
         items_html += (
             f'<div class="analysis-metric-box">'
-            f'<div class="analysis-metric-label">{label}</div>'
             f"{render_horizontal_value_tag_component(val, delta)}"
+            f'<div class="analysis-metric-label">{label}</div>'
             f"</div>"
         )
     # 移除換行以避免 Markdown 誤解析
