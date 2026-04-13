@@ -297,73 +297,77 @@ def fetch_historical_data(tickers, period="2y", group_by="ticker"):
     if df_all is None or df_all.empty:
         return pd.DataFrame()
 
-    # --- 1306.T 特殊數據修正邏輯 (Yahoo Finance 數據錯誤 Patch) ---
-    # 日本 1306.T 在 2024/07 執行了 1:10 分割，但 yfinance 的 auto_adjust=True 經常失效
-    target_ticker = "1306.T"
-    target_tickers = [tickers] if isinstance(tickers, str) else list(tickers)
+    # --- 歷史數據修正邏輯 (Yahoo Finance 數據錯誤 Patch) ---
+    # 註：yfinance 的 auto_adjust=True 有時會失效 (特別是長線數據)，需手動校正
+    fix_configs = {
+        "1306.T": {
+            "ratio": 10.0,
+            "threshold_factor": 5.0,
+            "bug_price": 10000,
+            "desc": "日本 1306.T (1:10 分割)"
+        },
+        "0052.TW": {
+            "ratio": 7.0,
+            "threshold_factor": 3.0,
+            "bug_price": 200,
+            "desc": "富邦科技 0052.TW (1:7 分割)"
+        }
+    }
 
-    if target_ticker in target_tickers:
-        try:
-            # 提取 1306.T 的數據進行檢查
-            if isinstance(df_all.columns, pd.MultiIndex):
-                t_df = df_all[target_ticker].copy()
-            else:
-                t_df = df_all.copy()
+    target_tickers_list = [tickers] if isinstance(tickers, str) else list(tickers)
+    for t_id, cfg in fix_configs.items():
+        if t_id in target_tickers_list:
+            try:
+                # 提取特定標的的數據進行檢查
+                if isinstance(df_all.columns, pd.MultiIndex):
+                    t_df = df_all[t_id].copy()
+                else:
+                    t_df = df_all.copy()
 
-            if not t_df.empty and "Close" in t_df.columns:
-                clean_close = t_df["Close"].dropna()
-                if not clean_close.empty:
-                    current_price = float(clean_close.iloc[-1])
-
-                    # 修正邏輯：若現價 > 10000 或 歷史有 5 倍以上突波，執行 1:10 修正
-                    threshold = current_price * 5
-                    is_global_bug = current_price > 10000
-                    high_price_dates = (
-                        t_df.index[t_df["Close"] > threshold]
-                        if not is_global_bug
-                        else t_df.index
-                    )
-
-                    if is_global_bug or not high_price_dates.empty:
-                        msg = (
-                            "全局未調整"
-                            if is_global_bug
-                            else f"歷史分割未對齊 ({len(high_price_dates)} 筆)"
+                if not t_df.empty and "Close" in t_df.columns:
+                    clean_close = t_df["Close"].dropna()
+                    if not clean_close.empty:
+                        current_p = float(clean_close.iloc[-1])
+                        ratio = cfg["ratio"]
+                        
+                        # 修正判斷：若現價過高 (全局未調整) 或 歷史數據有異常突波 (局部未對齊)
+                        threshold = current_p * cfg["threshold_factor"]
+                        is_global_bug = current_p > cfg["bug_price"]
+                        high_price_dates = (
+                            t_df.index[t_df["Close"] > threshold]
+                            if not is_global_bug
+                            else t_df.index
                         )
-                        logging.info(f"偵測到 {target_ticker} {msg}，執行 1:10 修正...")
 
-                        cols_to_fix = ["Open", "High", "Low", "Close"]
-                        if isinstance(df_all.columns, pd.MultiIndex):
-                            for col in cols_to_fix:
-                                if (target_ticker, col) in df_all.columns:
+                        if is_global_bug or not high_price_dates.empty:
+                            msg = "全局未調整" if is_global_bug else f"歷史分割未對齊 ({len(high_price_dates)} 筆)"
+                            logging.info(f"⚡ 偵測到 {cfg['desc']} {msg}，執行 1:{int(ratio)} 修正...")
+
+                            cols_to_fix = ["Open", "High", "Low", "Close"]
+                            if isinstance(df_all.columns, pd.MultiIndex):
+                                for col in cols_to_fix:
+                                    if (t_id, col) in df_all.columns:
+                                        if is_global_bug:
+                                            df_all.loc[:, (t_id, col)] /= ratio
+                                        else:
+                                            df_all.loc[high_price_dates, (t_id, col)] /= ratio
+                                if (t_id, "Volume") in df_all.columns:
                                     if is_global_bug:
-                                        df_all.loc[:, (target_ticker, col)] /= 10.0
+                                        df_all.loc[:, (t_id, "Volume")] *= ratio
                                     else:
-                                        df_all.loc[
-                                            high_price_dates, (target_ticker, col)
-                                        ] /= 10.0
-                            if (target_ticker, "Volume") in df_all.columns:
-                                if is_global_bug:
-                                    df_all.loc[:, (target_ticker, "Volume")] *= 10.0
-                                else:
-                                    df_all.loc[
-                                        high_price_dates, (target_ticker, "Volume")
-                                    ] *= 10.0
-                        else:
-                            # 單一層級 DataFrame
-                            available_cols = [
-                                c for c in cols_to_fix if c in df_all.columns
-                            ]
-                            if is_global_bug:
-                                df_all.loc[:, available_cols] /= 10.0
-                                if "Volume" in df_all.columns:
-                                    df_all["Volume"] *= 10.0
+                                        df_all.loc[high_price_dates, (t_id, "Volume")] *= ratio
                             else:
-                                df_all.loc[high_price_dates, available_cols] /= 10.0
-                                if "Volume" in df_all.columns:
-                                    df_all.loc[high_price_dates, "Volume"] *= 10.0
-        except Exception as e:
-            logging.debug(f"1306.T 修正發生錯誤: {e}")
+                                available_cols = [c for c in cols_to_fix if c in df_all.columns]
+                                if is_global_bug:
+                                    df_all.loc[:, available_cols] /= ratio
+                                    if "Volume" in df_all.columns:
+                                        df_all["Volume"] *= ratio
+                                else:
+                                    df_all.loc[high_price_dates, available_cols] /= ratio
+                                    if "Volume" in df_all.columns:
+                                        df_all.loc[high_price_dates, "Volume"] *= ratio
+            except Exception as e:
+                logging.debug(f"{t_id} 數據修正失敗: {e}")
 
     # --- 全域降維防禦 (避開 MultiIndex 內部方法) ---
     is_mi = False
