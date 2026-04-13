@@ -198,7 +198,7 @@ def render_horizontal_value_tag_component(value, tag):
         display_val = value
     else:
         # 如果是純數字則加上 $ 與正負號格式
-        display_val = f"${value:+,.0f}" if value != 0 else f"${value:,.0f}"
+        display_val = f"{value:+,.0f}" if value != 0 else f"{value:,.0f}"
 
     # 處理 tag 格式
     display_tag = f"{tag:+,.2f}%" if isinstance(tag, (int, float)) else str(tag)
@@ -248,7 +248,7 @@ def render_profit_and_loss_component(df):
                             <div class='inline-metric-row'>
                                 <span class='inline-metric-value'>${df["市值"].sum():,}</span>
                             </div>
-                            {render_vertical_value_tag_component(f"${total_pl:+,.0f}", roi)}
+                            {render_vertical_value_tag_component(f"{total_pl:+,.0f}", roi)}
                         </div>
                     """,
                     unsafe_allow_html=True,
@@ -420,7 +420,7 @@ def render_shareholding_component(df):
                     st.markdown(
                         f"""<div class='asset-value-container'>
                         <div class='asset-value-label'>損益 / 報酬</div>
-                        {render_vertical_value_tag_component(f"${pl:+,.0f}", roi)}
+                        {render_vertical_value_tag_component(f"{pl:+,.0f}", roi)}
                         </div>""",
                         unsafe_allow_html=True,
                     )
