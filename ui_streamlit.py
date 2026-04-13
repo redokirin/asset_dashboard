@@ -49,8 +49,8 @@ def render_analysis_metrics_row(metrics_dict, title=None):
     for label, value in metrics_dict.items():
         items_html += (
             f'<div class="analysis-metric-box">'
-            f'<div class="analysis-metric-label">{label}</div>'
             f'<div class="analysis-metric-value">{value}</div>'
+            f'<div class="analysis-metric-label">{label}</div>'
             f"</div>"
         )
     return f'{title_html}<div class="analysis-metrics-flex">{items_html}</div>'
@@ -240,19 +240,19 @@ def render_profit_and_loss_component(df):
                 total_cost = df["成本"].sum()
                 roi = (total_pl / total_cost * 100) if total_cost != 0 else 0
 
-            # value = f"${total_pl:+,.0f}"
+                # value = f"${total_pl:+,.0f}"
 
-            st.markdown(
-                f"""<div class='inline-metric-label'>💰 帳戶總損益</div>
-                    <div class='total-pl-wrapper'>
-                        <div class='inline-metric-row'>
-                            <span class='inline-metric-value'>${df["市值"].sum():,}</span>
+                st.markdown(
+                    f"""<div class='inline-metric-label'>💰 帳戶總損益</div>
+                        <div class='total-pl-wrapper'>
+                            <div class='inline-metric-row'>
+                                <span class='inline-metric-value'>${df["市值"].sum():,}</span>
+                            </div>
+                            {render_vertical_value_tag_component(f"${total_pl:+,.0f}", roi)}
                         </div>
-                        {render_vertical_value_tag_component(f"${total_pl:+,.0f}", roi)}
-                    </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                    """,
+                    unsafe_allow_html=True,
+                )
         with col_market:
             with st.container(gap="xxsmall"):
                 # 計算各市場損益明細
