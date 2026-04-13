@@ -115,7 +115,9 @@ def render_advanced_analysis_ui(res):
         tag_html = "".join(
             [f'<span class="light_tags">{tag}</span>' for tag in res["tags"]]
         )
-        st.markdown(tag_html, unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='tag-report-row'>{tag_html}</div>", unsafe_allow_html=True
+        )
         st.info(f"{res['技術診斷']}")
 
     st.markdown(
@@ -224,41 +226,45 @@ def render_vertical_value_tag_component(value, tag):
 
 def render_profit_and_loss_component(df):
     # 顯示整合型卡片
-    col_total, col_market = st.columns([0.5, 0.5])
-    with col_total:
-        with st.container(border=True, gap="xxsmall"):
-            # 計算總體數據
-            total_pl = df["損益"].sum()
-            total_cost = df["成本"].sum()
-            roi = (total_pl / total_cost * 100) if total_cost != 0 else 0
+    with st.container(border=True):
+        col_total, col_market = st.columns([0.5, 0.5])
+        with col_total:
+            with st.container():
+                # 計算總體數據
+                total_pl = df["損益"].sum()
+                total_cost = df["成本"].sum()
+                roi = (total_pl / total_cost * 100) if total_cost != 0 else 0
 
-            value = f"${total_pl:+,.0f}"
+            # value = f"${total_pl:+,.0f}"
 
             st.markdown(
                 f"""<div class='inline-metric-label'>💰 帳戶總損益</div>
-                    <div class='inline-metric-row'>
-                        <span class='inline-metric-value'>${df["市值"].sum():,}</span>
-                    </div>{render_vertical_value_tag_component(f"${total_pl:+,.0f}", roi)}
+                    <div class='total-pl-wrapper'>
+                        <div class='inline-metric-row'>
+                            <span class='inline-metric-value'>${df["市值"].sum():,}</span>
+                        </div>{render_vertical_value_tag_component(f"${total_pl:+,.0f}", roi)}
+                    </div>
                 """,
                 unsafe_allow_html=True,
             )
-    with col_market:
-        # 計算各市場損益明細
-        market_stats = df.groupby("市場").agg({"損益": "sum", "成本": "sum"})
-        market_stats = market_stats.sort_values("損益", ascending=False)
+        with col_market:
+            with st.container():
+                # 計算各市場損益明細
+                market_stats = df.groupby("市場").agg({"損益": "sum", "成本": "sum"})
+                market_stats = market_stats.sort_values("損益", ascending=False)
 
-        market_items = []
-        for m, row in market_stats.iterrows():
-            m_pl = row["損益"]
-            m_roi = (m_pl / row["成本"] * 100) if row["成本"] != 0 else 0
-            market_items.append({"名稱": m, "數值": m_pl, "漲跌幅": m_roi})
+                market_items = []
+                for m, row in market_stats.iterrows():
+                    m_pl = row["損益"]
+                    m_roi = (m_pl / row["成本"] * 100) if row["成本"] != 0 else 0
+                    market_items.append({"名稱": m, "數值": m_pl, "漲跌幅": m_roi})
 
-        # 3 個為一列顯示 (使用既有的 render_tracking_metrics_row)
-        for i in range(0, len(market_items), 3):
-            st.markdown(
-                render_tracking_metrics_row(market_items[i : i + 3]),
-                unsafe_allow_html=True,
-            )
+                # 3 個為一列顯示 (使用既有的 render_tracking_metrics_row)
+                for i in range(0, len(market_items), 3):
+                    st.markdown(
+                        render_tracking_metrics_row(market_items[i : i + 3]),
+                        unsafe_allow_html=True,
+                    )
 
 
 def render_vertical_component(indices):
@@ -413,10 +419,10 @@ def render_shareholding_component(df):
                         unsafe_allow_html=True,
                     )
 
-        if st.session_state.get(f"analyze_{row['代碼']}", False):
-            ticker = row["代碼"]
-            render_title_component(f"📈 {row['名稱']} ({ticker}) 深度量化診斷")
-            with st.container(border=True):
+            if st.session_state.get(f"analyze_{row['代碼']}", False):
+                ticker = row["代碼"]
+                # render_title_component(f"📈 {row['名稱']} ({ticker}) 深度量化診斷")
+                # with st.container(border=True):
                 if hasattr(dashboard_logic, "clear_ticker_cache"):
                     dashboard_logic.clear_ticker_cache(ticker)
                 with st.spinner("正在進行深度數據穿透..."):
@@ -424,10 +430,14 @@ def render_shareholding_component(df):
                         pd.DataFrame([row])
                     )
                     if not adv_results.empty:
-                        render_advanced_analysis_ui(adv_results.iloc[0])
-            if st.button("收合報告", key=f"close_{row['代碼']}"):
-                st.session_state[f"analyze_{row['代碼']}"] = False
-                st.rerun()
+                        with st.container():
+                            # with st.expander(
+                            #     f"📈 {row['名稱']} ({row['代碼']}) 報告", expanded=True
+                            # ):
+                            render_advanced_analysis_ui(adv_results.iloc[0])
+                # if st.button("收合報告", key=f"close_{row['代碼']}"):
+                #     st.session_state[f"analyze_{row['代碼']}"] = False
+                #     st.rerun()
 
 
 def render_plotly_pie_charts(df):

@@ -217,7 +217,7 @@ div[data-testid="stMetricDelta"] > div {
 	justify-content: flex-end;
 }
 .asset-price-main {
-	font-size: 1.3rem;
+	font-size: 1rem;
 	font-weight: 600;
 	color: white;
 	margin-right: 8px;
@@ -286,7 +286,7 @@ div[data-testid="stMetricDelta"] > div {
 .inline-metric-row {
 	display: flex;
 	align-items: baseline;
-	justify-content: flex-end;
+	justify-content: flex-start;
 }
 .inline-metric-value {
 	font-size: 1.2rem;
@@ -304,6 +304,13 @@ div[data-testid="stMetricDelta"] > div {
 .inline-metric-divider {
 	border-top: 1px solid rgba(255, 255, 255, 0.1);
 	margin: 10px 0 8px 0;
+}
+
+.total-pl-wrapper {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	width: 100%;
 }
 
 .inline-metric-details {
@@ -331,6 +338,14 @@ div[data-testid="stMetricDelta"] > div {
 }
 
 /* 進階分析報告 (Analysis Report) 內部佈局 */
+.tag-report-row {
+	display: flex;
+	flex-wrap: wrap; /* 讓 c1, c2 在小螢幕時自動垂直疊加 */
+	/* gap: 1rem; */
+	padding-top: 1rem;
+	padding-bottom: 1rem;
+}
+
 .analysis-report-row {
 	display: flex;
 	flex-wrap: wrap; /* 讓 c1, c2 在小螢幕時自動垂直疊加 */
@@ -391,8 +406,7 @@ div[data-testid="stMetricDelta"] > div {
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	text-align: right;
-	margin-right: 2px;
+	text-align: center;
 }
 
 .analysis-metric-delta {
