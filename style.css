@@ -194,7 +194,7 @@ div[data-testid="stMetricDelta"] > div {
 	white-space: nowrap;
 }
 .asset-info-name {
-	font-size: 1.1rem;
+	font-size: 1rem;
 	font-weight: 600;
 	color: white;
 	white-space: nowrap;
@@ -402,7 +402,7 @@ div[data-testid="stMetricDelta"] > div {
 }
 
 .analysis-metric-value {
-	font-size: 1.5rem;
+	font-size: 1em;
 	font-weight: 600;
 	color: white;
 	white-space: nowrap;
