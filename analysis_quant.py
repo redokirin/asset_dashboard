@@ -42,6 +42,45 @@ def calculate_buffered_entries(df, ma20, ma250, current_price, rs_p10_price):
     }
 
 
+# ┌──────────────────┬──────────────────────┬───────────────────────────────────────────────────────┐
+# │ 參數名稱          │ 中文名稱               │ 診斷用途說明                                          │
+# ├──────────────────┼──────────────────────┼───────────────────────────────────────────────────────┤
+# │ bias             │ 乖離率                │ 衡量股價偏離月線(MA20)的程度，判斷「極度價值」或「過熱」。  │
+# │ sharpe           │ 夏普值                │ 風險調整後報酬，大於 1.2 會被標註為「💎 高效率資產」。     │
+# │ rs_percentile    │ 相對強度百分位        │ 標的在池子中的強度排名，15% 以下為深水區，85% 以上為過熱區。 │
+# │ ticker           │ 代碼                  │ 標的辨識符號。                                        │
+# │ price_change_pct │ 今日漲跌幅            │ 用以結合量比進行「價量驗證」。                          │
+# │ vol_ratio        │ 量比 (Volume Ratio)   │ 成交量/均量。偵測是否有爆量下殺或價漲量縮現象。          │
+# │ rsi              │ 相對強弱指標          │ 判斷短線買賣盤力道是否有極端噴發或竭盡（80↑ / 20↓）。    │
+# │ price            │ 現價                  │ 診斷引擎的基礎數據點。                                  │
+# │ ma20 / ma250     │ 月線 / 年線           │ 判斷長、短線趨勢格局的分水嶺。                          │
+# │ eps / pe_ratio   │ 盈餘 / 本益比         │ 基礎估值與企業獲利能力的驗證。                          │
+# │ dividend_yield   │ 股息殖利率            │ 判斷是否具備高殖利率 (3.5%+) 的防禦緩衝（🛡️ 息收護城河）。 │
+# │ peg_ratio        │ PEG 比例             │ 成長 vs 估值的平衡點，PEG < 1 為優質成長標的。           │
+# └──────────────────┴──────────────────────┴───────────────────────────────────────────────────────┘
+
+#   🔍 診斷邏輯中的標籤 (Tags) 全對照表：
+#    【趨勢格局相關】
+#     * 🔥 極致強勢：長、短線趨勢處於多頭共振狀態。
+#     * 🟢 長線多頭：長線格局偏多，但短線可能正在回測整理。
+#     * 💧 弱勢反彈：處於長線空頭格局下的短線技術性止跌。
+#     * 🔵 長線偏弱：趨勢結構尚未止跌，技術面承壓。
+#
+#    【位階與風險相關】
+#     * 🔥 過熱區：RS 百分位 > 85 或 乖離率 > 7%，需警惕回檔風險。
+#     * 🔵 深水區：RS 百分位 <= 15，多數人已拋售的底部區。
+#     * 🟠 極度價值區：股價低於月線 7% 以上。
+#     * 💧 跌深反彈區：股價低於月線 4%~7% 之間。
+#     * 🟢 買超 / 🔴 賣超：RSI 進入 80 以上或 20 以下的極端區間。
+#
+#    【基本面與效率相關】
+#     * 📊 盈利穩健：具備正向 EPS 的實質獲利標的。
+#     * 🛡️ 息收護城河：位階偏低且具備 3.5% 以上高殖利率。
+#     * 💎 估值極具吸引力：PEG < 1，成長性尚未反映在估值中。
+#     * ⚠️ 成長溢價過高：PEG > 2，股價漲速已透支未來成長。
+#     * 💎 高效率資產：夏普值 (Sharpe) > 1.2 的穩定增長標的。
+
+
 def generate_advanced_diagnosis(
     bias,
     sharpe,
@@ -96,10 +135,10 @@ def generate_advanced_diagnosis(
     else:
         tags.append("⚪ 正常區")
 
-    if rsi > 70:
-        tags.append("🟢 超買")
-    elif rsi < 30:
-        tags.append("🔴 超賣")
+    if rsi > 80:
+        tags.append("🟢 買超")
+    elif rsi < 20:
+        tags.append("🔴 賣超")
 
     if bias is not None and not math.isnan(bias):
         if bias <= -7:
@@ -178,7 +217,13 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
         )
         return pd.DataFrame()
 
-    active_tickers = df_res["代碼"].tolist()
+    # 只過濾出需要抓取現價的標的
+    if "_get_value" in df_res.columns:
+        df_to_analyze = df_res[df_res["_get_value"] == True]
+    else:
+        df_to_analyze = df_res
+
+    active_tickers = df_to_analyze["代碼"].tolist()
 
     results = []
     try:
@@ -424,6 +469,12 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                         "夏普值": f"{sharpe:.2f}" if len(m_ret) >= 2 else "-",
                         "EPS": fundamentals["eps"],
                         "PE": fundamentals["pe"],
+                        "殖利率": f"{fundamentals['dividendYield']:.2%}"
+                        if fundamentals["dividendYield"]
+                        else "-",
+                        "PEG": f"{fundamentals['pegRatio']:.2f}"
+                        if fundamentals["pegRatio"]
+                        else "-",
                         "量比": f"{vol_ratio:.2f}",
                         "_vol_ratio_raw": vol_ratio,
                         "_score": pct,

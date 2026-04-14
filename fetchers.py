@@ -26,13 +26,14 @@ FETCHERS = {
     ),
 }
 
+
 @lru_cache(maxsize=128)
 def get_ticker_fundamental_info(ticker_symbol):
     """獲取 Ticker 的基本面與即時數據，並提供安全性處理"""
     try:
         t = yf.Ticker(ticker_symbol)
         info = t.info
-        
+
         # 由於台日股數據常缺失，使用 get 確保安全性
         return {
             "name": info.get("shortName") or info.get("longName") or ticker_symbol,
@@ -54,10 +55,17 @@ def get_ticker_fundamental_info(ticker_symbol):
             "avg_volume": 1,
         }
 
+
 def fetch_historical_data(tickers, period="2y", group_by="ticker"):
     """
     抓取歷史價格數據，並包含特殊標的修正邏輯 (如股票分割修正)
     """
+    # 確保 tickers 是字串清單，避免 int 造成的抓取失敗
+    if isinstance(tickers, (list, tuple, set)):
+        tickers = [str(t) for t in tickers]
+    elif not isinstance(tickers, str):
+        tickers = str(tickers)
+
     try:
         df_all = FETCHERS["historical"](tickers, period=period, group_by=group_by)
     except Exception as e:
@@ -113,20 +121,28 @@ def fetch_historical_data(tickers, period="2y", group_by="ticker"):
                                         if is_global_bug:
                                             df_all.loc[:, (t_id, col)] /= ratio
                                         else:
-                                            df_all.loc[high_price_dates, (t_id, col)] /= ratio
+                                            df_all.loc[
+                                                high_price_dates, (t_id, col)
+                                            ] /= ratio
                                 if (t_id, "Volume") in df_all.columns:
                                     if is_global_bug:
                                         df_all.loc[:, (t_id, "Volume")] *= ratio
                                     else:
-                                        df_all.loc[high_price_dates, (t_id, "Volume")] *= ratio
+                                        df_all.loc[
+                                            high_price_dates, (t_id, "Volume")
+                                        ] *= ratio
                             else:
-                                available_cols = [c for c in cols_to_fix if c in df_all.columns]
+                                available_cols = [
+                                    c for c in cols_to_fix if c in df_all.columns
+                                ]
                                 if is_global_bug:
                                     df_all.loc[:, available_cols] /= ratio
                                     if "Volume" in df_all.columns:
                                         df_all["Volume"] *= ratio
                                 else:
-                                    df_all.loc[high_price_dates, available_cols] /= ratio
+                                    df_all.loc[high_price_dates, available_cols] /= (
+                                        ratio
+                                    )
                                     if "Volume" in df_all.columns:
                                         df_all.loc[high_price_dates, "Volume"] *= ratio
             except Exception as e:
@@ -136,7 +152,9 @@ def fetch_historical_data(tickers, period="2y", group_by="ticker"):
     try:
         if isinstance(df_all.columns, pd.MultiIndex):
             all_cols = df_all.columns.tolist()
-            tickers_in_df = list(set([c[0] if isinstance(c, tuple) else c for c in all_cols]))
+            tickers_in_df = list(
+                set([c[0] if isinstance(c, tuple) else c for c in all_cols])
+            )
             if len(tickers_in_df) == 1:
                 t_name = tickers_in_df[0]
                 df_all = df_all[t_name].copy()
@@ -145,13 +163,21 @@ def fetch_historical_data(tickers, period="2y", group_by="ticker"):
 
     return df_all
 
+
 def fetch_common_data(tickers, period="2y"):
     """抓取基準指數或匯率等共用數據"""
+    # 確保 tickers 是字串清單
+    if isinstance(tickers, (list, tuple, set)):
+        tickers = [str(t) for t in tickers]
+    elif not isinstance(tickers, str):
+        tickers = str(tickers)
+
     try:
         return FETCHERS["common"](tickers, period=period)
     except Exception as e:
         logging.error(f"抓取共用數據失敗: {e}")
         return pd.DataFrame()
+
 
 def get_market_radar_data():
     """抓取市場雷達數據"""

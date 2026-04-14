@@ -81,6 +81,7 @@ def calculate_assets_data(exchange_rates):
             "市值": round(val_twd),
             "損益": round(pl_val),
             "報酬率": (pl_val / cost_twd * 100) if cost_twd != 0 else 0,
+            "_get_value": asset.get("get_value", True),
         }
 
     # 分開處理基金與 ETF 的價格抓取

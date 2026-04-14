@@ -90,9 +90,15 @@ def render_advanced_analysis_ui(res):
         "MA250": res["MA250"],
     }
 
-    fund_dic = {"EPS": res["EPS"], "P/E": f"{res['PE']:.1f}", "量比": res["量比"]}
+    fund_dic = {
+        "EPS": res["EPS"],
+        "P/E": f"{res['PE']:.1f}",
+        "殖利率": res.get("殖利率", "-"),
+        "PEG": res.get("PEG", "-"),
+    }
 
     analyze_1_dic = {
+        "量比": res["量比"],
         "RS%": res["RS 百分位"],
         "RSI": f"{res.get('RSI', 0):.1f}",
         "Sharpe": res["夏普值"],
@@ -102,6 +108,7 @@ def render_advanced_analysis_ui(res):
         "α勝率": res["Alpha 勝率"],
         "月度α": res["月度 Alpha"],
         "Bias%": res["乖離率 (Bias)"],
+        "": "",
     }
 
     # 使用自定義 DIV 代替 st.columns，移除縮排以避免 Markdown 誤解析

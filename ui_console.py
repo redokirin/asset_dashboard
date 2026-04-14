@@ -57,7 +57,7 @@ def show_console_rich(
             ticker = str(row["代碼"])
             console.print(f"\n[bold yellow]== {ticker} ==[/bold yellow]")
             console.print(
-                f"EPS:{row.get('EPS', 0):.2f} 本益比:{row.get('PE', 0):.1f} 成交量比率:{row.get('量比', '-')}"
+                f"EPS:{row.get('EPS', 0):.2f} 本益比:{row.get('PE', 0):.1f} 殖利率:{row.get('殖利率', '-')} PEG:{row.get('PEG', '-')} 量比:{row.get('量比', '-')}"
             )
             if is_list_mode:
                 val_alpha = (
@@ -115,7 +115,7 @@ def show_console_rich(
             console.print(
                 f"{' '.join(row.get('tags', []))}\n{row.get('技術診斷', '-')}"
             )
-            console.print("\n" + "=" * 73)
+            # console.print("\n" + "=" * 73)
 
     if show_report:
         console.print(

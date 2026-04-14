@@ -10,21 +10,6 @@ from dashboard_ui import show_console_rich
 def generate_markdown_report(df, adv_results):
     # """生成符合 Markdown 與 HTML 顏色規範的報告"""
     lines = []
-    # lines.append("## 📊 資產持倉摘要表\n")
-    # lines.append("| 名稱 | 代碼 | 市場 | 股價 | 損益 | 報酬率 | 佔比 |")
-    # lines.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- |")
-
-    # for _, row in df.iterrows():
-    #     # roi = row["報酬率"]:+.2f
-    #     # 根據要求：正數綠色、負數紅色
-    #     # color = "green" if roi >= 0 else "red"
-    #     # roi_html = f"<span style='color:{color}'>{roi:+.2f}%</span>"
-    #     # pl_html = f"<span style='color:{color}'>${row['損益']:+,}</span>"
-
-    #     lines.append(
-    #         f"| {row['名稱']} | {row['代碼']} | {row['市場']} | {row['股價']:.2f} | "
-    #         f"${row['損益']:+,} | {row['報酬率']:+.2f}% | {row['佔比']:.1f}% |"
-    #     )
 
     if adv_results is not None and not adv_results.empty:
         groups = [
@@ -34,7 +19,16 @@ def generate_markdown_report(df, adv_results):
         ]
 
         for status_key, title in groups:
-            subset = adv_results[adv_results["狀態"].str.contains(status_key)]
+            # 修正：由於重構後狀態存放在 tags (list) 中，需改用 apply 檢查
+            subset = adv_results[
+                adv_results["tags"].apply(
+                    lambda x: (
+                        any(status_key in str(t) for t in x)
+                        if isinstance(x, list)
+                        else False
+                    )
+                )
+            ]
             if subset.empty:
                 continue
 
@@ -42,12 +36,24 @@ def generate_markdown_report(df, adv_results):
             for _, row in subset.iterrows():
                 lines.append(f"#### 🔍 {row['名稱']} ({row['代碼']})")
                 lines.append(
-                    f"- **當前股價**: {row['股價']} | **乖離率**: {row['乖離率 (Bias)']}"
+                    f"- **當前股價**: {row['股價']} | **乖離率**: {row.get('乖離率 (Bias)', '-')}"
                 )
+
+                eps_val = row.get("EPS", 0)
+                pe_val = row.get("PE", 0)
+                eps_str = (
+                    f"{eps_val:.2f}"
+                    if isinstance(eps_val, (int, float))
+                    else str(eps_val)
+                )
+                pe_str = (
+                    f"{pe_val:.1f}" if isinstance(pe_val, (int, float)) else str(pe_val)
+                )
+
                 lines.append(
-                    f"- **EPS**: {row.get('EPS', 0):.2f} | **PE**: {row.get('PE', 0):.1f} | **量能比**: {row['量比']}"
+                    f"- **EPS**: {eps_str} | **PE**: {pe_str} | **量能比**: {row.get('量比', '-')}"
                 )
-                diag = row["技術診斷"].replace("\n", " ")
+                diag = str(row.get("技術診斷", "-")).replace("\n", " ")
                 lines.append(f"> **技術診斷**: {diag}")
                 if "🔴 量能不足" in diag:
                     lines.append(
@@ -114,7 +120,7 @@ def run_cli():
 
     # 當同時指定 --ai 與 --analyze 時，合併結果並寫入檔案 ai_report.md
     if args.ai and args.analyze:
-        ai_text = dashboard_logic.export_for_ai(df_final)
+        ai_text = dashboard_logic.export_for_ai(df_final, adv_res=advanced_results)
         string_io = io.StringIO()
         file_console = Console(file=string_io, force_terminal=False, width=120)
         show_console_rich(
@@ -132,7 +138,7 @@ def run_cli():
             f.write(ai_text + "\n\n" + markdown_report)
         print(f"\n✅ AI 摘要與量化分析結果已合併寫入檔案: ai_report.md")
     elif args.ai:
-        print(dashboard_logic.export_for_ai(df_final))
+        print(dashboard_logic.export_for_ai(df_final, adv_res=advanced_results))
     else:
         show_console_rich(
             df_final,

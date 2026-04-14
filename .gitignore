@@ -63,3 +63,4 @@ read_assets.py
 credentials.json
 migrate_to_gsheet.py
 verify_gsheet_load.py
+ai_report.md
