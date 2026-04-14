@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import streamlit as st
 import gspread
 import tomllib
 import logging
@@ -9,18 +8,22 @@ from google.oauth2.service_account import Credentials
 # --- 配置與路徑 ---
 CREDENTIALS_PATH = Path(__file__).parent / "credentials.json"
 
+
 def get_secret(key, default=None):
     """安全地讀取 Secrets，避免本地端報錯"""
     try:
+        import streamlit as st
+
         return st.secrets.get(key, default)
     except Exception:
         return default
+
 
 SPREADSHEET_ID = get_secret(
     "spreadsheet_id", "1xiuVw0fuuIdqVX0a-gGf0MkEZWmwWGnsRndCoNEc-4A"
 )
 
-@st.cache_data(ttl=600)  # 每 10 分鐘快取一次
+
 def get_config_from_gsheets():
     """從 Google Sheets 讀取資產配置，支援本地檔案與 Streamlit Secrets"""
     creds = None
@@ -145,7 +148,7 @@ def get_config_from_gsheets():
         logging.error(f"Google Sheets 讀取失敗: {e}")
         return None
 
-@st.cache_data(ttl=600)
+
 def get_config():
     """
     讀取資產配置。
@@ -168,8 +171,8 @@ def get_config():
     # 2. 如果本地沒讀到關鍵設定，嘗試從 Streamlit Secrets 讀取
     if not config.get("app_password"):
         try:
-            if "my_assets" in st.secrets:
-                secrets_data = st.secrets["my_assets"]
+            secrets_data = get_secret("my_assets")
+            if secrets_data:
                 if hasattr(secrets_data, "to_dict"):
                     config.update(secrets_data.to_dict())
                 else:
@@ -182,11 +185,14 @@ def get_config():
     if gs_config:
         # 用 GS 的內容更新資產清單與雷達清單，保留基礎設定
         config.update(gs_config)
-        
+
     if not config:
-        logging.error("🚨 配置缺失：未偵測到 assets_config.toml 或 st.secrets['my_assets']")
-        
+        logging.error(
+            "🚨 配置缺失：未偵測到 assets_config.toml 或 st.secrets['my_assets']"
+        )
+
     return config
+
 
 def _ensure_id(config_dict):
     """增加防呆機制：如果項目中沒有定義 id，則以 Key 為預設 id"""
@@ -201,6 +207,7 @@ def _ensure_id(config_dict):
         result[key] = val
     return result
 
+
 def get_assets():
     """獲取最新的資產配置"""
     config = get_config()
@@ -208,6 +215,7 @@ def get_assets():
         "funds": _ensure_id(config.get("funds", {})),
         "etfs": _ensure_id(config.get("etfs", {})),
     }
+
 
 def get_radar_tickers():
     """獲取最新的雷達標的"""

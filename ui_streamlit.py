@@ -432,6 +432,23 @@ def render_shareholding_component(df):
                 if hasattr(dashboard_logic, "clear_ticker_cache"):
                     dashboard_logic.clear_ticker_cache(ticker)
                 with st.spinner("正在進行深度數據穿透..."):
+                    cost_dic = {
+                        "單位數": row["單位數"],
+                        "平均成本": f"${row['平均成本']:,.2f}",
+                        "成本": f"${row['成本']:,}",
+                        "市值": f"${row['市值']:,}",
+                    }
+
+                    cost_row = render_analysis_metrics_row(cost_dic, "💰 成本分析")
+
+                    st.markdown(
+                        f"""<div class="analysis-report-row">
+                                    <div class="analysis-report-col">
+                                    {cost_row}
+                                    </div>
+                                    </div>""",
+                        unsafe_allow_html=True,
+                    )
                     adv_results = dashboard_logic.run_advanced_analysis(
                         pd.DataFrame([row])
                     )
@@ -440,7 +457,9 @@ def render_shareholding_component(df):
                             # with st.expander(
                             #     f"📈 {row['名稱']} ({row['代碼']}) 報告", expanded=True
                             # ):
+
                             render_advanced_analysis_ui(adv_results.iloc[0])
+
                 # if st.button("收合報告", key=f"close_{row['代碼']}"):
                 #     st.session_state[f"analyze_{row['代碼']}"] = False
                 #     st.rerun()

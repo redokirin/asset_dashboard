@@ -2,7 +2,14 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import dashboard_logic
+import data_loader
 from dashboard_ui import show_streamlit
+
+# --- 注入 Streamlit 快取到配置讀取端 (避免 CLI 出現警告) ---
+data_loader.get_config = st.cache_data(ttl=600)(data_loader.get_config)
+data_loader.get_config_from_gsheets = st.cache_data(ttl=600)(data_loader.get_config_from_gsheets)
+
+# 從 dashboard_logic 重新導出 (維持相容性)
 from dashboard_logic import get_config
 
 # --- 讀取配置 ---
