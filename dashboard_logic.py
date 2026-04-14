@@ -304,14 +304,14 @@ def fetch_historical_data(tickers, period="2y", group_by="ticker"):
             "ratio": 10.0,
             "threshold_factor": 5.0,
             "bug_price": 10000,
-            "desc": "日本 1306.T (1:10 分割)"
+            "desc": "日本 1306.T (1:10 分割)",
         },
         "0052.TW": {
             "ratio": 7.0,
             "threshold_factor": 3.0,
             "bug_price": 200,
-            "desc": "富邦科技 0052.TW (1:7 分割)"
-        }
+            "desc": "富邦科技 0052.TW (1:7 分割)",
+        },
     }
 
     target_tickers_list = [tickers] if isinstance(tickers, str) else list(tickers)
@@ -329,7 +329,7 @@ def fetch_historical_data(tickers, period="2y", group_by="ticker"):
                     if not clean_close.empty:
                         current_p = float(clean_close.iloc[-1])
                         ratio = cfg["ratio"]
-                        
+
                         # 修正判斷：若現價過高 (全局未調整) 或 歷史數據有異常突波 (局部未對齊)
                         threshold = current_p * cfg["threshold_factor"]
                         is_global_bug = current_p > cfg["bug_price"]
@@ -340,8 +340,14 @@ def fetch_historical_data(tickers, period="2y", group_by="ticker"):
                         )
 
                         if is_global_bug or not high_price_dates.empty:
-                            msg = "全局未調整" if is_global_bug else f"歷史分割未對齊 ({len(high_price_dates)} 筆)"
-                            logging.info(f"⚡ 偵測到 {cfg['desc']} {msg}，執行 1:{int(ratio)} 修正...")
+                            msg = (
+                                "全局未調整"
+                                if is_global_bug
+                                else f"歷史分割未對齊 ({len(high_price_dates)} 筆)"
+                            )
+                            logging.info(
+                                f"⚡ 偵測到 {cfg['desc']} {msg}，執行 1:{int(ratio)} 修正..."
+                            )
 
                             cols_to_fix = ["Open", "High", "Low", "Close"]
                             if isinstance(df_all.columns, pd.MultiIndex):
@@ -350,20 +356,28 @@ def fetch_historical_data(tickers, period="2y", group_by="ticker"):
                                         if is_global_bug:
                                             df_all.loc[:, (t_id, col)] /= ratio
                                         else:
-                                            df_all.loc[high_price_dates, (t_id, col)] /= ratio
+                                            df_all.loc[
+                                                high_price_dates, (t_id, col)
+                                            ] /= ratio
                                 if (t_id, "Volume") in df_all.columns:
                                     if is_global_bug:
                                         df_all.loc[:, (t_id, "Volume")] *= ratio
                                     else:
-                                        df_all.loc[high_price_dates, (t_id, "Volume")] *= ratio
+                                        df_all.loc[
+                                            high_price_dates, (t_id, "Volume")
+                                        ] *= ratio
                             else:
-                                available_cols = [c for c in cols_to_fix if c in df_all.columns]
+                                available_cols = [
+                                    c for c in cols_to_fix if c in df_all.columns
+                                ]
                                 if is_global_bug:
                                     df_all.loc[:, available_cols] /= ratio
                                     if "Volume" in df_all.columns:
                                         df_all["Volume"] *= ratio
                                 else:
-                                    df_all.loc[high_price_dates, available_cols] /= ratio
+                                    df_all.loc[high_price_dates, available_cols] /= (
+                                        ratio
+                                    )
                                     if "Volume" in df_all.columns:
                                         df_all.loc[high_price_dates, "Volume"] *= ratio
             except Exception as e:
@@ -491,13 +505,13 @@ def calculate_assets_data(exchange_rates):
         val_twd, cost_twd = (current_price * units * rate), (cost_origin * rate)
         pl_val = val_twd - cost_twd
 
-        suggested_bid = 0.0
-        if price is not None and asset.get("market_type"):
-            target = min(
-                price * asset.get("discount", 0.985),
-                avg_cost * 0.998 if avg_cost > 0 else 999999,
-            )
-            suggested_bid = calculate_tick_price(target, asset["market_type"])
+        # suggested_bid = 0.0
+        # if price is not None and asset.get("market_type"):
+        #     target = min(
+        #         price * asset.get("discount", 0.985),
+        #         avg_cost * 0.998 if avg_cost > 0 else 999999,
+        #     )
+        #     suggested_bid = calculate_tick_price(target, asset["market_type"])
 
         return {
             "市場": asset["market"],
@@ -509,7 +523,7 @@ def calculate_assets_data(exchange_rates):
             "平均成本": avg_cost,
             "漲跌": change_val,
             "股價": current_price,
-            "建議掛單": suggested_bid,
+            # "建議掛單": suggested_bid,
             "成本": round(cost_twd),
             "市值": round(val_twd),
             "損益": round(pl_val),
@@ -706,125 +720,6 @@ def calculate_buffered_entries(df, ma20, ma250, current_price, rs_p10_price):
 #    * 🔥 極致強勢：長、短線趨勢處於多頭共振狀態。
 
 
-def generate_objective_diagnosis(
-    price,
-    ma20,
-    ma250,
-    vol_ratio,
-    price_change_pct,
-    rs_percentile,
-    sharpe,
-    eps=None,
-    pe_ratio=None,
-    dividend_yield=None,
-    peg_ratio=None,
-):
-    """
-    核心客觀診斷邏輯 (基本面 + 技術位階 + 股息護城河 + PEG 成長平衡器)
-    """
-    tags = []
-    # 1. 長線格局 (Long-term Context)
-    if ma250 is None or math.isnan(ma250):
-        lt_context = "LONG_UNKNOWN"
-        lt_desc = "長線趨勢數據不足"
-    elif price > ma250:
-        lt_context = "BULLISH"
-        lt_desc = "長線多頭格局"
-    else:
-        lt_context = "BEARISH"
-        lt_desc = "長線空頭排列"
-
-    # 2. 短線動能 (Short-term Momentum)
-    if ma20 is None or math.isnan(ma20):
-        st_momentum = "MOM_UNKNOWN"
-    elif price > ma20:
-        st_momentum = "STRONG"
-    else:
-        st_momentum = "WEAK"
-
-    # 3. 綜合格局標籤 (Professional Research Tone)
-    match (lt_context, st_momentum):
-        case ("BULLISH", "STRONG"):
-            tags.append("🔥 極致強勢")
-            advice_base = "標的處於長短線多頭共振，向上動能極強。"
-        case ("BULLISH", "WEAK"):
-            tags.append("🟢 長線多頭")
-            advice_base = "標的維持長線多頭格局，但短線動能出現技術性背離（跌破月線），目前正進行結構性回測。"
-        case ("BEARISH", "STRONG"):
-            tags.append("💧 弱勢反彈")
-            advice_base = "長線空頭趨勢未變，當前價格運動僅屬超跌後的短線乖離修正。"
-        case ("BEARISH", "WEAK"):
-            tags.append("🔵 長線偏弱")
-            advice_base = "長短線均受制於下行均線，技術面承壓，尚未見止跌訊號。"
-        case _:
-            tags.append("⚪ 中性整理")
-            advice_base = "趨勢動能不明，建議於關鍵支撐位階觀察。"
-
-    # 4. 基本面、股息護城河與 PEG 診斷
-    fund_advice = ""
-
-    # 4.1 估值診斷
-    if eps is not None and not math.isnan(eps) and eps > 0:
-        tags.append("📊 盈利穩健")
-        if pe_ratio is not None and not math.isnan(pe_ratio) and pe_ratio > 0:
-            pe_desc = (
-                "低估值"
-                if pe_ratio < 15
-                else "合理估值"
-                if pe_ratio <= 30
-                else "高成長溢價"
-            )
-            fund_advice += f"基本面 EPS 正向，反映{pe_desc}。"
-
-    # 4.2 股息護城河 (Dividend Moat)
-    if (
-        dividend_yield is not None
-        and not math.isnan(dividend_yield)
-        and dividend_yield > 0.035
-    ):
-        if rs_percentile < 20 or lt_context == "BEARISH":
-            tags.append("🛡️ 息收護城河")
-            fund_advice += (
-                f"具備高股息殖利率({dividend_yield:.1%})，在深水區提供強大下行支撐。\n"
-            )
-
-    # 4.3 PEG Validator
-    if peg_ratio is not None and not math.isnan(peg_ratio) and peg_ratio > 0:
-        if peg_ratio < 1.0:
-            tags.append("💎 估值極具吸引力 (PEG < 1)")
-            fund_advice += "成長估值極其便宜 (PEG < 1)。"
-        elif peg_ratio > 2.0:
-            tags.append("⚠️ 成長溢價過高 (PEG > 2)")
-            if lt_context == "BULLISH":
-                fund_advice += "雖然趨勢向上，但成長估值已顯過熱 (PEG > 2)。"
-
-    if sharpe > 1.2:
-        tags.append("💎 高效率資產")
-
-    # 5. 量價驗證與結構性換手偵測
-    vp_advice = ""
-    if price_change_pct > 1.5:
-        if vol_ratio > 1.5:
-            vp_advice = "今日價量齊揚，主動性買盤積極介入。"
-        elif vol_ratio < 0.75:
-            vp_advice = "⚠️ 注意價漲量縮現象，反彈動能缺乏量能支撐，慎防追高風險。"
-    elif price_change_pct < -1.5:
-        if vol_ratio > 2.0:
-            vp_advice = "😱 偵測到結構性換手或恐慌拋售（異常爆量 2.0x+），\n技術支撐可能失效，建議暫緩接單，優先觀察更深層的防守位。"
-        elif vol_ratio > 1.5:
-            vp_advice = "😱 帶量下殺，恐慌性賣壓持續湧現，建議先觀察狙擊防守位。"
-        elif vol_ratio < 0.8:
-            vp_advice = "量縮下跌，顯示賣壓已出現竭盡跡象，利於短線止跌企穩。"
-
-    # 組合最終建議
-    fund_display = f"\n{fund_advice}" if fund_advice else ""
-    vp_advice_display = f"\n{vp_advice}" if vp_advice else ""
-    advice_base_display = f"\n{advice_base}" if advice_base else ""
-    full_advice = f"{lt_desc}。{advice_base_display}{fund_display}{vp_advice_display}"
-
-    return tags, full_advice
-
-
 def generate_advanced_diagnosis(
     bias,
     sharpe,
@@ -842,63 +737,120 @@ def generate_advanced_diagnosis(
     peg_ratio=None,
 ):
     """
-    綜合診斷：調用客觀診斷函式並整合原有邏輯
+    綜合量化診斷邏輯 (整合基本面、技術位、RS、RSI 與量價關係)
     """
-    # 預設值，防止 NameError
-    obj_advice = "『數據分析中...』"
+    tags = []
 
-    # 調用核心診斷
-    try:
-        tags, obj_advice = generate_objective_diagnosis(
-            price,
-            ma20,
-            ma250,
-            vol_ratio,
-            price_change_pct,
-            rs_percentile,
-            sharpe,
-            eps,
-            pe_ratio,
-            dividend_yield,
-            peg_ratio,
-        )
-    except Exception as e:
-        logging.warning(f"Objective diagnosis failed for {ticker}: {e}")
+    # 1. 趨勢格局與短線動能診斷 (Trend & Context)
+    if ma250 is None or math.isnan(ma250):
+        lt_context, lt_desc = "LONG_UNKNOWN", "長線趨勢數據不足"
+    elif price is not None and price > ma250:
+        lt_context, lt_desc = "BULLISH", "長線多頭格局"
+    else:
+        lt_context, lt_desc = "BEARISH", "長線空頭排列"
 
-    tech_signal_text = "  "
-    rs_status_text = "⚪ 正常區"
+    st_momentum = "MOM_UNKNOWN"
+    if price is not None and ma20 is not None and not math.isnan(ma20):
+        st_momentum = "STRONG" if price > ma20 else "WEAK"
 
-    # RS 狀態判斷
+    # 綜合格局建議基礎
+    match (lt_context, st_momentum):
+        case ("BULLISH", "STRONG"):
+            tags.append("🔥 極致強勢")
+            advice_base = "標的處於長短線多頭共振，向上動能極強。"
+        case ("BULLISH", "WEAK"):
+            tags.append("🟢 長線多頭")
+            advice_base = "標的維持長線多頭格局，但短線出現技術性背離（跌破月線），正進行結構性回測。"
+        case ("BEARISH", "STRONG"):
+            tags.append("💧 弱勢反彈")
+            advice_base = "長線空頭趨勢未變，當前僅屬超跌後的短線乖離修正。"
+        case ("BEARISH", "WEAK"):
+            tags.append("🔵 長線偏弱")
+            advice_base = "長短線均受制於均線下行，技術面承壓，尚未見止跌訊號。"
+        case _:
+            tags.append("⚪ 中性整理")
+            advice_base = "趨勢動能不明，建議於關鍵支撐位階觀察。"
+
+    # 2. RS 相對強度與 RSI 超買超賣判斷
     if rs_percentile > 85:
-        rs_status_text = "🔥 過熱區"
+        tags.append("🔥 過熱區")
     elif rs_percentile <= 15:
-        rs_status_text = "🔵 深水區"
-
-    tags.append(rs_status_text)
+        tags.append("🔵 深水區")
+    else:
+        tags.append("⚪ 正常區")
 
     if rsi > 70:
         tags.append("🟢 超買")
     elif rsi < 30:
         tags.append("🔴 超賣")
 
-    # 技術燈號判斷
+    # 3. 技術位階 (Bias 乖離率燈號)
     if bias is not None and not math.isnan(bias):
         if bias <= -7:
-            tech_signal_text = "🟠 極度價值區 (低於月線 -7%，強力加碼)"
+            tags.append("🟠 極度價值區 (低於月線 -7%)")
         elif -7 < bias <= -4:
-            tech_signal_text = "💧 跌深反彈區 (低於月線 -4%~-7%，注意反彈)"
+            tags.append("💧 跌深反彈區 (低於月線 -4%~-7%)")
         elif bias >= 7:
-            tech_signal_text = "🔴 過熱區 (高於月線 +7%，注意獲利了結)"
+            tags.append("🔴 過熱區 (高於月線 +7%)")
         else:
-            tech_signal_text = (
-                "🟢 趨勢區 (沿月線上漲，定期定額)"
-                if bias >= 0
-                else "🟡 價值區 (低於月線，二線買點)"
+            tags.append("🟢 趨勢區" if bias >= 0 else "🟡 價值區")
+
+    # 4. 基本面診斷 (盈利、估值與股息護城河)
+    fund_advice = ""
+    if eps is not None and not math.isnan(eps) and eps > 0:
+        tags.append("📊 盈利穩健")
+        if pe_ratio is not None and not math.isnan(pe_ratio) and pe_ratio > 0:
+            pe_desc = (
+                "低估值"
+                if pe_ratio < 15
+                else "合理估值"
+                if pe_ratio <= 30
+                else "高成長溢價"
+            )
+            fund_advice += f"基本面 EPS 正向，反映出{pe_desc}。"
+
+    if (
+        dividend_yield is not None
+        and not math.isnan(dividend_yield)
+        and dividend_yield > 0.035
+    ):
+        if rs_percentile < 20 or lt_context == "BEARISH":
+            tags.append("🛡️ 息收護城河")
+            fund_advice += (
+                f"具備高股息殖利率 ({dividend_yield:.1%})，為深水區提供防禦支撐。"
             )
 
-    tags.append(tech_signal_text)
+    if peg_ratio is not None and not math.isnan(peg_ratio) and peg_ratio > 0:
+        if peg_ratio < 1.0:
+            tags.append("💎 估值極具吸引力 (PEG < 1)")
+            fund_advice += " 成長估值具備極高吸引力 (PEG < 1)。"
+        elif peg_ratio > 2.0:
+            tags.append("⚠️ 成長溢價過高 (PEG > 2)")
+            if lt_context == "BULLISH":
+                fund_advice += " 需注意成長性已透支估值 (PEG > 2)。"
 
-    return obj_advice, tags
+    if sharpe > 1.2:
+        tags.append("💎 高效率資產")
+
+    # 5. 量價驗證與結構性換手偵測
+    vp_advice = ""
+    if price_change_pct > 1.5:
+        if vol_ratio > 1.5:
+            vp_advice = "今日價量齊揚，主動性買盤積極介入。"
+        elif vol_ratio < 0.75:
+            vp_advice = "⚠️ 注意價漲量縮現象，反彈動能缺乏支撐，慎防追高風險。"
+    elif price_change_pct < -1.5:
+        if vol_ratio > 2.0:
+            vp_advice = "😱 偵測到異常爆量 (2.0x+)，技術支撐可能失效，建議暫緩接單並觀察防守位。"
+        elif vol_ratio > 1.5:
+            vp_advice = "😱 帶量下殺，反映恐慌性賣壓持續湧現，建議優先觀察狙擊位。"
+        elif vol_ratio < 0.8:
+            vp_advice = "量縮下跌，賣壓出現竭盡跡象，有利於短線止跌整理。"
+
+    # 組合最終建議 (Professional Tone)
+    full_advice = f"{lt_desc}。 {advice_base}\n{fund_advice}\n{vp_advice}".strip()
+
+    return full_advice, tags
 
 
 # RS & 百分位：解決了「現在相對於台股，誰便宜、誰貴？」（相對位階）
