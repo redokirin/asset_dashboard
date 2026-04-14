@@ -4,6 +4,7 @@ import pandas as pd
 import logging
 import requests_cache
 from functools import lru_cache
+from data_loader import get_radar_tickers
 
 # 設定 10 分鐘 (600 秒) 的 Requests 快取，減輕 API 負擔並加速執行
 requests_cache.install_cache("asset_tracking_cache", expire_after=600)
@@ -151,3 +152,35 @@ def fetch_common_data(tickers, period="2y"):
     except Exception as e:
         logging.error(f"抓取共用數據失敗: {e}")
         return pd.DataFrame()
+
+def get_market_radar_data():
+    """抓取市場雷達數據"""
+    data = []
+    radar_tickers = get_radar_tickers()
+    for ticker, name in radar_tickers.items():
+        try:
+            t = yf.Ticker(ticker)
+            # 優先從 fast_info 獲取
+            try:
+                last_price = t.fast_info["last_price"]
+            except Exception:
+                # 備援方案：從歷史數據獲取最後收盤價
+                hist_1d = t.history(period="1d")
+                if not hist_1d.empty:
+                    last_price = hist_1d["Close"].iloc[-1]
+                else:
+                    logging.warning(f"無法獲取雷達數據價格 [{ticker}]")
+                    continue
+
+            hist = t.history(period="2d")
+            change_pct = (
+                ((last_price - hist["Close"].iloc[0]) / hist["Close"].iloc[0] * 100)
+                if not hist.empty and len(hist) >= 2
+                else 0.0
+            )
+            data.append(
+                {"代碼": ticker, "名稱": name, "數值": last_price, "漲跌幅": change_pct}
+            )
+        except Exception as e:
+            logging.warning(f"無法獲取雷達數據 [{ticker}]: {e}")
+    return data
