@@ -148,34 +148,45 @@ def get_config_from_gsheets():
 @st.cache_data(ttl=600)
 def get_config():
     """
-    讀取資產配置。優先從 Google Sheets 讀取，其次本地 assets_config.toml，
-    最後為 Streamlit Secrets。
+    讀取資產配置。
+    邏輯：優先載入本地或 Secrets 的基礎設定（如 app_password），
+    再由 Google Sheets 更新資產與雷達清單。
     """
-    gs_config = get_config_from_gsheets()
-    if gs_config:
-        return gs_config
+    config = {}
 
+    # 1. 嘗試讀取本地 assets_config.toml
     current_dir = Path(__file__).parent
     toml_path = current_dir / "assets_config.toml"
     if toml_path.exists():
         try:
             with open(toml_path, "rb") as f:
-                config = tomllib.load(f)
-                return config.get("my_assets", {})
+                toml_data = tomllib.load(f)
+                config = dict(toml_data.get("my_assets", {}))
         except Exception as e:
             logging.error(f"本地配置讀取失敗: {e}")
 
-    try:
-        if "my_assets" in st.secrets:
-            secrets_data = st.secrets["my_assets"]
-            if hasattr(secrets_data, "to_dict"):
-                return secrets_data.to_dict()
-            return dict(secrets_data)
-    except Exception as e:
-        logging.error(f"Secrets 讀取失敗: {e}")
+    # 2. 如果本地沒讀到關鍵設定，嘗試從 Streamlit Secrets 讀取
+    if not config.get("app_password"):
+        try:
+            if "my_assets" in st.secrets:
+                secrets_data = st.secrets["my_assets"]
+                if hasattr(secrets_data, "to_dict"):
+                    config.update(secrets_data.to_dict())
+                else:
+                    config.update(dict(secrets_data))
+        except Exception as e:
+            logging.error(f"Secrets 讀取失敗: {e}")
 
-    logging.error("🚨 配置缺失：未偵測到 assets_config.toml 或 st.secrets['my_assets']")
-    return {}
+    # 3. 嘗試從 Google Sheets 讀取資產數據並合併
+    gs_config = get_config_from_gsheets()
+    if gs_config:
+        # 用 GS 的內容更新資產清單與雷達清單，保留基礎設定
+        config.update(gs_config)
+        
+    if not config:
+        logging.error("🚨 配置缺失：未偵測到 assets_config.toml 或 st.secrets['my_assets']")
+        
+    return config
 
 def _ensure_id(config_dict):
     """增加防呆機制：如果項目中沒有定義 id，則以 Key 為預設 id"""
