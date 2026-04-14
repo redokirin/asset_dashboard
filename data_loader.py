@@ -143,6 +143,37 @@ def get_config_from_gsheets():
         except Exception as e:
             logging.error(f"讀取 etfs 分頁失敗: {e}")
 
+        # 4. 讀取 stocks (以 Ticker 為索引)
+        try:
+            ws_stocks = sh.worksheet("stocks")
+            stocks_data = ws_stocks.get_all_records()
+            stocks_dict = {}
+            numeric_cols = ["shares", "cost", "discount", "units"]
+            bool_cols = ["enabled", "get_value"]
+            for row in stocks_data:
+                ticker_key = str(row.pop("Ticker", "") or row.pop("ticker", "")).strip()
+                if ticker_key:
+                    cleaned_row = {}
+                    cleaned_row["id"] = ticker_key
+                    for k, v in row.items():
+                        low_k = k.lower()
+                        if low_k in numeric_cols:
+                            try:
+                                cleaned_row[low_k] = (
+                                    float(str(v).replace(",", "")) if v != "" else 0.0
+                                )
+                            except:
+                                cleaned_row[low_k] = 0.0
+                        elif low_k in bool_cols:
+                            val_str = str(v).upper()
+                            cleaned_row[low_k] = val_str in ["TRUE", "1", "YES", "T"]
+                        elif v != "":
+                            cleaned_row[low_k] = v
+                    stocks_dict[ticker_key] = cleaned_row
+            config["stocks"] = stocks_dict
+        except Exception as e:
+            logging.error(f"讀取 stocks 分頁失敗: {e}")
+
         return config
     except Exception as e:
         logging.error(f"Google Sheets 讀取失敗: {e}")
@@ -214,6 +245,7 @@ def get_assets():
     return {
         "funds": _ensure_id(config.get("funds", {})),
         "etfs": _ensure_id(config.get("etfs", {})),
+        "stocks": _ensure_id(config.get("stocks", {})),
     }
 
 

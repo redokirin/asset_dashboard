@@ -148,8 +148,9 @@ def calculate_assets_data(exchange_rates):
 
     fetch_batch_prices("funds")
     fetch_batch_prices("etfs")
+    fetch_batch_prices("stocks")
 
-    for cat_key, cat_name in [("funds", "基金"), ("etfs", "ETF")]:
+    for cat_key, cat_name in [("funds", "基金"), ("etfs", "ETF"), ("stocks", "個股")]:
         for asset in assets[cat_key].values():
             if not asset.get("enabled", True):
                 continue
@@ -157,7 +158,8 @@ def calculate_assets_data(exchange_rates):
             price, change_val = None, None
             if asset.get("get_value"):
                 price = batch_prices.get(asset["id"])
-                if cat_key == "etfs":
+                # 無論是 ETF 還是個股，都讀取漲跌幅
+                if cat_key in ["etfs", "stocks"]:
                     change_val = batch_changes.get(asset["id"])
 
             res = process_asset(asset, cat_name, price, change_val)

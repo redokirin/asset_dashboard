@@ -13,9 +13,10 @@ def generate_markdown_report(df, adv_results):
 
     if adv_results is not None and not adv_results.empty:
         groups = [
-            ("🔥 過熱", "### 🔥 過熱區 (強勢標的，建議觀望)"),
-            ("🔵 深水", "### 🔵 深水區 (價值凹陷，分批佈局)"),
-            ("⚪ 正常", "### ⚪ 正常區 (趨勢跟隨)"),
+            ("過熱", "### 🔥 過熱區 (極端動能，建議觀望/分批停利)"),
+            ("動能", "### 🚀 動能區 (趨勢領先，續抱觀察)"),
+            ("深水", "### 🔵 價值/深水區 (長線佈局點)"),
+            ("中軸", "### ⚪ 趨勢中軸 (盤整與穩定)"),
         ]
 
         for status_key, title in groups:

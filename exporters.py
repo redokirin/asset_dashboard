@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
 
+
 def export_for_ai(df_res, adv_res=None):
     """
     導出結構化的 AI 分析文本。
@@ -31,21 +32,20 @@ def export_for_ai(df_res, adv_res=None):
             cols_to_use = adv_res.columns.difference(
                 work_df.columns.difference(["代碼"])
             )
-            work_df = pd.merge(
-                work_df, adv_res[cols_to_use], on="代碼", how="left"
-            )
+            work_df = pd.merge(work_df, adv_res[cols_to_use], on="代碼", how="left")
 
     for _, row in work_df.iterrows():
         ticker = row["代碼"]
         name = row["名稱"]
+        asset_type = row.get("類型", "個股")
 
         # 基礎狀況
         change_val = row.get("漲跌", 0)
         change_str = f"{change_val:+.2f}" if pd.notnull(change_val) else "0.00"
-        
+
         base_info = (
-            f"### [{ticker}] {name}\n"
-            f"- **資產現況**: 股價 {row.get('股價', '-')}({change_str}), 報酬率 {row.get('報酬率', 0):.2f}%, 佔比 {row.get('佔比', 0):.1f}%\n"
+            f"### [{ticker}] {name} ({asset_type})\n"
+            f"- **資產現況**: 類型 {asset_type}, 股價 {row.get('股價', '-')}({change_str}), 報酬率 {row.get('報酬率', 0):.2f}%, 佔比 {row.get('佔比', 0):.1f}%\n"
             f"- **持倉明細**: 單位 {row.get('單位數', 0):,.2f}, 平均成本 {row.get('平均成本', 0):.2f}, 總成本 ${row.get('成本', 0):,.0f}"
         )
         report.append(base_info)
@@ -57,7 +57,7 @@ def export_for_ai(df_res, adv_res=None):
             pe = row.get("PE", "-")
             yield_val = row.get("殖利率", "-")
             peg = row.get("PEG", "-")
-            
+
             # 處理量化指標
             quant_info = (
                 f"- **基本面**: EPS {eps} | P/E {pe} | 殖利率 {yield_val} | PEG {peg}\n"
@@ -72,7 +72,17 @@ def export_for_ai(df_res, adv_res=None):
 
     report.append("\n" + "=" * 50)
     report.append(
-        "請 AI 根據以上數據，分析目前的投資組合健康度，並針對各標的給予「加碼、減碼或觀望」的建議。請特別注意 PEG > 2 或 RS 百分位過高的標的風險。"
+        """
+### 💡 給 AI 的分析指南：
+1. **智能基準 (Smart Benchmarks) 與 RS 解讀**：本報表採用「區域自動對標」邏輯。
+   - **台股**對點 [0050.TW]；**美股與全球資產**對標 [VOO] (S&P 500)；**日股**對標 [1306.T] (TOPIX)。
+   - **指數型 ETF**：RS 進入「價值/深水區」意味著該區域市場相對於其歷史長期趨勢處於低位，是跨市場再平衡的潛在買點。
+   - **個股與主動型 ETF**：高 RS 代表其表現超越所屬市場大盤，具備真實的動能領先。
+2. **Alpha 的專業意義**：Alpha 現在反映的是標的相對於「自身所屬市場」的超額報酬能力，請以此判斷主動型基金與經理人的選股實力。
+3. **基本面與掛單**：請結合 PEG 比例與建議掛單位階。低位階且 PEG < 1 的標的具備極高安全邊際。
+
+請 AI 根據以上數據，分析目前的投資組合健康度，並針對各標的給予「加碼、減碼或觀望」的具體建議。
+"""
     )
 
     return "\n".join(report)

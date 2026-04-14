@@ -67,11 +67,13 @@ def calculate_buffered_entries(df, ma20, ma250, current_price, rs_p10_price):
 #     * 🔵 長線偏弱：趨勢結構尚未止跌，技術面承壓。
 #
 #    【位階與風險相關】
-#     * 🔥 過熱區：RS 百分位 > 85 或 乖離率 > 7%，需警惕回檔風險。
-#     * 🔵 深水區：RS 百分位 <= 15，多數人已拋售的底部區。
-#     * 🟠 極度價值區：股價低於月線 7% 以上。
-#     * 💧 跌深反彈區：股價低於月線 4%~7% 之間。
-#     * 🟢 買超 / 🔴 賣超：RSI 進入 80 以上或 20 以下的極端區間。
+#     * 🔥 極致過熱：RS 百分位 >= 90，極端噴發，警惕反轉。
+#     * 🚀 動能強勢：RS 百分位 75~89，市場主流領先標的。
+#     * ⚪ 趨勢中軸：RS 百分位 31~74，表現平穩。
+#     * 🔵 價值佈局區：RS 百分位 11~30，相對低估，適合長線分批。
+#     * 💎 黃金深水區：RS 百分位 <= 10，歷史級別低位。
+#     * 🟠 極度價值區 / 💧 跌深反彈區：基於「乖離率 (Bias)」的判斷。
+#     * 🟢 買超 / 🔴 賣超：基於「RSI」的超買賣狀態。
 #
 #    【基本面與效率相關】
 #     * 📊 盈利穩健：具備正向 EPS 的實質獲利標的。
@@ -96,9 +98,12 @@ def generate_advanced_diagnosis(
     pe_ratio=None,
     dividend_yield=None,
     peg_ratio=None,
+    asset_type="個股",
+    alpha_win_rate="0%",
 ):
     """綜合量化診斷邏輯 (整合基本面、技術位、RS、RSI 與量價關係)"""
     tags = []
+    fund_advice = ""
 
     if ma250 is None or math.isnan(ma250):
         lt_context, lt_desc = "LONG_UNKNOWN", "長線趨勢數據不足"
@@ -128,12 +133,16 @@ def generate_advanced_diagnosis(
             tags.append("⚪ 中性整理")
             advice_base = "趨勢動能不明，建議於關鍵支撐位階觀察。"
 
-    if rs_percentile > 85:
-        tags.append("🔥 過熱區")
-    elif rs_percentile <= 15:
-        tags.append("🔵 深水區")
+    if rs_percentile >= 90:
+        tags.append("🔥 極致過熱")
+    elif rs_percentile >= 75:
+        tags.append("🚀 動能強勢")
+    elif rs_percentile <= 10:
+        tags.append("💎 黃金深水區")
+    elif rs_percentile <= 30:
+        tags.append("🔵 價值佈局區")
     else:
-        tags.append("⚪ 正常區")
+        tags.append("⚪ 趨勢中軸")
 
     if rsi > 80:
         tags.append("🟢 買超")
@@ -150,18 +159,52 @@ def generate_advanced_diagnosis(
         else:
             tags.append("🟢 趨勢區" if bias >= 0 else "🟡 價值區")
 
-    fund_advice = ""
-    if eps is not None and not math.isnan(eps) and eps > 0:
-        tags.append("📊 盈利穩健")
-        if pe_ratio is not None and not math.isnan(pe_ratio) and pe_ratio > 0:
-            pe_desc = (
-                "低估值"
-                if pe_ratio < 15
-                else "合理估值"
-                if pe_ratio <= 30
-                else "高成長溢價"
-            )
-            fund_advice += f"基本面 EPS 正向，反映出{pe_desc}。"
+    # --- 3. 基本面與效率評價 ---
+    is_fund_like = asset_type in ["ETF", "基金", "Fund", "個股 (ETF)"]
+
+    if not is_fund_like:
+        # 個股專屬邏輯 (如 2330.TW)
+        if eps is not None and not math.isnan(eps) and eps > 0:
+            tags.append("📊 盈利穩健")
+            if pe_ratio is not None and not math.isnan(pe_ratio) and pe_ratio > 0:
+                pe_desc = (
+                    "低估值"
+                    if pe_ratio < 15
+                    else "合理估值"
+                    if pe_ratio <= 30
+                    else "高成長溢價"
+                )
+                fund_advice += f" 基本面 EPS 正向，反映出{pe_desc}。"
+
+        if peg_ratio is not None and not math.isnan(peg_ratio) and peg_ratio > 0:
+            if peg_ratio < 1.0:
+                tags.append("💎 估值極具吸引力 (PEG < 1)")
+                fund_advice += " 成長估值具備極高吸引力 (PEG < 1)。"
+            elif peg_ratio > 2.0:
+                tags.append("⚠️ 成長溢價過高 (PEG > 2)")
+                if lt_context == "BULLISH":
+                    fund_advice += " 需注意成長性已透支估值 (PEG > 2)。"
+    else:
+        # ETF/基金專屬邏輯
+        if sharpe > 1.2:
+            tags.append("💎 高效率資產")
+            fund_advice += f" 具備高夏普值 ({sharpe:.1f})，資產配置效率極佳。"
+
+        # 處理 Alpha 勝率標籤
+        try:
+            alpha_num = float(str(alpha_win_rate).replace("%", ""))
+            if alpha_num > 60:
+                tags.append("🛡️ 強勢管理")
+                fund_advice += (
+                    f" Alpha 勝率 ({alpha_num:.1f}%) 表現強勁，具備超額報酬能力。"
+                )
+        except:
+            pass
+
+        # 指數型 ETF 位階判斷 (針對再平衡)
+        if rs_percentile <= 20:
+            tags.append("⚖️ 配置機會")
+            fund_advice += " 標的相對於基準處於深水區，為跨市場再平衡的潛在買點。"
 
     if (
         dividend_yield is not None
@@ -171,20 +214,11 @@ def generate_advanced_diagnosis(
         if rs_percentile < 20 or lt_context == "BEARISH":
             tags.append("🛡️ 息收護城河")
             fund_advice += (
-                f"具備高股息殖利率 ({dividend_yield:.1%})，為深水區提供防禦支撐。"
+                f" 具備高股息殖利率 ({dividend_yield:.1%})，為下行提供防禦支撐。"
             )
 
-    if peg_ratio is not None and not math.isnan(peg_ratio) and peg_ratio > 0:
-        if peg_ratio < 1.0:
-            tags.append("💎 估值極具吸引力 (PEG < 1)")
-            fund_advice += " 成長估值具備極高吸引力 (PEG < 1)。"
-        elif peg_ratio > 2.0:
-            tags.append("⚠️ 成長溢價過高 (PEG > 2)")
-            if lt_context == "BULLISH":
-                fund_advice += " 需注意成長性已透支估值 (PEG > 2)。"
-
-    if sharpe > 1.2:
-        tags.append("💎 高效率資產")
+    # if sharpe > 1.2:
+    #     tags.append("💎 高效率資產")
 
     vp_advice = ""
     if price_change_pct > 1.5:
@@ -204,10 +238,29 @@ def generate_advanced_diagnosis(
     return full_advice, tags
 
 
-def run_advanced_analysis(df_res, benchmark="0050.TW"):
+def get_smart_benchmark(ticker):
+    """根據標的代碼判定最適合的基準目標 (Benchmark)"""
+    t = ticker.upper()
+    # 特殊處理：日本掛牌的 S&P 500 系列 ETF (如 1655, 2558, 2521 等)
+    if t.endswith(".T") and any(p in t for p in ["1655", "2558", "2521"]):
+        return "VOO"
+
+    # 一般日股
+    if t.endswith(".T"):
+        return "1306.T"  # TOPIX ETF
+
+    # 台灣標的 (上市/上櫃)
+    if t.endswith(".TW") or t.endswith(".TWO"):
+        return "0050.TW"
+
+    # 其餘均對標 S&P 500 (美股或全球資產)
+    return "VOO"
+
+
+def run_advanced_analysis(df_res):
     """
     合併執行 RS (相對強度) 與 Alpha (穩定性) 進階分析。
-    自動處理幣別轉換與 Benchmark 對齊。
+    自動處理幣別轉換與 Smart Benchmarking 對齊。
     """
     try:
         from scipy import stats
@@ -227,7 +280,11 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
 
     results = []
     try:
-        common_raw = fetch_common_data((benchmark, "JPYTWD=X", "USDTWD=X"), period="2y")
+        # 0. 整理所有需要的基準，一次抓取以提升效能
+        required_benchmarks = {get_smart_benchmark(t) for t in active_tickers}
+        all_bench_tickers = list(required_benchmarks) + ["JPYTWD=X", "USDTWD=X"]
+        logging.info(f"正在批次抓取智能基準數據: {all_bench_tickers}")
+        common_raw = fetch_common_data(tuple(all_bench_tickers), period="2y")
 
         def get_clean_col(df, ticker_name, col_name):
             try:
@@ -235,6 +292,7 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                     if ticker_name in df.columns.get_level_values(0):
                         s = df.xs(ticker_name, axis=1, level=0)[col_name]
                     else:
+                        # 處理單一 Ticker 時可能是原本的欄位
                         s = df[col_name]
                 else:
                     s = df[col_name]
@@ -249,26 +307,34 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
             except:
                 return pd.Series()
 
-        b_series_final = get_clean_col(common_raw, benchmark, "Close")
-        if b_series_final.empty:
-            return pd.DataFrame()
-
         t_data_all_raw = fetch_historical_data(
             tuple(active_tickers), period="2y", group_by="ticker"
         )
 
         for ticker in active_tickers:
             try:
+                # 獲取該標的的原始數據行以取得其類型
+                row_data = df_to_analyze[df_to_analyze["代碼"] == ticker].iloc[0]
+                asset_type = row_data.get("類型", "個股")
+
+                # 動態取得當前標的對應的基準
+                current_benchmark = get_smart_benchmark(ticker)
+                b_series_final = get_clean_col(common_raw, current_benchmark, "Close")
+
+                if b_series_final.empty:
+                    logging.warning(
+                        f"標的 {ticker} 的基準 {current_benchmark} 無數據，跳過分析"
+                    )
+                    continue
+
+                # 取得標的數據 (t_df)
                 if isinstance(t_data_all_raw.columns, pd.MultiIndex):
                     if ticker in t_data_all_raw.columns.get_level_values(0):
                         t_df = t_data_all_raw.xs(ticker, axis=1, level=0).copy()
                     else:
-                        t_df = t_data_all_raw.copy()
+                        continue
                 else:
                     t_df = t_data_all_raw.copy()
-
-                if t_df is None or t_df.empty:
-                    continue
 
                 if isinstance(t_df.columns, pd.MultiIndex):
                     t_df.columns = t_df.columns.get_level_values(-1)
@@ -429,11 +495,14 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                     else 1.0
                 )
 
+                # 格式化 Alpha 勝率字串
+                alpha_win_str = f"{bat_avg:.1f}%" if not m_ret.empty else "0%"
+
                 full_diag_text, tags = generate_advanced_diagnosis(
-                    bias_numeric,
-                    sharpe,
-                    pct,
-                    ticker,
+                    bias=bias_numeric,
+                    sharpe=sharpe,
+                    rs_percentile=pct,
+                    ticker=ticker,
                     price_change_pct=day_change_pct,
                     vol_ratio=vol_ratio,
                     rsi=rsi_val,
@@ -444,6 +513,8 @@ def run_advanced_analysis(df_res, benchmark="0050.TW"):
                     pe_ratio=fundamentals.get("pe"),
                     dividend_yield=fundamentals.get("dividendYield"),
                     peg_ratio=fundamentals.get("pegRatio"),
+                    asset_type=asset_type,
+                    alpha_win_rate=alpha_win_str,
                 )
 
                 results.append(
