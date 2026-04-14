@@ -3,7 +3,12 @@ import math
 import logging
 import pandas as pd
 import numpy as np
-from fetchers import fetch_historical_data, fetch_common_data, get_ticker_fundamental_info
+from fetchers import (
+    fetch_historical_data,
+    fetch_common_data,
+    get_ticker_fundamental_info,
+)
+
 
 def calculate_buffered_entries(df, ma20, ma250, current_price, rs_p10_price):
     """計算具備緩衝的建議掛單價位"""
@@ -35,6 +40,7 @@ def calculate_buffered_entries(df, ma20, ma250, current_price, rs_p10_price):
         "技術回測": round(final_tech, 2),
         "狙擊位": round(final_sniper, 2),
     }
+
 
 def generate_advanced_diagnosis(
     bias,
@@ -109,13 +115,25 @@ def generate_advanced_diagnosis(
     if eps is not None and not math.isnan(eps) and eps > 0:
         tags.append("📊 盈利穩健")
         if pe_ratio is not None and not math.isnan(pe_ratio) and pe_ratio > 0:
-            pe_desc = "低估值" if pe_ratio < 15 else "合理估值" if pe_ratio <= 30 else "高成長溢價"
+            pe_desc = (
+                "低估值"
+                if pe_ratio < 15
+                else "合理估值"
+                if pe_ratio <= 30
+                else "高成長溢價"
+            )
             fund_advice += f"基本面 EPS 正向，反映出{pe_desc}。"
 
-    if dividend_yield is not None and not math.isnan(dividend_yield) and dividend_yield > 0.035:
+    if (
+        dividend_yield is not None
+        and not math.isnan(dividend_yield)
+        and dividend_yield > 0.035
+    ):
         if rs_percentile < 20 or lt_context == "BEARISH":
             tags.append("🛡️ 息收護城河")
-            fund_advice += f"具備高股息殖利率 ({dividend_yield:.1%})，為深水區提供防禦支撐。"
+            fund_advice += (
+                f"具備高股息殖利率 ({dividend_yield:.1%})，為深水區提供防禦支撐。"
+            )
 
     if peg_ratio is not None and not math.isnan(peg_ratio) and peg_ratio > 0:
         if peg_ratio < 1.0:
@@ -146,20 +164,21 @@ def generate_advanced_diagnosis(
     full_advice = f"{lt_desc}。 {advice_base}\n{fund_advice}\n{vp_advice}".strip()
     return full_advice, tags
 
-def run_advanced_analysis(df_res, benchmark="0050.TW", has_scipy=True):
-    """合併執行 RS (相對強度) 與 Alpha (穩定性) 進階分析"""
-    if len(df_res) == 1:
-        active_tickers = df_res["代碼"].tolist()
-    else:
-        active_tickers = df_res[df_res["類型"] == "ETF"]["代碼"].tolist()
 
-    if not active_tickers or not has_scipy:
-        return pd.DataFrame()
-
+def run_advanced_analysis(df_res, benchmark="0050.TW"):
+    """
+    合併執行 RS (相對強度) 與 Alpha (穩定性) 進階分析。
+    自動處理幣別轉換與 Benchmark 對齊。
+    """
     try:
         from scipy import stats
     except ImportError:
+        logging.error(
+            "🚨 缺少 scipy 套件，無法執行進階診斷。請執行 `poetry add scipy`。"
+        )
         return pd.DataFrame()
+
+    active_tickers = df_res["代碼"].tolist()
 
     results = []
     try:
@@ -189,7 +208,9 @@ def run_advanced_analysis(df_res, benchmark="0050.TW", has_scipy=True):
         if b_series_final.empty:
             return pd.DataFrame()
 
-        t_data_all_raw = fetch_historical_data(tuple(active_tickers), period="2y", group_by="ticker")
+        t_data_all_raw = fetch_historical_data(
+            tuple(active_tickers), period="2y", group_by="ticker"
+        )
 
         for ticker in active_tickers:
             try:
@@ -222,11 +243,19 @@ def run_advanced_analysis(df_res, benchmark="0050.TW", has_scipy=True):
                 ma20_val, ma250_val, ma250_str = None, None, "-"
 
                 last_close_val = t_df_clean["Close"].iloc[-1]
-                price_val = float(last_close_val.iloc[0]) if isinstance(last_close_val, pd.Series) else float(last_close_val)
+                price_val = (
+                    float(last_close_val.iloc[0])
+                    if isinstance(last_close_val, pd.Series)
+                    else float(last_close_val)
+                )
 
                 if len(t_df_clean) >= 2:
                     prev_close_val = t_df_clean["Close"].iloc[-2]
-                    prev_close = float(prev_close_val.iloc[0]) if isinstance(prev_close_val, pd.Series) else float(prev_close_val)
+                    prev_close = (
+                        float(prev_close_val.iloc[0])
+                        if isinstance(prev_close_val, pd.Series)
+                        else float(prev_close_val)
+                    )
                 else:
                     prev_close = price_val
 
@@ -235,7 +264,11 @@ def run_advanced_analysis(df_res, benchmark="0050.TW", has_scipy=True):
                 if len(t_df_clean) >= 20:
                     ma20_series = t_df_clean["Close"].rolling(20).mean()
                     ma20_last = ma20_series.iloc[-1]
-                    ma20_val = float(ma20_last.iloc[0]) if isinstance(ma20_last, pd.Series) else float(ma20_last)
+                    ma20_val = (
+                        float(ma20_last.iloc[0])
+                        if isinstance(ma20_last, pd.Series)
+                        else float(ma20_last)
+                    )
                     if pd.notnull(ma20_val) and ma20_val > 0:
                         ma20_str = f"{ma20_val:.2f}"
                         bias_numeric = ((price_val - ma20_val) / ma20_val) * 100
@@ -245,7 +278,7 @@ def run_advanced_analysis(df_res, benchmark="0050.TW", has_scipy=True):
                     ma60_last = t_df_clean["Close"].rolling(60).mean().iloc[-1]
                     if pd.notnull(ma60_last):
                         ma60_str = f"{float(ma60_last):.2f}"
-                
+
                 if len(t_df_clean) >= 120:
                     ma120_last = t_df_clean["Close"].rolling(120).mean().iloc[-1]
                     if pd.notnull(ma120_last):
@@ -258,23 +291,37 @@ def run_advanced_analysis(df_res, benchmark="0050.TW", has_scipy=True):
                         ma250_str = f"{ma250_val:.2f}"
 
                 p_series = t_df_clean["Close"].copy()
-                if isinstance(p_series, pd.DataFrame): p_series = p_series.iloc[:, 0]
+                if isinstance(p_series, pd.DataFrame):
+                    p_series = p_series.iloc[:, 0]
 
-                ccy = "JPY" if ticker.endswith(".T") else "USD" if ".US" in ticker or ticker.isupper() else "TWD"
-                if ccy == "JPY": r_series = get_clean_col(common_raw, "JPYTWD=X", "Close")
-                elif ccy == "USD": r_series = get_clean_col(common_raw, "USDTWD=X", "Close")
-                else: r_series = 1.0
+                ccy = (
+                    "JPY"
+                    if ticker.endswith(".T")
+                    else "USD"
+                    if ".US" in ticker or ticker.isupper()
+                    else "TWD"
+                )
+                if ccy == "JPY":
+                    r_series = get_clean_col(common_raw, "JPYTWD=X", "Close")
+                elif ccy == "USD":
+                    r_series = get_clean_col(common_raw, "USDTWD=X", "Close")
+                else:
+                    r_series = 1.0
 
                 comb_dict = {"p": p_series, "b": b_series_final}
-                if isinstance(r_series, (pd.Series, pd.DataFrame)): comb_dict["r"] = r_series
+                if isinstance(r_series, (pd.Series, pd.DataFrame)):
+                    comb_dict["r"] = r_series
                 comb = pd.DataFrame(comb_dict).ffill()
-                if "r" not in comb.columns: comb["r"] = 1.0
+                if "r" not in comb.columns:
+                    comb["r"] = 1.0
                 comb = comb[comb["p"].notnull() & comb["b"].notnull()]
 
-                if comb.empty: continue
+                if comb.empty:
+                    continue
 
                 rs_series = (comb["p"] * comb["r"]) / comb["b"]
-                if len(rs_series) < 20: continue
+                if len(rs_series) < 20:
+                    continue
                 curr_rs = float(rs_series.iloc[-1])
                 pct = stats.percentileofscore(rs_series.values.flatten(), curr_rs)
 
@@ -286,7 +333,11 @@ def run_advanced_analysis(df_res, benchmark="0050.TW", has_scipy=True):
                     with np.errstate(divide="ignore", invalid="ignore"):
                         rs_val = gain / loss
                         rsi_series = 100 - (100 / (1 + rs_val))
-                    rsi_val = float(rsi_series.iloc[-1]) if not pd.isna(rsi_series.iloc[-1]) else 0.0
+                    rsi_val = (
+                        float(rsi_series.iloc[-1])
+                        if not pd.isna(rsi_series.iloc[-1])
+                        else 0.0
+                    )
 
                 rs_p10 = float(np.percentile(rs_series.values.flatten(), 10))
                 rs_p10_price = (rs_p10 * comb["b"].iloc[-1]) / comb["r"].iloc[-1]
@@ -294,41 +345,91 @@ def run_advanced_analysis(df_res, benchmark="0050.TW", has_scipy=True):
                 suggested_bid_str = "-"
                 daily_wave, tech_retest, sniper_pos = "-", "-", "-"
                 if ma20_val is not None:
-                    entries = calculate_buffered_entries(t_df_clean, ma20_val, ma250_val, price_val, rs_p10_price)
+                    entries = calculate_buffered_entries(
+                        t_df_clean, ma20_val, ma250_val, price_val, rs_p10_price
+                    )
                     if entries:
                         suggested_bid_str = f"{entries['日常波段']:.2f} | {entries['技術回測']:.2f} | {entries['狙擊位']:.2f}"
-                        daily_wave, tech_retest, sniper_pos = f"{entries['日常波段']:.2f}", f"{entries['技術回測']:.2f}", f"{entries['狙擊位']:.2f}"
+                        daily_wave, tech_retest, sniper_pos = (
+                            f"{entries['日常波段']:.2f}",
+                            f"{entries['技術回測']:.2f}",
+                            f"{entries['狙擊位']:.2f}",
+                        )
 
                 m_price = comb.resample("ME").last()
-                m_ret = pd.DataFrame({"target_ret": (m_price["p"] * m_price["r"]).pct_change(), "bench_ret": m_price["b"].pct_change()}).dropna()
+                m_ret = pd.DataFrame(
+                    {
+                        "target_ret": (m_price["p"] * m_price["r"]).pct_change(),
+                        "bench_ret": m_price["b"].pct_change(),
+                    }
+                ).dropna()
                 bat_avg, avg_alpha, sharpe = 0.0, 0.0, 0.0
                 if not m_ret.empty and len(m_ret) >= 2:
                     m_ret["Alpha"] = m_ret["target_ret"] - m_ret["bench_ret"]
-                    avg_alpha, bat_avg = m_ret["Alpha"].mean() * 100, (m_ret["Alpha"] > 0).mean() * 100
+                    avg_alpha, bat_avg = (
+                        m_ret["Alpha"].mean() * 100,
+                        (m_ret["Alpha"] > 0).mean() * 100,
+                    )
                     std_r = m_ret["target_ret"].std()
-                    sharpe = (m_ret["target_ret"].mean() / std_r * (12**0.5)) if std_r != 0 else 0.0
+                    sharpe = (
+                        (m_ret["target_ret"].mean() / std_r * (12**0.5))
+                        if std_r != 0
+                        else 0.0
+                    )
 
                 fundamentals = get_ticker_fundamental_info(ticker)
-                vol_ratio = fundamentals["volume"] / fundamentals["avg_volume"] if fundamentals["avg_volume"] > 0 else 1.0
-
-                full_diag_text, tags = generate_advanced_diagnosis(
-                    bias_numeric, sharpe, pct, ticker, price_change_pct=day_change_pct, vol_ratio=vol_ratio, rsi=rsi_val,
-                    price=price_val, ma20=ma20_val, ma250=ma250_val, eps=fundamentals.get("eps"), pe_ratio=fundamentals.get("pe"),
-                    dividend_yield=fundamentals.get("dividendYield"), peg_ratio=fundamentals.get("pegRatio")
+                vol_ratio = (
+                    fundamentals["volume"] / fundamentals["avg_volume"]
+                    if fundamentals["avg_volume"] > 0
+                    else 1.0
                 )
 
-                results.append({
-                    "代碼": ticker, "名稱": fundamentals.get("name", ticker), "股價": f"{price_val:.2f}",
-                    "乖離率 (Bias)": bias_str, "技術診斷": full_diag_text, "建議掛單": suggested_bid_str,
-                    "日常波段": daily_wave, "技術回測": tech_retest, "狙擊位": sniper_pos,
-                    "MA20": ma20_str, "MA60": ma60_str, "MA120": ma120_str, "MA250": ma250_str,
-                    "當前 RS": round(curr_rs, 4), "RS 百分位": f"{pct:.1f}%", "RSI": rsi_val,
-                    "Alpha 勝率": f"{bat_avg:.1f}%" if len(m_ret) >= 2 else "-",
-                    "月度 Alpha": f"{avg_alpha:+.2f}%" if len(m_ret) >= 2 else "-",
-                    "夏普值": f"{sharpe:.2f}" if len(m_ret) >= 2 else "-",
-                    "EPS": fundamentals["eps"], "PE": fundamentals["pe"], "量比": f"{vol_ratio:.2f}",
-                    "_vol_ratio_raw": vol_ratio, "_score": pct, "tags": tags,
-                })
+                full_diag_text, tags = generate_advanced_diagnosis(
+                    bias_numeric,
+                    sharpe,
+                    pct,
+                    ticker,
+                    price_change_pct=day_change_pct,
+                    vol_ratio=vol_ratio,
+                    rsi=rsi_val,
+                    price=price_val,
+                    ma20=ma20_val,
+                    ma250=ma250_val,
+                    eps=fundamentals.get("eps"),
+                    pe_ratio=fundamentals.get("pe"),
+                    dividend_yield=fundamentals.get("dividendYield"),
+                    peg_ratio=fundamentals.get("pegRatio"),
+                )
+
+                results.append(
+                    {
+                        "代碼": ticker,
+                        "名稱": fundamentals.get("name", ticker),
+                        "股價": f"{price_val:.2f}",
+                        "乖離率 (Bias)": bias_str,
+                        "技術診斷": full_diag_text,
+                        "建議掛單": suggested_bid_str,
+                        "日常波段": daily_wave,
+                        "技術回測": tech_retest,
+                        "狙擊位": sniper_pos,
+                        "MA20": ma20_str,
+                        "MA60": ma60_str,
+                        "MA120": ma120_str,
+                        "MA250": ma250_str,
+                        "當前 RS": round(curr_rs, 4),
+                        "RS 百分位": f"{pct:.1f}%",
+                        "RSI": rsi_val,
+                        "Alpha 勝率": f"{bat_avg:.1f}%" if len(m_ret) >= 2 else "-",
+                        "月度 Alpha": f"{avg_alpha:+.2f}%" if len(m_ret) >= 2 else "-",
+                        "夏普值": f"{sharpe:.2f}" if len(m_ret) >= 2 else "-",
+                        "EPS": fundamentals["eps"],
+                        "PE": fundamentals["pe"],
+                        "量比": f"{vol_ratio:.2f}",
+                        "_vol_ratio_raw": vol_ratio,
+                        "_score": pct,
+                        "tags": tags,
+                    }
+                )
             except Exception as e:
                 logging.warning(f"進階分析計算異常 [{ticker}]: {e}")
                 continue
