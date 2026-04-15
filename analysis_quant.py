@@ -405,13 +405,15 @@ def run_advanced_analysis(df_res):
                 if isinstance(p_series, pd.DataFrame):
                     p_series = p_series.iloc[:, 0]
 
-                ccy = (
-                    "JPY"
-                    if ticker.endswith(".T")
-                    else "USD"
-                    if ".US" in ticker or ticker.isupper()
-                    else "TWD"
-                )
+                ccy = str(row_data.get("幣別", "")).strip().upper()
+                if ccy not in {"TWD", "USD", "JPY"}:
+                    ccy = (
+                        "JPY"
+                        if ticker.endswith(".T")
+                        else "USD"
+                        if ".US" in ticker or ticker.isupper()
+                        else "TWD"
+                    )
                 if ccy == "JPY":
                     r_series = get_clean_col(common_raw, "JPYTWD=X", "Close")
                 elif ccy == "USD":
