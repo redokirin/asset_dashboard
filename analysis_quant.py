@@ -217,15 +217,13 @@ def generate_advanced_diagnosis(
                 f" 具備高股息殖利率 ({dividend_yield:.1%})，為下行提供防禦支撐。"
             )
 
-    # if sharpe > 1.2:
-    #     tags.append("💎 高效率資產")
-
     vp_advice = ""
     if price_change_pct > 1.5:
         if vol_ratio > 1.5:
             vp_advice = "今日價量齊揚，主動性買盤積極介入。"
         elif vol_ratio < 0.75:
-            vp_advice = "⚠️ 注意價漲量縮現象，反彈動能缺乏支撐，慎防追高風險。"
+            tags.append("🔴 量能不足")
+            vp_advice = "⚠️ 偵測到價漲量縮現象（量價背離），目前反彈動能缺乏成交量支撐，反彈動能可能衰竭，請謹慎追高。"
     elif price_change_pct < -1.5:
         if vol_ratio > 2.0:
             vp_advice = "😱 偵測到異常爆量 (2.0x+)，技術支撐可能失效，建議暫緩接單並觀察防守位。"
