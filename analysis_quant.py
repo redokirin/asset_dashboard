@@ -220,16 +220,20 @@ def generate_advanced_diagnosis(
     vp_advice = ""
     if price_change_pct > 1.5:
         if vol_ratio > 1.5:
+            tags.append("🚀 價量齊揚")
             vp_advice = "今日價量齊揚，主動性買盤積極介入。"
         elif vol_ratio < 0.75:
             tags.append("🔴 量能不足")
             vp_advice = "⚠️ 偵測到價漲量縮現象（量價背離），目前反彈動能缺乏成交量支撐，反彈動能可能衰竭，請謹慎追高。"
     elif price_change_pct < -1.5:
         if vol_ratio > 2.0:
+            tags.append("😱 異常爆量")
             vp_advice = "😱 偵測到異常爆量 (2.0x+)，技術支撐可能失效，建議暫緩接單並觀察防守位。"
         elif vol_ratio > 1.5:
+            tags.append("🔻 帶量下殺")
             vp_advice = "😱 帶量下殺，反映恐慌性賣壓持續湧現，建議優先觀察狙擊位。"
         elif vol_ratio < 0.8:
+            tags.append("⚪ 量縮止跌")
             vp_advice = "量縮下跌，賣壓出現竭盡跡象，有利於短線止跌整理。"
 
     full_advice = f"{lt_desc}。 {advice_base}\n{fund_advice}\n{vp_advice}".strip()
