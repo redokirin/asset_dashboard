@@ -146,11 +146,11 @@ def calculate_assets_data(exchange_rates):
         except Exception as e:
             logging.error(f"批次抓取 {cat_key} 失敗: {e}")
 
-    fetch_batch_prices("funds")
     fetch_batch_prices("etfs")
     fetch_batch_prices("stocks")
+    fetch_batch_prices("funds")
 
-    for cat_key, cat_name in [("funds", "基金"), ("etfs", "ETF"), ("stocks", "個股")]:
+    for cat_key, cat_name in [("etfs", "ETF"), ("stocks", "個股"), ("funds", "基金")]:
         for asset in assets[cat_key].values():
             if not asset.get("enabled", True):
                 continue

@@ -243,9 +243,9 @@ def get_assets():
     """獲取最新的資產配置"""
     config = get_config()
     return {
-        "funds": _ensure_id(config.get("funds", {})),
         "etfs": _ensure_id(config.get("etfs", {})),
         "stocks": _ensure_id(config.get("stocks", {})),
+        "funds": _ensure_id(config.get("funds", {})),
     }
 
 
