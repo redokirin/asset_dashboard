@@ -565,13 +565,19 @@ def render_asset_filter(df):
 def show_streamlit(df, radar_data, exchange_rates):
     load_css()
 
-    col_mid, col_right = st.columns([1.4, 0.6])
-
-    with col_right:
-        # 將篩選器移至右側欄位最上方
-        filtered_df = render_asset_filter(df)
-
+    col_mid, col_right = st.columns([1.3, 0.7])
+    with col_mid:
         with st.container(border=False):
+            # 篩選器
+            filtered_df = render_asset_filter(df)
+            # 總損益
+            render_profit_and_loss_component(filtered_df)
+        with st.container(border=False):
+            # 持股明細
+            render_shareholding_component(filtered_df)
+    with col_right:
+        with st.container(border=False):
+            # with st.expander("🔍 指數", expanded=False):
             # 指數
             indices = [item for item in radar_data]
             for i in range(0, len(indices), 3):
@@ -585,11 +591,3 @@ def show_streamlit(df, radar_data, exchange_rates):
                 render_plotly_pie_charts(filtered_df)
             else:
                 st.info("無符合條件的資產可供分析")
-
-    with col_mid:
-        with st.container(border=False):
-            # 總損益
-            render_profit_and_loss_component(filtered_df)
-        with st.container(border=False):
-            # 持股明細
-            render_shareholding_component(filtered_df)
