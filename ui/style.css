@@ -22,6 +22,9 @@
 	color: white;
 	margin-bottom: 5px;
 }
+[data-testid="stMarkdownContainer"] {
+	margin-bottom: 0rem;
+}
 
 /* 針對所有垂直/水平區塊容器的間距微調 (強制 0.5rem) */
 [data-testid="stVerticalBlock"],
@@ -50,12 +53,9 @@ div[data-testid="stMetricDelta"] > div {
 	padding: 0.4rem 0.3rem !important; /* 上下 0.4, 左右 0.6 */
 }
 
-/* 2. 確保容器內的組件間距也是 0.5rem */
+/* 2. 確保容器內的組件間距也是 0.2rem */
 [data-testid="stVerticalBlock"] {
-	gap: 0.3rem !important;
-	/* padding: 1rem 0.3rem !important; 上下 0.4, 左右 0.6 */
-	/* padding-left: 0.3rem !important;
-	padding-right: 0.3rem !important; */
+	padding: 0.1rem !important;
 }
 
 /* 3. 隱藏預設標題頂部過大的間距 */

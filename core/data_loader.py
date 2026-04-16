@@ -6,14 +6,16 @@ from pathlib import Path
 from google.oauth2.service_account import Credentials
 
 # --- 配置與路徑 ---
-CREDENTIALS_PATH = Path(__file__).parent / "credentials.json"
+# 修正：指向根目錄 (core 的上一層)
+ROOT_DIR = Path(__file__).parent.parent
+CREDENTIALS_PATH = ROOT_DIR / "credentials.json"
+TOML_PATH = ROOT_DIR / "assets_config.toml"
 
 
 def get_secret(key, default=None):
     """安全地讀取 Secrets，避免本地端報錯"""
     try:
         import streamlit as st
-
         return st.secrets.get(key, default)
     except Exception:
         return default
@@ -189,11 +191,9 @@ def get_config():
     config = {}
 
     # 1. 嘗試讀取本地 assets_config.toml
-    current_dir = Path(__file__).parent
-    toml_path = current_dir / "assets_config.toml"
-    if toml_path.exists():
+    if TOML_PATH.exists():
         try:
-            with open(toml_path, "rb") as f:
+            with open(TOML_PATH, "rb") as f:
                 toml_data = tomllib.load(f)
                 config = dict(toml_data.get("my_assets", {}))
         except Exception as e:

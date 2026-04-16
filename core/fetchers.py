@@ -4,7 +4,7 @@ import pandas as pd
 import logging
 import requests_cache
 from functools import lru_cache
-from data_loader import get_radar_tickers
+from core.data_loader import get_radar_tickers
 
 # 設定 10 分鐘 (600 秒) 的 Requests 快取，減輕 API 負擔並加速執行
 requests_cache.install_cache("asset_tracking_cache", expire_after=600)

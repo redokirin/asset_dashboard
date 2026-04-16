@@ -2,8 +2,8 @@
 import streamlit as st
 import pandas as pd
 import os
-import dashboard_logic
-import ui_common
+from core import dashboard_logic
+from ui import ui_common
 
 
 def load_css():
@@ -529,7 +529,7 @@ def render_inline_metric(label, value, delta):
 def show_streamlit(df, radar_data, exchange_rates):
     load_css()
     # col_left, col_mid, col_right = st.columns([0.5, 1.2, 0.5])
-    col_mid, col_right = st.columns([1.6, 0.5])
+    col_mid, col_right = st.columns([1.4, 0.6])
     # with col_left:
     # with st.container(border=False):
     # with st.container(border=False):

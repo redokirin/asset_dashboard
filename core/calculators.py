@@ -2,8 +2,8 @@
 import math
 import logging
 import pandas as pd
-from data_loader import get_assets
-from fetchers import fetch_historical_data
+from core.data_loader import get_assets
+from core.fetchers import fetch_historical_data
 
 
 def calculate_tick_price(target_price, market_type):

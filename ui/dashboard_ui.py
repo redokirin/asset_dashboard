@@ -5,10 +5,10 @@ UI 組件導出層
 """
 
 # 匯入共用邏輯與繪圖
-from ui_common import set_chinese_font, plot_asset_allocation
+from ui.ui_common import set_chinese_font, plot_asset_allocation
 
 # 匯入 Streamlit 特定組件
-from ui_streamlit import (
+from ui.ui_streamlit import (
     load_css,
     render_advanced_analysis_ui,
     show_manual_analysis_page,
@@ -24,7 +24,7 @@ from ui_streamlit import (
 )
 
 # 匯入 Console (Rich) 特定組件
-from ui_console import show_console_rich
+from ui.ui_console import show_console_rich
 
 # 匯入 Jupyter 特定組件
-from ui_jupyter import show_jupyter
+from ui.ui_jupyter import show_jupyter

@@ -5,21 +5,21 @@ dashboard_logic.py - 業務邏輯外觀模組 (Facade)
 """
 
 import logging
-from data_loader import get_assets, get_radar_tickers, get_config, get_secret
-from fetchers import (
+from core.data_loader import get_assets, get_radar_tickers, get_config, get_secret
+from core.fetchers import (
     get_ticker_fundamental_info, 
     fetch_historical_data, 
     fetch_common_data, 
     get_market_radar_data,
     FETCHERS
 )
-from calculators import calculate_tick_price, exchange_rate, calculate_assets_data
-from analysis_quant import (
+from core.calculators import calculate_tick_price, exchange_rate, calculate_assets_data
+from core.analysis_quant import (
     calculate_buffered_entries, 
     generate_advanced_diagnosis, 
     run_advanced_analysis
 )
-from exporters import export_for_ai
+from core.exporters import export_for_ai
 
 # 設定全域日誌配置
 logging.basicConfig(

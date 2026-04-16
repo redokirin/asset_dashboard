@@ -1,16 +1,22 @@
+import os
+import sys
+
+# 將專案根目錄加入搜尋路徑
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import streamlit as st
 import pandas as pd
 import yfinance as yf
-import dashboard_logic
-import data_loader
-from dashboard_ui import show_streamlit
+from core import dashboard_logic
+from core import data_loader
+from ui.dashboard_ui import show_streamlit
 
 # --- 注入 Streamlit 快取到配置讀取端 (避免 CLI 出現警告) ---
 data_loader.get_config = st.cache_data(ttl=600)(data_loader.get_config)
 data_loader.get_config_from_gsheets = st.cache_data(ttl=600)(data_loader.get_config_from_gsheets)
 
 # 從 dashboard_logic 重新導出 (維持相容性)
-from dashboard_logic import get_config
+from core.dashboard_logic import get_config
 
 # --- 讀取配置 ---
 _config = get_config()
@@ -41,18 +47,12 @@ def login_form():
             else:
                 st.error("密碼錯誤，請再試一次。")
 
-    # if st.sidebar.button("🧪 先去手動分析頁面"):
-    #     st.session_state.page = "manual"
-    #     st.rerun()
-
 
 # --- 2. 注入受 Streamlit 管理的快取抓取器 ---
 @st.cache_data(ttl=3600)
 def fetch_single_ticker_historical_flat(ticker, period="2y"):
     """單獨抓取並快取單一標的的歷史數據 (單層索引)"""
-    # 傳入字串 ticker (不帶 list) 以確保返回單層 Index
     df = yf.download(ticker, period=period, progress=False, auto_adjust=True)
-    # 強制轉換索引為無時區的 DatetimeIndex
     if not df.empty:
         df.index = pd.to_datetime(df.index)
         if hasattr(df.index, "tz") and df.index.tz is not None:
@@ -86,10 +86,8 @@ def streamlit_historical_fetcher(tickers, period="2y", group_by="ticker"):
     for t in ticker_list:
         df = fetch_single_ticker_historical_flat(t, period)
         if not df.empty:
-            # 在快取之外手動建立 MultiIndex
             df_m = df.copy()
             if isinstance(df_m.columns, pd.MultiIndex):
-                # 如果已經是 MultiIndex (yfinance 0.2.40+)，先降維再接起來
                 df_m.columns = df_m.columns.get_level_values(0)
             df_m.columns = pd.MultiIndex.from_product([[t], df_m.columns])
             dfs.append(df_m)
@@ -133,10 +131,8 @@ dashboard_logic.FETCHERS["common"] = streamlit_common_fetcher
 
 def clear_ticker_cache(ticker):
     """清除特定 Ticker 的快取，確保重新抓取最新數據"""
-    # 清除不同 period 的快取 (與業務邏輯中使用的參數一致)
     fetch_single_ticker_historical_flat.clear(ticker, period="2y")
     fetch_single_ticker_historical_flat.clear(ticker, period="1mo")
-    # fetch_single_ticker_common_flat.clear(ticker, period="2y")
 
 
 # 注入清除快取的函式到邏輯層，供 UI 層調用
@@ -145,15 +141,12 @@ dashboard_logic.clear_ticker_cache = clear_ticker_cache
 # --- 3. 執行主程式邏輯 ---
 if __name__ == "__main__":
     if "is_authenticated" not in st.session_state:
-        # 如果不使用密碼，預設為已驗證
         st.session_state.is_authenticated = not USE_PASSWORD
 
-    # 使用 st.tabs 進行分頁導覽
     tab_manual, tab_dashboard = st.tabs(["🧪 自選代碼量化分析", "📈 全球資產即時監控"])
 
     with tab_manual:
-        from dashboard_ui import show_manual_analysis_page
-
+        from ui.dashboard_ui import show_manual_analysis_page
         show_manual_analysis_page()
 
     with tab_dashboard:

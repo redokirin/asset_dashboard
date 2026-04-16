@@ -3,7 +3,7 @@ import math
 import logging
 import pandas as pd
 import numpy as np
-from fetchers import (
+from core.fetchers import (
     fetch_historical_data,
     fetch_common_data,
     get_ticker_fundamental_info,

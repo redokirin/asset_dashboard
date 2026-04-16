@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
-from ui_common import set_chinese_font
+from ui.ui_common import set_chinese_font
 
 
 def show_jupyter(df, radar_data, exchange_rates):

@@ -1,8 +1,13 @@
-import argparse
 import os
+import sys
+
+# 將專案根目錄加入搜尋路徑
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+import argparse
 import pandas as pd
-import dashboard_logic
-from dashboard_ui import show_console_rich
+from core import dashboard_logic
+from ui.dashboard_ui import show_console_rich
 
 
 def run_cli():
