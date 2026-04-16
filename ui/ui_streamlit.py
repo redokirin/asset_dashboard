@@ -526,23 +526,51 @@ def render_inline_metric(label, value, delta):
         )
 
 
+def render_asset_filter(df):
+    """資產篩選器組件，返回過濾後的 DataFrame"""
+    with st.expander("🔍 資產篩選器", expanded=False):
+        c1, c2 = st.columns(2)
+
+        # 獲取選項 (確保存在該欄位)
+        market_options = (
+            sorted(df["市場"].dropna().unique().tolist())
+            if "市場" in df.columns
+            else []
+        )
+        type_options = (
+            sorted(df["類型"].dropna().unique().tolist())
+            if "類型" in df.columns
+            else []
+        )
+
+        with c1:
+            selected_markets = st.multiselect(
+                "選擇市場", options=market_options, default=market_options
+            )
+        with c2:
+            selected_types = st.multiselect(
+                "選擇類型", options=type_options, default=type_options
+            )
+
+    # 進行資料過濾
+    filtered_df = df.copy()
+    if "市場" in filtered_df.columns and selected_markets is not None:
+        filtered_df = filtered_df[filtered_df["市場"].isin(selected_markets)]
+    if "類型" in filtered_df.columns and selected_types is not None:
+        filtered_df = filtered_df[filtered_df["類型"].isin(selected_types)]
+
+    return filtered_df
+
+
 def show_streamlit(df, radar_data, exchange_rates):
     load_css()
-    # col_left, col_mid, col_right = st.columns([0.5, 1.2, 0.5])
-    col_mid, col_right = st.columns([1.4, 0.6])
-    # with col_left:
-    # with st.container(border=False):
-    # with st.container(border=False):
-    # indices = [item for item in radar_data if not item["代碼"].endswith("=X")]
 
-    with col_mid:
-        with st.container(border=False):
-            # 總損益
-            render_profit_and_loss_component(df)
-        with st.container(border=False):
-            # 持股明細
-            render_shareholding_component(df)
+    col_mid, col_right = st.columns([1.4, 0.6])
+
     with col_right:
+        # 將篩選器移至右側欄位最上方
+        filtered_df = render_asset_filter(df)
+
         with st.container(border=False):
             # 指數
             indices = [item for item in radar_data]
@@ -553,4 +581,15 @@ def show_streamlit(df, radar_data, exchange_rates):
                 )
         with st.container(border=False, gap="xxsmall"):
             # 圓餅圖
-            render_plotly_pie_charts(df)
+            if not filtered_df.empty:
+                render_plotly_pie_charts(filtered_df)
+            else:
+                st.info("無符合條件的資產可供分析")
+
+    with col_mid:
+        with st.container(border=False):
+            # 總損益
+            render_profit_and_loss_component(filtered_df)
+        with st.container(border=False):
+            # 持股明細
+            render_shareholding_component(filtered_df)
