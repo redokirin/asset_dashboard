@@ -209,7 +209,7 @@ div[data-testid="stMetricDelta"] > div {
 	align-items: flex-end;
 }
 .asset-value-label {
-	font-size: 0.8rem;
+	font-size: 0.7rem;
 	color: #8b949e;
 }
 .asset-value-row {
@@ -344,8 +344,8 @@ div[data-testid="stMetricDelta"] > div {
 	display: flex;
 	flex-wrap: wrap; /* 讓 c1, c2 在小螢幕時自動垂直疊加 */
 	/* gap: 1rem; */
-	padding-top: 1rem;
-	padding-bottom: 1rem;
+	/* padding-top: 1rem;
+	padding-bottom: 1rem; */
 }
 
 .analysis-report-row {
@@ -375,7 +375,7 @@ div[data-testid="stMetricDelta"] > div {
 	flex-wrap: nowrap !important;
 	justify-content: space-between;
 	gap: 8px;
-	margin-bottom: 12px;
+	/* margin-bottom: 12px; */
 	width: 100%;
 }
 

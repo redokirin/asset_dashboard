@@ -75,6 +75,26 @@ def render_tracking_metrics_row(items, title=None):
     return f'{title_html}<div class="analysis-metrics-flex">{items_html}</div>'
 
 
+def render_cost_component(row):
+    cost_dic = {
+        "單位數": row["單位數"],
+        "平均成本": f"${row['平均成本']:,.2f}",
+        "成本": f"${row['成本']:,}",
+        "市值": f"${row['市值']:,}",
+    }
+
+    cost_row = render_analysis_metrics_row(cost_dic, "💰 成本分析")
+
+    st.markdown(
+        f"""<div class="analysis-report-row">
+                    <div class="analysis-report-col">
+                    {cost_row}
+                    </div>
+                    </div>""",
+        unsafe_allow_html=True,
+    )
+
+
 def render_advanced_analysis_ui(res):
 
     price_levels_dic = {
@@ -436,40 +456,17 @@ def render_shareholding_component(df):
                 ticker = row["代碼"]
                 # render_title_component(f"📈 {row['名稱']} ({ticker}) 深度量化診斷")
                 # with st.container(border=True):
+                render_cost_component(row)
                 if hasattr(dashboard_logic, "clear_ticker_cache"):
                     dashboard_logic.clear_ticker_cache(ticker)
+
                 with st.spinner("正在進行深度數據穿透..."):
-                    cost_dic = {
-                        "單位數": row["單位數"],
-                        "平均成本": f"${row['平均成本']:,.2f}",
-                        "成本": f"${row['成本']:,}",
-                        "市值": f"${row['市值']:,}",
-                    }
-
-                    cost_row = render_analysis_metrics_row(cost_dic, "💰 成本分析")
-
-                    st.markdown(
-                        f"""<div class="analysis-report-row">
-                                    <div class="analysis-report-col">
-                                    {cost_row}
-                                    </div>
-                                    </div>""",
-                        unsafe_allow_html=True,
-                    )
                     adv_results = dashboard_logic.run_advanced_analysis(
                         pd.DataFrame([row])
                     )
                     if not adv_results.empty:
                         with st.container():
-                            # with st.expander(
-                            #     f"📈 {row['名稱']} ({row['代碼']}) 報告", expanded=True
-                            # ):
-
                             render_advanced_analysis_ui(adv_results.iloc[0])
-
-                # if st.button("收合報告", key=f"close_{row['代碼']}"):
-                #     st.session_state[f"analyze_{row['代碼']}"] = False
-                #     st.rerun()
 
 
 def render_plotly_pie_charts(df):
