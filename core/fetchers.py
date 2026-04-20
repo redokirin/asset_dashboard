@@ -35,11 +35,28 @@ def get_ticker_fundamental_info(ticker_symbol):
         info = t.info
 
         # 由於台日股數據常缺失，使用 get 確保安全性
+        raw_dy = info.get("dividendYield", 0) or 0
+        y_yd = info.get("yield", 0) or 0
+        
+        final_dy = 0
+        if y_yd > 0:
+            final_dy = y_yd
+        else:
+            calc_dy = (info.get("dividendRate", 0) or 0) / (info.get("previousClose", 1) or 1)
+            if calc_dy > 0 and raw_dy > 0:
+                if abs(raw_dy / 100.0 - calc_dy) < abs(raw_dy - calc_dy):
+                    final_dy = raw_dy / 100.0
+                else:
+                    final_dy = raw_dy
+            elif raw_dy > 0:
+                # 預設多數股票 dividendYield 為百分制 (例如 1.18)
+                final_dy = raw_dy / 100.0
+
         return {
             "name": info.get("shortName") or info.get("longName") or ticker_symbol,
             "eps": info.get("trailingEps", 0) or 0,
             "pe": info.get("trailingPE", 0) or 0,
-            "dividendYield": info.get("dividendYield", 0) or 0,
+            "dividendYield": final_dy,
             "pegRatio": info.get("trailingPegRatio", 0) or info.get("pegRatio", 0) or 0,
             "volume": info.get("volume", 0) or 0,
             "avg_volume": info.get("averageVolume", 1) or 1,

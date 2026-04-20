@@ -51,7 +51,7 @@ def calculate_assets_data(exchange_rates):
     results = []
     assets = get_assets()
 
-    def process_asset(asset, category, price=None, change_val=None):
+    def process_asset(asset, category, price=None, change_val=None, update_time=None):
         rate = exchange_rates.get(asset["ccy"], 1.0)
         units = float(asset.get("units", asset.get("shares", 0)))
         if units == 0 and "investment" in asset:
@@ -77,6 +77,7 @@ def calculate_assets_data(exchange_rates):
             "平均成本": avg_cost,
             "漲跌": change_val,
             "股價": current_price,
+            "更新時間": update_time or "",
             "成本": round(cost_twd),
             "市值": round(val_twd),
             "損益": round(pl_val),
@@ -87,6 +88,7 @@ def calculate_assets_data(exchange_rates):
     # 分開處理基金與 ETF 的價格抓取
     batch_prices = {}
     batch_changes = {}
+    batch_times = {}
 
     def fetch_batch_prices(cat_key):
         tickers = []
@@ -132,6 +134,13 @@ def calculate_assets_data(exchange_rates):
                                 if isinstance(last_val, pd.Series)
                                 else float(last_val)
                             )
+                            try:
+                                last_time = pd.to_datetime(df_clean.index[-1])
+                                if last_time.tzinfo is None:
+                                    last_time = last_time.tz_localize("UTC")
+                                batch_times[t] = last_time.tz_convert("Asia/Taipei").strftime("%Y-%m-%d %H:%M")
+                            except Exception:
+                                batch_times[t] = ""
 
                             if len(df_clean) >= 2:
                                 prev_val = df_clean.iloc[-2]
@@ -155,14 +164,15 @@ def calculate_assets_data(exchange_rates):
             if not asset.get("enabled", True):
                 continue
 
-            price, change_val = None, None
+            price, change_val, update_time = None, None, None
             if asset.get("get_value"):
                 price = batch_prices.get(asset["id"])
+                update_time = batch_times.get(asset["id"], "")
                 # 無論是 ETF 還是個股，都讀取漲跌幅
                 if cat_key in ["etfs", "stocks"]:
                     change_val = batch_changes.get(asset["id"])
 
-            res = process_asset(asset, cat_name, price, change_val)
+            res = process_asset(asset, cat_name, price, change_val, update_time)
             if res:
                 results.append(res)
 
@@ -178,6 +188,7 @@ def calculate_assets_data(exchange_rates):
             "平均成本",
             "漲跌",
             "股價",
+            "更新時間",
             "建議掛單",
             "成本",
             "市值",

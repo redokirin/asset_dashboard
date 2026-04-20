@@ -47,9 +47,18 @@ def render_analysis_metrics_row(metrics_dict, title=None):
     title_html = f'<div class="analysis-report-title">{title}</div>' if title else ""
     items_html = ""
     for label, value in metrics_dict.items():
+        color_style = ""
+        # 支援顯示特定顏色 (value, color)
+        if isinstance(value, tuple) and len(value) == 2:
+            display_val, color = value
+            if color:
+                color_style = f" style='color: {color};'"
+        else:
+            display_val = value
+
         items_html += (
             f'<div class="analysis-metric-box">'
-            f'<div class="analysis-metric-value">{value}</div>'
+            f'<div class="analysis-metric-value"{color_style}>{display_val}</div>'
             f'<div class="analysis-metric-label">{label}</div>'
             f"</div>"
         )
@@ -96,6 +105,33 @@ def render_cost_component(row):
 
 
 def render_advanced_analysis_ui(res):
+    def get_anomaly_color(value, metric_type):
+        if value is None or str(value).strip() in ["-", ""]:
+            return ""
+
+        try:
+            val = float(str(value).replace("%", "").replace(",", ""))
+        except ValueError:
+            return ""
+
+        thresholds = {
+            "yield": lambda x: x > 20.0,  # 20% 以上標紅
+            "vol_ratio": lambda x: x > 50,  # 量比過大標紅
+            "pe": lambda x: x > 500 or x < 0,  # PE 異常
+        }
+
+        if metric_type == "bias":
+            if val > 15:
+                return "#FF4500"  # 橘紅色 (提醒技術面溢價)
+            elif val < -10:
+                return "#00FF00"  # 亮綠色 (跌深超賣折價)
+            elif abs(val) > 50:
+                return "#FF4B4B"  # 乖離過大標紅
+
+        if metric_type in thresholds and thresholds[metric_type](val):
+            return "#FF4B4B"  # 亮紅色
+
+        return ""
 
     price_levels_dic = {
         "股價": res["股價"],
@@ -111,14 +147,17 @@ def render_advanced_analysis_ui(res):
     }
 
     fund_dic = {
-        "EPS": res["EPS"],
-        "P/E": f"{res['PE']:.1f}",
-        "殖利率": res.get("殖利率", "-"),
+        "EPS": res.get("EPS", "-"),
+        "P/E": (f"{res['PE']:.1f}", get_anomaly_color(res["PE"], "pe")),
+        "殖利率": (
+            res.get("殖利率", "-"),
+            get_anomaly_color(res.get("殖利率", "-"), "yield"),
+        ),
         "PEG": res.get("PEG", "-"),
     }
 
     analyze_1_dic = {
-        "量比": res["量比"],
+        "量比": (res["量比"], get_anomaly_color(res["量比"], "vol_ratio")),
         "RS%": res["RS 百分位"],
         "RSI": f"{res.get('RSI', 0):.1f}",
         "Sharpe": res["夏普值"],
@@ -127,7 +166,10 @@ def render_advanced_analysis_ui(res):
     analyze_2_dic = {
         "α勝率": res["Alpha 勝率"],
         "月度α": res["月度 Alpha"],
-        "Bias%": res["乖離率 (Bias)"],
+        "Bias%": (
+            res["乖離率 (Bias)"],
+            get_anomaly_color(res["乖離率 (Bias)"], "bias"),
+        ),
         "": "",
     }
 
@@ -420,9 +462,14 @@ def render_shareholding_component(df):
                         st.session_state[f"analyze_{row['代碼']}"] = True
 
                 with c2:
+                    update_time_str = (
+                        f"⏳ {row.get('更新時間', '')} | "
+                        if row.get("更新時間")
+                        else ""
+                    )
                     st.markdown(
                         f"""<div class='asset-info-container'>
-                        <div class='asset-info-meta'>{row["市場"]} | {row["代碼"]} ({row["佔比"]:.1f}%)</div>
+                        <div class='asset-info-meta'>{update_time_str}{row["市場"]} | {row["代碼"]} ({row["佔比"]:.1f}%) </div>
                         <div class='asset-info-name'>{row["名稱"]} </div>
                         </div>""",
                         unsafe_allow_html=True,
