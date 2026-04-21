@@ -138,7 +138,7 @@ def calculate_assets_data(exchange_rates):
                                 last_time = pd.to_datetime(df_clean.index[-1])
                                 if last_time.tzinfo is None:
                                     last_time = last_time.tz_localize("UTC")
-                                batch_times[t] = last_time.tz_convert("Asia/Taipei").strftime("%Y-%m-%d %H:%M")
+                                batch_times[t] = last_time.tz_convert("Asia/Taipei").strftime("%Y-%m-%d")
                             except Exception:
                                 batch_times[t] = ""
 

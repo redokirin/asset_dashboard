@@ -92,7 +92,7 @@ def render_cost_component(row):
         "市值": f"${row['市值']:,}",
     }
 
-    cost_row = render_analysis_metrics_row(cost_dic, "💰 成本分析")
+    cost_row = render_analysis_metrics_row(cost_dic)  # , "💰 成本分析")
 
     st.markdown(
         f"""<div class="analysis-report-row">
@@ -448,7 +448,7 @@ def render_shareholding_component(df):
     for idx, row in df.iterrows():
         with st.container(border=True):
             with st.container():
-                c1, c2, c3, c4 = st.columns([0.65, 2.5, 2.2, 2.2])
+                c1, c2, c3, c4 = st.columns([0.65, 2.2, 1, 1])
                 with c1:
                     st.markdown(
                         '<div class="asset-card-beacon" style="display:none;"></div>',

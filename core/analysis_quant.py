@@ -236,7 +236,13 @@ def generate_advanced_diagnosis(
             tags.append("⚪ 量縮止跌")
             vp_advice = "量縮下跌，賣壓出現竭盡跡象，有利於短線止跌整理。"
 
-    full_advice = f"{lt_desc}。 {advice_base}\n{fund_advice}\n{vp_advice}".strip()
+    advice_base_display = f"\n{advice_base}" if advice_base else ""
+    fund_display = f"\n{fund_advice}" if fund_advice else ""
+    vp_advice_display = f"\n{vp_advice}" if vp_advice else ""
+
+    full_advice = (
+        f"{lt_desc}。{advice_base_display}{fund_display}{vp_advice_display}".strip()
+    )
     return full_advice, tags
 
 
