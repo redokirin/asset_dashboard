@@ -2,8 +2,129 @@
 import streamlit as st
 import pandas as pd
 import os
+import plotly.graph_objects as go
 from core import dashboard_logic
 from ui import ui_common
+
+
+def render_price_chart(ticker):
+    """渲染股價折線圖與均線"""
+    try:
+        # 抓取數據 (確保 period 參數傳遞正確)
+        df = dashboard_logic.FETCHERS["historical"](ticker, period="1y")
+
+        if df is None or df.empty:
+            st.warning(f"⚠️ 無法取得 {ticker} 的歷史數據")
+            return
+
+        # --- 強健處理 MultiIndex ---
+        if isinstance(df.columns, pd.MultiIndex):
+            # 嘗試 1: 如果第一層是 Ticker，選取它
+            if ticker in df.columns.get_level_values(0):
+                df = df.xs(ticker, axis=1, level=0)
+            # 嘗試 2: 如果第二層是 Ticker
+            elif ticker in df.columns.get_level_values(1):
+                df = df.xs(ticker, axis=1, level=1)
+            else:
+                # 嘗試 3: 尋找包含 'Close' 的那一層
+                for i in range(df.columns.nlevels):
+                    if "Close" in df.columns.get_level_values(i):
+                        df.columns = df.columns.get_level_values(i)
+                        break
+
+        # 確保 Close 欄位存在
+        if "Close" not in df.columns:
+            # 嘗試找尋 Adj Close
+            if "Adj Close" in df.columns:
+                df = df.rename(columns={"Adj Close": "Close"})
+            else:
+                # 嘗試模糊匹配
+                cols_map = {str(c).lower().replace(" ", ""): c for c in df.columns}
+                if "close" in cols_map:
+                    df = df.rename(columns={cols_map["close"]: "Close"})
+                else:
+                    st.error(f"❌ 數據格式異常，缺少收盤價欄位: {df.columns.tolist()}")
+                    return
+
+        # 清洗數據
+        df = df[df["Close"].notnull()].copy()
+        if len(df) < 5:
+            st.warning(f"⚠️ {ticker} 歷史數據量不足")
+            return
+
+        # 計算均線 (MA20, MA60)
+        # 確保數據是 float
+        df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
+        df["MA20"] = df["Close"].rolling(window=20, min_periods=1).mean()
+        df["MA60"] = df["Close"].rolling(window=60, min_periods=1).mean()
+
+        # 繪圖
+        fig = go.Figure()
+
+        # MA60
+        fig.add_trace(
+            go.Scatter(
+                x=df.index,
+                y=df["MA60"],
+                name="MA60",
+                line=dict(color="rgba(0, 200, 83, 0.4)", width=1.2),
+                hoverinfo="skip",
+            )
+        )
+
+        # MA20
+        fig.add_trace(
+            go.Scatter(
+                x=df.index,
+                y=df["MA20"],
+                name="MA20",
+                line=dict(color="rgba(255, 75, 75, 0.5)", width=1.2),
+                hoverinfo="skip",
+            )
+        )
+
+        # 收盤價
+        fig.add_trace(
+            go.Scatter(
+                x=df.index,
+                y=df["Close"],
+                name="收盤價",
+                line=dict(color="#FFFFFF", width=2),
+                hovertemplate="日期: %{x}<br>價格: %{y:.2f}<extra></extra>",
+            )
+        )
+
+        fig.update_layout(
+            height=250,
+            margin=dict(l=10, r=10, t=30, b=10),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            hovermode="x unified",
+            xaxis=dict(
+                showgrid=True,
+                gridcolor="rgba(255,255,255,0.05)",
+                tickformat="%Y-%m",
+            ),
+            yaxis=dict(
+                showgrid=True,
+                gridcolor="rgba(255,255,255,0.05)",
+                side="right",
+                tickformat=".1f",
+            ),
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1,
+                font=dict(size=10),
+            ),
+        )
+
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    except Exception as e:
+        st.error(f"📉 繪圖失敗 ({ticker}): {str(e)}")
 
 
 def load_css():
@@ -105,6 +226,9 @@ def render_cost_component(row):
 
 
 def render_advanced_analysis_ui(res):
+    # 渲染股價走勢圖
+    render_price_chart(res["代碼"])
+
     def get_anomaly_color(value, metric_type):
         if value is None or str(value).strip() in ["-", ""]:
             return ""
