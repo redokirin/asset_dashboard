@@ -583,7 +583,12 @@ def render_shareholding_component(df):
                         key=f"btn_{row['代碼']}_{idx}",
                         help="點擊執行進階量化分析",
                     ):
-                        st.session_state[f"analyze_{row['代碼']}"] = True
+                        # 切換顯示狀態 (Toggle)
+                        state_key = f"analyze_{row['代碼']}"
+                        st.session_state[state_key] = not st.session_state.get(
+                            state_key, False
+                        )
+                        st.rerun()
 
                 with c2:
                     update_time_str = (
