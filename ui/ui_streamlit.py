@@ -10,8 +10,8 @@ from ui import ui_common
 def render_price_chart(ticker):
     """渲染股價折線圖與均線"""
     try:
-        # 抓取數據 (確保 period 參數傳遞正確)
-        df = dashboard_logic.FETCHERS["historical"](ticker, period="1y")
+        # 使用封裝過的 fetch_historical_data 以套用數據修正補丁 (如 1306.T, 0052.TW)
+        df = dashboard_logic.fetch_historical_data(ticker, period="2y")
 
         if df is None or df.empty:
             st.warning(f"⚠️ 無法取得 {ticker} 的歷史數據")
@@ -122,7 +122,7 @@ def render_price_chart(ticker):
             ),
         )
 
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
     except Exception as e:
         st.error(f"📉 繪圖失敗 ({ticker}): {str(e)}")
 

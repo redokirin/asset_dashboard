@@ -79,7 +79,8 @@ def fetch_single_ticker_common_flat(ticker, period="2y"):
 def streamlit_historical_fetcher(tickers, period="2y", group_by="ticker"):
     """封裝層：將單層快取數據組合成 MultiIndex 結構"""
     if isinstance(tickers, str):
-        return fetch_single_ticker_historical_flat(tickers, period)
+        df = fetch_single_ticker_historical_flat(tickers, period)
+        return df.copy() if df is not None else pd.DataFrame()
 
     ticker_list = list(tickers)
     dfs = []

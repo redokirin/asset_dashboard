@@ -12,14 +12,14 @@ requests_cache.install_cache("asset_tracking_cache", expire_after=600)
 # 定義資料抓取器註冊表
 FETCHERS = {
     "historical": lambda tickers, **kwargs: yf.download(
-        list(tickers),
+        tickers if isinstance(tickers, list) else [tickers],
         period=kwargs.get("period", "2y"),
         progress=kwargs.get("progress", False),
         group_by=kwargs.get("group_by", "ticker"),
         auto_adjust=True,
     ),
     "common": lambda tickers, **kwargs: yf.download(
-        list(tickers),
+        tickers if isinstance(tickers, list) else [tickers],
         period=kwargs.get("period", "2y"),
         progress=kwargs.get("progress", False),
         auto_adjust=True,
@@ -37,12 +37,14 @@ def get_ticker_fundamental_info(ticker_symbol):
         # 由於台日股數據常缺失，使用 get 確保安全性
         raw_dy = info.get("dividendYield", 0) or 0
         y_yd = info.get("yield", 0) or 0
-        
+
         final_dy = 0
         if y_yd > 0:
             final_dy = y_yd
         else:
-            calc_dy = (info.get("dividendRate", 0) or 0) / (info.get("previousClose", 1) or 1)
+            calc_dy = (info.get("dividendRate", 0) or 0) / (
+                info.get("previousClose", 1) or 1
+            )
             if calc_dy > 0 and raw_dy > 0:
                 if abs(raw_dy / 100.0 - calc_dy) < abs(raw_dy - calc_dy):
                     final_dy = raw_dy / 100.0
@@ -85,6 +87,8 @@ def fetch_historical_data(tickers, period="2y", group_by="ticker"):
 
     try:
         df_all = FETCHERS["historical"](tickers, period=period, group_by=group_by)
+        if df_all is not None:
+            df_all = df_all.copy()
     except Exception as e:
         logging.error(f"資料抓取器執行失敗: {e}")
         return pd.DataFrame()
@@ -92,76 +96,122 @@ def fetch_historical_data(tickers, period="2y", group_by="ticker"):
     if df_all is None or df_all.empty:
         return pd.DataFrame()
 
+    # 統一 MultiIndex 方向為 (Ticker, Price)
+    # yfinance 單 ticker 無 group_by 時可能回傳 (Price, Ticker) 結構
+    if isinstance(df_all.columns, pd.MultiIndex) and df_all.columns.nlevels == 2:
+        price_fields = {"open", "high", "low", "close", "volume", "adjclose", "adj close"}
+        lv0_unique = {str(v).lower().replace(" ", "") for v in df_all.columns.get_level_values(0).unique()}
+        if lv0_unique.issubset(price_fields):
+            df_all = df_all.swaplevel(axis=1).sort_index(axis=1)
+
     # --- 歷史數據修正邏輯 (Yahoo Finance 數據錯誤 Patch) ---
     fix_configs = {
         "1306.T": {
             "ratio": 10.0,
-            "threshold_factor": 5.0,
-            "bug_price": 10000,
+            "threshold_factor": 3.5,
+            "bug_price": 1000,
             "desc": "日本 1306.T (1:10 分割)",
         },
         "0052.TW": {
             "ratio": 7.0,
-            "threshold_factor": 3.0,
-            "bug_price": 200,
+            "threshold_factor": 2.5,
+            "bug_price": 80,
             "desc": "富邦科技 0052.TW (1:7 分割)",
         },
     }
 
-    target_tickers_list = [tickers] if isinstance(tickers, str) else list(tickers)
+    # 轉為大寫集合進行比對，增加穩健性
+    target_tickers_set = {
+        str(t).upper()
+        for t in ([tickers] if isinstance(tickers, str) else list(tickers))
+    }
+
     for t_id, cfg in fix_configs.items():
-        if t_id in target_tickers_list:
+        if t_id.upper() in target_tickers_set:
             try:
+                # 獲取該 Ticker 的數據視圖 (不分大小寫)
+                ticker_key = None
                 if isinstance(df_all.columns, pd.MultiIndex):
-                    t_df = df_all[t_id].copy()
+                    level0 = df_all.columns.get_level_values(0).unique()
+                    for l0 in level0:
+                        if str(l0).upper() == t_id.upper():
+                            ticker_key = l0
+                            break
+                    if ticker_key:
+                        t_df = df_all[ticker_key]
+                    else:
+                        continue
                 else:
-                    t_df = df_all.copy()
+                    t_df = df_all
+                    ticker_key = t_id  # 佔位
 
-                if not t_df.empty and "Close" in t_df.columns:
-                    clean_close = t_df["Close"].dropna()
-                    if not clean_close.empty:
-                        current_p = float(clean_close.iloc[-1])
-                        ratio = cfg["ratio"]
-                        threshold = current_p * cfg["threshold_factor"]
-                        is_global_bug = current_p > cfg["bug_price"]
-                        high_price_dates = (
-                            t_df.index[t_df["Close"] > threshold]
-                            if not is_global_bug
-                            else t_df.index
-                        )
+                if not t_df.empty:
+                    # 尋找 Close 欄位 (不分大小寫)
+                    close_col = None
+                    for c in t_df.columns:
+                        c_clean = str(c).lower().replace(" ", "")
+                        if c_clean in ["close", "adjclose"]:
+                            close_col = c
+                            break
 
-                        if is_global_bug or not high_price_dates.empty:
-                            cols_to_fix = ["Open", "High", "Low", "Close"]
-                            if isinstance(df_all.columns, pd.MultiIndex):
-                                for col in cols_to_fix:
-                                    if (t_id, col) in df_all.columns:
-                                        if is_global_bug:
-                                            df_all.loc[:, (t_id, col)] /= ratio
-                                        else:
-                                            df_all.loc[
-                                                high_price_dates, (t_id, col)
-                                            ] /= ratio
-                                if (t_id, "Volume") in df_all.columns:
-                                    if is_global_bug:
-                                        df_all.loc[:, (t_id, "Volume")] *= ratio
-                                    else:
-                                        df_all.loc[
-                                            high_price_dates, (t_id, "Volume")
-                                        ] *= ratio
+                    if close_col:
+                        # 確保數據為數值型態
+                        close_series = pd.to_numeric(t_df[close_col], errors="coerce")
+                        clean_close = close_series.dropna()
+
+                        if not clean_close.empty:
+                            current_p = float(clean_close.iloc[-1])
+                            ratio = cfg["ratio"]
+                            threshold = current_p * cfg["threshold_factor"]
+
+                            is_global_bug = current_p > cfg["bug_price"]
+
+                            # 修正邏輯改進：
+                            # 1. 若現價就已經過高，判定為全域錯誤。
+                            # 2. 若現價正常但歷史有高價，則將「最後一個異常高價日期」之前的所有數據一併修正，避免遺漏。
+                            if is_global_bug:
+                                fix_dates = t_df.index
                             else:
-                                available_cols = [
-                                    c for c in cols_to_fix if c in df_all.columns
-                                ]
-                                if is_global_bug:
-                                    df_all.loc[:, available_cols] /= ratio
-                                    if "Volume" in df_all.columns:
-                                        df_all["Volume"] *= ratio
+                                abnormal_mask = close_series > threshold
+                                if abnormal_mask.any():
+                                    last_abnormal_date = t_df.index[abnormal_mask].max()
+                                    fix_dates = t_df.index[
+                                        t_df.index <= last_abnormal_date
+                                    ]
                                 else:
-                                    df_all.loc[high_price_dates, available_cols] /= (
-                                        ratio
-                                    )
-                                    if "Volume" in df_all.columns:
-                                        df_all.loc[high_price_dates, "Volume"] *= ratio
+                                    fix_dates = pd.Index([])
+
+                            if not fix_dates.empty:
+                                # 需要修正的欄位關鍵字 (含 Adj Close)
+                                fix_keywords = [
+                                    "open",
+                                    "high",
+                                    "low",
+                                    "close",
+                                    "adjclose",
+                                ]
+
+                                for col_actual in t_df.columns:
+                                    col_lower = str(col_actual).lower().replace(" ", "")
+                                    if col_lower in fix_keywords:
+                                        if isinstance(df_all.columns, pd.MultiIndex):
+                                            df_all.loc[
+                                                fix_dates, (ticker_key, col_actual)
+                                            ] /= ratio
+                                        else:
+                                            df_all.loc[fix_dates, col_actual] /= ratio
+
+                                    elif col_lower == "volume":
+                                        if isinstance(df_all.columns, pd.MultiIndex):
+                                            df_all.loc[
+                                                fix_dates, (ticker_key, col_actual)
+                                            ] *= ratio
+                                        else:
+                                            df_all.loc[fix_dates, col_actual] *= ratio
+
+                                logging.info(
+                                    f"已套用 {cfg['desc']} 修正補丁 (範圍: {len(fix_dates)} 筆數據)"
+                                )
             except Exception as e:
                 logging.debug(f"{t_id} 數據修正失敗: {e}")
 
