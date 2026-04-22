@@ -10,11 +10,50 @@ from ui import ui_common
 def render_price_chart(ticker):
     """渲染股價折線圖與均線"""
     try:
-        # 使用封裝過的 fetch_historical_data 以套用數據修正補丁 (如 1306.T, 0052.TW)
-        df = dashboard_logic.fetch_historical_data(ticker, period="2y")
+        # 使用 session_state 紀錄每個 ticker 的選中區間，預設為 6mo
+        period_key = f"chart_period_{ticker}"
+        if period_key not in st.session_state:
+            st.session_state[period_key] = "6mo"
+
+        # 區間選擇按鈕
+        periods = ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y"]
+        
+        # 建立一個容器放置選擇器
+        c1, c2 = st.columns([0.3, 0.7])
+        with c1:
+            st.markdown("<div style='padding-top: 5px; font-size: 0.8rem; color: #888;'>📅 走勢區間</div>", unsafe_allow_html=True)
+        with c2:
+            selected_period = st.segmented_control(
+                "選擇區間",
+                options=periods,
+                default=st.session_state[period_key],
+                key=f"selector_{ticker}",
+                label_visibility="collapsed"
+            )
+        
+        if selected_period and selected_period != st.session_state[period_key]:
+            st.session_state[period_key] = selected_period
+            st.rerun()
+
+        current_period = st.session_state[period_key]
+
+        # 根據 period 設定時間軸格式
+        tick_map = {
+            "1d": "%H:%M",
+            "5d": "%m-%d",
+            "1mo": "%m-%d",
+            "3mo": "%m-%d",
+            "6mo": "%Y-%m",
+            "1y": "%Y-%m",
+            "2y": "%Y-%m",
+        }
+        current_tick_format = tick_map.get(current_period, "%Y-%m")
+
+        # 使用選定的 period 抓取數據
+        df = dashboard_logic.fetch_historical_data(ticker, period=current_period)
 
         if df is None or df.empty:
-            st.warning(f"⚠️ 無法取得 {ticker} 的歷史數據")
+            st.warning(f"⚠️ 無法取得 {ticker} 的歷史數據 ({current_period})")
             return
 
         # --- 強健處理 MultiIndex ---
@@ -48,7 +87,7 @@ def render_price_chart(ticker):
 
         # 清洗數據
         df = df[df["Close"].notnull()].copy()
-        if len(df) < 5:
+        if len(df) < (1 if current_period == "1d" else 5): # 1d 數據可能很少
             st.warning(f"⚠️ {ticker} 歷史數據量不足")
             return
 
@@ -103,7 +142,7 @@ def render_price_chart(ticker):
             xaxis=dict(
                 showgrid=True,
                 gridcolor="rgba(255,255,255,0.05)",
-                tickformat="%Y-%m",
+                tickformat=current_tick_format,
             ),
             yaxis=dict(
                 showgrid=True,
