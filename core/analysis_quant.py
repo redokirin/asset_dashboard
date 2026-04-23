@@ -104,6 +104,7 @@ def generate_advanced_diagnosis(
     """綜合量化診斷邏輯 (整合基本面、技術位、RS、RSI 與量價關係)"""
     tags = []
     fund_advice = ""
+    bias_advice = ""
 
     if ma250 is None or math.isnan(ma250):
         lt_context, lt_desc = "LONG_UNKNOWN", "長線趨勢數據不足"
@@ -151,11 +152,14 @@ def generate_advanced_diagnosis(
 
     if bias is not None and not math.isnan(bias):
         if bias <= -7:
-            tags.append("🟠 極度價值區 (低於月線 -7%)")
+            tags.append("🟠 極度價值區")
+            bias_advice += f"標的位於月線下方 {bias:.1f}%，處於極度價值區。"
         elif -7 < bias <= -4:
-            tags.append("💧 跌深反彈區 (低於月線 -4%~-7%)")
+            tags.append("💧 跌深反彈區")
+            bias_advice += f"標的位於月線下方 {bias:.1f}%，處於跌深反彈區。"
         elif bias >= 7:
-            tags.append("🔴 過熱區 (高於月線 +7%)")
+            tags.append("🔴 過熱區")
+            bias_advice += f"標的位於月線上方 {bias:.1f}%，處於過熱區。"
         else:
             tags.append("🟢 趨勢區" if bias >= 0 else "🟡 價值區")
 
@@ -238,11 +242,10 @@ def generate_advanced_diagnosis(
 
     advice_base_display = f"\n{advice_base}" if advice_base else ""
     fund_display = f"\n{fund_advice}" if fund_advice else ""
+    bias_advice_display = f"\n{bias_advice}" if bias_advice else ""
     vp_advice_display = f"\n{vp_advice}" if vp_advice else ""
 
-    full_advice = (
-        f"{lt_desc}。{advice_base_display}{fund_display}{vp_advice_display}".strip()
-    )
+    full_advice = f"{lt_desc}。{advice_base_display}{fund_display}{bias_advice_display}{vp_advice_display}"
     return full_advice, tags
 
 
