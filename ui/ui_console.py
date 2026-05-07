@@ -20,6 +20,7 @@ def show_console_rich(
     show_report=True,
     console=None,
     is_list_mode=False,
+    show_detail=False,
 ):
     if not HAS_RICH:
         print(df.to_string())
@@ -77,6 +78,13 @@ def show_console_rich(
                 mini_table = Table(box=box.SIMPLE, show_header=True)
                 cols = [
                     "股價",
+                    "日常波段",
+                    "技術回測",
+                    "狙擊目標",
+                    "MA20",
+                    "MA60",
+                    "MA120",
+                    "MA250",
                     "RS",
                     "RS%",
                     "RSI",
@@ -84,18 +92,18 @@ def show_console_rich(
                     "月度α",
                     "夏普值",
                     "乖離率",
-                    "MA20",
-                    "MA60",
-                    "MA120",
-                    "MA250",
-                    "日常波段",
-                    "技術回測",
-                    "狙擊目標",
                 ]
                 for col in cols:
                     mini_table.add_column(col, justify="right")
                 mini_table.add_row(
                     str(row.get("股價", "-")),
+                    str(row.get("日常波段", "-")),
+                    str(row.get("技術回測", "-")),
+                    str(row.get("狙擊位", "-")),
+                    str(row.get("MA20", "-")),
+                    str(row.get("MA60", "-")),
+                    str(row.get("MA120", "-")),
+                    str(row.get("MA250", "-")),
                     str(row.get("RS", "-")),
                     str(row.get("RS%", "-")),
                     f"{row.get('RSI', 0):.1f}",
@@ -103,13 +111,6 @@ def show_console_rich(
                     str(row.get("月度 Alpha", "-")),
                     str(row.get("夏普值", "-")),
                     str(row.get("乖離率", "-")),
-                    str(row.get("MA20", "-")),
-                    str(row.get("MA60", "-")),
-                    str(row.get("MA120", "-")),
-                    str(row.get("MA250", "-")),
-                    str(row.get("日常波段", "-")),
-                    str(row.get("技術回測", "-")),
-                    str(row.get("狙擊位", "-")),
                 )
                 console.print(mini_table)
             console.print(
@@ -138,6 +139,11 @@ def show_console_rich(
             ("報酬率", "bold", "right"),
             ("佔比", "blue", "right"),
         ]
+
+        if not show_detail:
+            cols_to_keep = ["市場", "名稱", "幣別", "股價", "漲跌", "市值", "損益", "報酬率", "佔比"]
+            cols_config = [c for c in cols_config if c[0] in cols_to_keep]
+
         for c, s, j in cols_config:
             table.add_column(c, style=s, justify=j)
         for _, row in df.iterrows():
@@ -147,22 +153,23 @@ def show_console_rich(
                 if pd.notnull(row["漲跌"])
                 else "-"
             )
-            table.add_row(
-                str(row["市場"]),
-                str(row["名稱"]),
-                str(row["代碼"]),
-                str(row["幣別"]),
-                f"{row['單位數']:,.2f}",
-                f"{row['平均成本']:,.2f}",
-                f"{row['股價']:,.2f}",
-                change_str,
-                # f"{row['建議掛單']:,.2f}" if row["建議掛單"] > 0 else "-",
-                f"${row['成本']:,}",
-                f"${row['市值']:,}",
-                f"[{color}]{row['損益']:+,.0f}[/]",
-                f"[{color}]{row['報酬率']:+.1f}%[/]",
-                f"{row['佔比']:.1f}%",
-            )
+
+            data_map = {
+                "市場": str(row["市場"]),
+                "名稱": str(row["名稱"]),
+                "代碼": str(row["代碼"]),
+                "幣別": str(row["幣別"]),
+                "單位數": f"{row['單位數']:,.2f}",
+                "平均成本": f"{row['平均成本']:,.2f}",
+                "股價": f"{row['股價']:,.2f}",
+                "漲跌": change_str,
+                "成本": f"${row['成本']:,}",
+                "市值": f"${row['市值']:,}",
+                "損益": f"[{color}]{row['損益']:+,.0f}[/]",
+                "報酬率": f"[{color}]{row['報酬率']:+.1f}%[/]",
+                "佔比": f"{row['佔比']:.1f}%",
+            }
+            table.add_row(*[data_map[c[0]] for c in cols_config])
         console.print(table)
         console.print(
             f"\n💰 [bold]總市值: ${df['市值'].sum():,}[/] | 📈 [bold]總損益: {df['損益'].sum():+,.0f}[/]"

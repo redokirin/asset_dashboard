@@ -18,6 +18,7 @@ def run_cli():
         "--analyze", action="store_true", help="執行進階量化分析 (RS & Alpha)"
     )
     parser.add_argument("--report", action="store_true", help="顯示資產明細報表")
+    parser.add_argument("--detail", action="store_true", help="顯示詳細報表資訊")
     parser.add_argument(
         "--code", type=str, nargs="+", help="指定一個或多個代碼進行分析"
     )
@@ -52,6 +53,7 @@ def run_cli():
                     "損益": 0,
                     "報酬率": 0.0,
                     "佔比": 100.0,
+                    "_get_value": True,
                 }
                 df_to_analyze = pd.concat(
                     [df_to_analyze, pd.DataFrame([mock_record])], ignore_index=True
@@ -80,6 +82,7 @@ def run_cli():
             market_share_data,
             advanced_results,
             show_report=args.report,
+            show_detail=args.detail,
         )
 
 
