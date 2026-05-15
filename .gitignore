@@ -66,3 +66,4 @@ verify_gsheet_load.py
 ai_report.md
 .graphifyignore
 graphify-out/
+.claude/settings.local.json
