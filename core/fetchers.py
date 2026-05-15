@@ -85,6 +85,9 @@ def fetch_historical_data(tickers, period="2y", group_by="ticker"):
     elif not isinstance(tickers, str):
         tickers = str(tickers)
 
+    if not tickers:
+        return pd.DataFrame()
+
     try:
         df_all = FETCHERS["historical"](tickers, period=period, group_by=group_by)
         if df_all is not None:
@@ -238,6 +241,9 @@ def fetch_common_data(tickers, period="2y"):
         tickers = [str(t) for t in tickers]
     elif not isinstance(tickers, str):
         tickers = str(tickers)
+
+    if not tickers:
+        return pd.DataFrame()
 
     try:
         return FETCHERS["common"](tickers, period=period)

@@ -45,7 +45,7 @@ def export_for_ai(df_res, adv_res=None):
 
         base_info = (
             f"### [{ticker}] {name} ({asset_type})\n"
-            f"- **資產現況**: 類型 {asset_type}, 股價 {row.get('股價', '-')}({change_str}), 報酬率 {row.get('報酬率', 0):.2f}%, 佔比 {row.get('佔比', 0):.1f}%\n"
+            f"- **資產現況**: 類型 {asset_type}, 股價 [{row.get('股價', 0):,.2f}] ({change_str}), 報酬率 {row.get('報酬率', 0):.2f}%, 佔比 {row.get('佔比', 0):.1f}%\n"
             f"- **持倉明細**: 單位 {row.get('單位數', 0):,.2f}, 平均成本 {row.get('平均成本', 0):.2f}, 總成本 ${row.get('成本', 0):,.0f}"
         )
         report.append(base_info)
@@ -66,7 +66,7 @@ def export_for_ai(df_res, adv_res=None):
             quant_info = (
                 f"- **基本面**: EPS {eps} | P/E {pe} | 殖利率 {yield_val} | PEG {peg}\n"
                 f"- **量化指標**: RS百分位 {row.get('RS 百分位', '-')} | 乖離率 {bias} | 量比 {vol_ratio} | RSI {row.get('RSI', 0):.1f} | 夏普值 {row.get('夏普值', '-')} | α勝率 {row.get('Alpha 勝率', '-')}\n"
-                f"- **掛單策略**: 日常 {row.get('日常波段', '-')} | 回測 {row.get('技術回測', '-')} | 狙擊 {row.get('狙擊位', '-')}\n"
+                f"- **掛單策略**: 日常 [{row.get('日常波段', '-')}] 回測 [{row.get('技術回測', '-')}] 狙擊 [{row.get('狙擊位', '-')}]\n"
                 f"- **診斷標籤**: {' '.join(row['tags']) if isinstance(row.get('tags'), list) else '-'}\n"
                 f"- **AI 診斷建議**: {diag}"
             )

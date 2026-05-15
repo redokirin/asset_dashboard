@@ -400,6 +400,7 @@ def show_manual_analysis_page():
                         "損益": 0,
                         "報酬率": 0.0,
                         "佔比": 0.0,
+                        "_get_value": True,
                     }
                     for c in codes
                 ]
