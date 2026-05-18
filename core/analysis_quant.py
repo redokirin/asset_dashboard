@@ -200,10 +200,10 @@ def generate_advanced_diagnosis(
 
     if price is not None and ma5 is not None and price < ma5:
         tags.append("🔴破線轉弱")
-        bias_advice += " 跌破五日線，技術回測中"
+        bias_advice += "跌破五日線，技術回測中。"
     else:
         tags.append("🟢多頭支撐")
-        bias_advice += " 站穩五日線，續強中"
+        bias_advice += "站穩五日線，續強中。"
 
     if bias is not None and not math.isnan(bias):
         if bias <= -7:
@@ -263,7 +263,7 @@ def generate_advanced_diagnosis(
         # 指數型 ETF 位階判斷 (針對再平衡)
         if rs_percentile <= 20:
             tags.append("⚖️配置機會")
-            fund_advice += " 標的相對於基準處於深水區，為跨市場再平衡的潛在買點。"
+            fund_advice += "標的相對於基準處於深水區，為跨市場再平衡的潛在買點。"
 
     if (
         dividend_yield is not None
@@ -273,7 +273,7 @@ def generate_advanced_diagnosis(
         if rs_percentile < 20 or lt_context == "BEARISH":
             tags.append("🛡️息收護城河")
             fund_advice += (
-                f" 具備高股息殖利率 ({dividend_yield:.1%})，為下行提供防禦支撐。"
+                f"具備高股息殖利率 ({dividend_yield:.1%})，為下行提供防禦支撐。"
             )
 
     vp_advice = ""
@@ -302,7 +302,7 @@ def generate_advanced_diagnosis(
     bias_advice_display = f"\n{bias_advice}" if bias_advice else ""
     vp_advice_display = f"\n{vp_advice}" if vp_advice else ""
 
-    full_advice = f"{lt_desc}。{advice_base_display}{fund_display}{bias_advice_display}{vp_advice_display}"
+    full_advice = f"{advice_base_display}{fund_display}{bias_advice_display}{vp_advice_display}"
     return full_advice, tags
 
 

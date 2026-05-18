@@ -17,23 +17,26 @@ def render_price_chart(ticker):
 
         # 區間選擇按鈕
         periods = ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y"]
-        
+
         # 建立一個容器放置選擇器
         c1, c2 = st.columns([0.3, 0.7])
         with c1:
-            st.markdown("<div style='padding-top: 5px; font-size: 0.8rem; color: #888;'>📅 走勢區間</div>", unsafe_allow_html=True)
+            st.markdown(
+                "<div style='padding-top: 5px; font-size: 0.8rem; color: #888;'>📅 走勢區間</div>",
+                unsafe_allow_html=True,
+            )
         with c2:
             selected_period = st.segmented_control(
                 "選擇區間",
                 options=periods,
                 default=st.session_state[period_key],
                 key=f"selector_{ticker}",
-                label_visibility="collapsed"
+                label_visibility="collapsed",
             )
-        
+
         if selected_period and selected_period != st.session_state[period_key]:
             st.session_state[period_key] = selected_period
-            st.rerun()
+            st.rerun() 
 
         current_period = st.session_state[period_key]
 
@@ -87,7 +90,7 @@ def render_price_chart(ticker):
 
         # 清洗數據
         df = df[df["Close"].notnull()].copy()
-        if len(df) < (1 if current_period == "1d" else 5): # 1d 數據可能很少
+        if len(df) < (1 if current_period == "1d" else 5):  # 1d 數據可能很少
             st.warning(f"⚠️ {ticker} 歷史數據量不足")
             return
 
@@ -265,8 +268,6 @@ def render_cost_component(row):
 
 
 def render_advanced_analysis_ui(res):
-    # 渲染股價走勢圖
-    render_price_chart(res["代碼"])
 
     def get_anomaly_color(value, metric_type):
         if value is None or str(value).strip() in ["-", ""]:
@@ -371,6 +372,10 @@ def render_advanced_analysis_ui(res):
             </div>""",
         unsafe_allow_html=True,
     )
+
+    # 渲染股價走勢圖
+    with st.expander("🔍 折線圖與均線", expanded=False):
+        render_price_chart(res["代碼"])
 
 
 def show_manual_analysis_page():
@@ -688,13 +693,32 @@ def render_shareholding_component(df):
 def render_plotly_pie_charts(df):
     import plotly.express as px
 
+    market_colors = {
+        "美股": px.colors.sequential.Tealgrn,
+        "台股": px.colors.sequential.Sunset,
+        "日股": px.colors.sequential.Peach,
+        # "加密貨幣": px.colors.sequential.Purples,
+    }
+    default_colors = px.colors.sequential.Greys
+
     market_df = df.groupby("市場")["市值"].sum().reset_index()
+
+    # 建立市場別的基礎顏色映射 (取各市場最深/基礎顏色)
+    market_color_map = {}
+    for market in market_df["市場"]:
+        color_scale = market_colors.get(market, default_colors)
+        safe_colors = (
+            color_scale[2:][::-1] if len(color_scale) > 2 else color_scale[::-1]
+        )
+        market_color_map[market] = safe_colors[0] if safe_colors else "#808080"
+
     fig_market = px.pie(
         market_df,
         values="市值",
         names="市場",
         title="資產分析-市場別",
-        color_discrete_sequence=px.colors.qualitative.Pastel,
+        color="市場",
+        color_discrete_map=market_color_map,
     )
     fig_market.update_layout(
         showlegend=True,
@@ -709,14 +733,36 @@ def render_plotly_pie_charts(df):
     item_df["顯示名稱"] = (
         item_df["名稱"].astype(str).str.replace(r"[🏆🚩]", "", regex=True)
     )
+
+    # 彙總同市場及同名稱的項目，並依市場與市值排序，確保同市場項目相近排列
+    item_df = item_df.groupby(["市場", "顯示名稱"], as_index=False)["市值"].sum()
+    item_df = item_df.sort_values(by=["市場", "市值"], ascending=[True, False])
+
+    colors_seq = []
+    market_indices = {}
+    for market in item_df["市場"]:
+        if market not in market_indices:
+            market_indices[market] = 0
+
+        color_scale = market_colors.get(market, default_colors)
+        # 避開最淺的顏色，並反轉讓市值大的顏色較深
+        safe_colors = (
+            color_scale[2:][::-1] if len(color_scale) > 2 else color_scale[::-1]
+        )
+
+        idx = market_indices[market]
+        colors_seq.append(safe_colors[idx % len(safe_colors)])
+        market_indices[market] += 1
+
     fig_item = px.pie(
         item_df,
         values="市值",
         names="顯示名稱",
         title="資產分析-項目別",
         hole=0.5,
-        color_discrete_sequence=px.colors.qualitative.Set3,
+        color_discrete_sequence=colors_seq,
     )
+    fig_item.update_traces(sort=False)
     fig_item.update_layout(
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.5, xanchor="center", x=0.5),
