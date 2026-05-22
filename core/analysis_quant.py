@@ -8,6 +8,7 @@ from core.fetchers import (
     fetch_common_data,
     get_ticker_fundamental_info,
 )
+from core.buy_levels import MarketData, get_buy_levels, compute_atr20
 
 
 def calculate_buffered_entries_v2(df, ma5, ma20, ma250, current_price, rs_p10_price):
@@ -25,10 +26,10 @@ def calculate_buffered_entries_v2(df, ma5, ma20, ma250, current_price, rs_p10_pr
     MIN_GAP = 0.015
 
     # 2. 計算原始的三個物理位階 (Raw Tiers)
-    raw_daily = prev_close - (1.0 * atr)
-    raw_tech = ma20 * 0.97
+    base_daily = prev_close - (1.0 * atr)
+    base_tech = ma20 * 0.97
     long_term_floor = ma250 * 0.98 if ma250 is not None else 999999.0
-    raw_sniper = min(ma20 * 0.95, rs_p10_price, long_term_floor)
+    base_sniper = min(ma20 * 0.95, rs_p10_price, long_term_floor)
 
     # 3. 判斷是否「低於 5 日均線」，決定位階分配
     # 如果低於 MA5，我們就把「日常」捨棄，將後面的位階往前遞補
@@ -39,9 +40,9 @@ def calculate_buffered_entries_v2(df, ma5, ma20, ma250, current_price, rs_p10_pr
     #     base_tech = raw_sniper
     #     base_sniper = raw_sniper * (1 - MIN_GAP)  # 狙擊位再往下看 1.5%
     # else:
-    base_daily = raw_daily
-    base_tech = raw_tech
-    base_sniper = raw_sniper
+    # base_daily = raw_daily
+    # base_tech = raw_tech
+    # base_sniper = raw_sniper
 
     # 4. 套用天花板與緩衝 (這裡 Ceiling 可以改用 MA5 或維持 current_price 作為最後防線)
     ceiling = min(current_price, ma5) * 0.995  # 取兩者之小，避免延遲數據誤導
@@ -302,7 +303,9 @@ def generate_advanced_diagnosis(
     bias_advice_display = f"\n{bias_advice}" if bias_advice else ""
     vp_advice_display = f"\n{vp_advice}" if vp_advice else ""
 
-    full_advice = f"{advice_base_display}{fund_display}{bias_advice_display}{vp_advice_display}"
+    full_advice = (
+        f"{advice_base_display}{fund_display}{bias_advice_display}{vp_advice_display}"
+    )
     return full_advice, tags
 
 
@@ -323,6 +326,13 @@ def get_smart_benchmark(ticker):
 
     # 其餘均對標 S&P 500 (美股或全球資產)
     return "VOO"
+
+
+def _to_float_scalar(value) -> float | None:
+    """yfinance MultiIndex 邊界情況下 .iloc[-1] 可能回傳 Series，統一轉為 float scalar。"""
+    if isinstance(value, pd.Series):
+        value = value.iloc[0]
+    return float(value) if pd.notnull(value) else None
 
 
 def run_advanced_analysis(df_res):
@@ -418,67 +428,40 @@ def run_advanced_analysis(df_res):
                     continue
 
                 ma20_str, ma60_str, ma120_str = "-", "數據不足", "數據不足"
-                bias_str, bias_numeric = "-", 0.0
-                ma20_val, ma250_val, ma250_str = None, None, "-"
+                bias_str, bias_numeric = "-", float("nan")
+                ma20_val, ma60_val, ma120_val, ma250_val, ma250_str = None, None, None, None, "-"
 
-                last_close_val = t_df_clean["Close"].iloc[-1]
-                price_val = (
-                    float(last_close_val.iloc[0])
-                    if isinstance(last_close_val, pd.Series)
-                    else float(last_close_val)
-                )
-
-                if len(t_df_clean) >= 2:
-                    prev_close_val = t_df_clean["Close"].iloc[-2]
-                    prev_close = (
-                        float(prev_close_val.iloc[0])
-                        if isinstance(prev_close_val, pd.Series)
-                        else float(prev_close_val)
-                    )
-                else:
-                    prev_close = price_val
+                price_val = _to_float_scalar(t_df_clean["Close"].iloc[-1])
+                prev_close = _to_float_scalar(t_df_clean["Close"].iloc[-2]) if len(t_df_clean) >= 2 else price_val
 
                 day_change_pct = ((price_val - prev_close) / prev_close) * 100
 
                 # --- 關鍵更新：在計算均價前加入 MA5 濾網判斷 ---
                 ma5_val = None
                 if len(t_df_clean) >= 5:
-                    ma5_series = t_df_clean["Close"].rolling(5).mean()
-                    ma5_last = ma5_series.iloc[-1]
-                    ma5_val = (
-                        float(ma5_last.iloc[0])
-                        if isinstance(ma5_last, pd.Series)
-                        else float(ma5_last)
-                    )
+                    ma5_val = _to_float_scalar(t_df_clean["Close"].rolling(5).mean().iloc[-1])
                 # ------------------------------------------------
 
                 if len(t_df_clean) >= 20:
-                    ma20_series = t_df_clean["Close"].rolling(20).mean()
-                    ma20_last = ma20_series.iloc[-1]
-                    ma20_val = (
-                        float(ma20_last.iloc[0])
-                        if isinstance(ma20_last, pd.Series)
-                        else float(ma20_last)
-                    )
-                    if pd.notnull(ma20_val) and ma20_val > 0:
+                    ma20_val = _to_float_scalar(t_df_clean["Close"].rolling(20).mean().iloc[-1])
+                    if ma20_val is not None and ma20_val > 0:
                         ma20_str = f"{ma20_val:.2f}"
                         bias_numeric = ((price_val - ma20_val) / ma20_val) * 100
                         bias_str = f"{bias_numeric:.2f}%"
 
                 if len(t_df_clean) >= 60:
-                    ma60_last = t_df_clean["Close"].rolling(60).mean().iloc[-1]
-                    if pd.notnull(ma60_last):
-                        ma60_str = f"{float(ma60_last):.2f}"
+                    ma60_val = _to_float_scalar(t_df_clean["Close"].rolling(60).mean().iloc[-1])
+                    if ma60_val is not None:
+                        ma60_str = f"{ma60_val:.2f}"
 
                 if len(t_df_clean) >= 120:
-                    ma120_last = t_df_clean["Close"].rolling(120).mean().iloc[-1]
-                    if pd.notnull(ma120_last):
-                        ma120_str = f"{float(ma120_last):.2f}"
+                    ma120_val = _to_float_scalar(t_df_clean["Close"].rolling(120).mean().iloc[-1])
+                    if ma120_val is not None:
+                        ma120_str = f"{ma120_val:.2f}"
 
                 if len(t_df_clean) >= 250:
-                    ma250_last = t_df_clean["Close"].rolling(250).mean().iloc[-1]
-                    ma250_val = float(ma250_last) if pd.notnull(ma250_last) else None
-                    if ma250_val:
+                    ma250_val = _to_float_scalar(t_df_clean["Close"].rolling(250).mean().iloc[-1])
+                    if ma250_val is not None:
                         ma250_str = f"{ma250_val:.2f}"
 
                 p_series = t_df_clean["Close"].copy()
@@ -487,13 +470,12 @@ def run_advanced_analysis(df_res):
 
                 ccy = str(row_data.get("幣別", "")).strip().upper()
                 if ccy not in {"TWD", "USD", "JPY"}:
-                    ccy = (
-                        "JPY"
-                        if ticker.endswith(".T")
-                        else "USD"
-                        if ".US" in ticker or ticker.isupper()
-                        else "TWD"
-                    )
+                    if ticker.endswith(".T"):
+                        ccy = "JPY"
+                    elif ticker.endswith((".TW", ".TWO")):
+                        ccy = "TWD"
+                    else:
+                        ccy = "USD"
                 if ccy == "JPY":
                     r_series = get_clean_col(common_raw, "JPYTWD=X", "Close")
                 elif ccy == "USD":
@@ -537,22 +519,41 @@ def run_advanced_analysis(df_res):
 
                 suggested_bid_str = "-"
                 daily_wave, tech_retest, sniper_pos = "-", "-", "-"
-                if ma20_val is not None:
-                    entries = calculate_buffered_entries_v2(
-                        t_df_clean,
-                        ma5_val,
-                        ma20_val,
-                        ma250_val,
-                        price_val,
-                        rs_p10_price,
+                entries = None
+                if ma20_val is not None and ma60_val is not None and ma120_val is not None:
+                    if not {"High", "Low", "Close"}.issubset(t_df_clean.columns):
+                        logging.debug(f"[{ticker}] 買點計算跳過：缺少 OHLC 欄位")
+                    else:
+                        try:
+                            atr20_val = compute_atr20(t_df_clean)
+                        except Exception:
+                            atr20_val = None
+                        if atr20_val is None or pd.isna(atr20_val):
+                            logging.debug(f"[{ticker}] 買點計算跳過：ATR20 無法計算")
+                        else:
+                            market_data = MarketData(
+                                price=price_val,
+                                ma20=ma20_val,
+                                ma60=ma60_val,
+                                ma120=ma120_val,
+                                atr20=float(atr20_val),
+                            )
+                            entries = get_buy_levels(
+                                asset=row_data.to_dict(),
+                                data=market_data,
+                                rs_p10_price=rs_p10_price,
+                            )
+                else:
+                    missing = [n for n, v in [("MA60", ma60_val), ("MA120", ma120_val)] if v is None]
+                    if missing:
+                        logging.debug(f"[{ticker}] 買點計算跳過：{', '.join(missing)} 資料不足")
+                if entries:
+                    suggested_bid_str = f"{entries['日常波段']:.2f} | {entries['技術回測']:.2f} | {entries['狙擊位']:.2f}"
+                    daily_wave, tech_retest, sniper_pos = (
+                        f"{entries['日常波段']:.2f}",
+                        f"{entries['技術回測']:.2f}",
+                        f"{entries['狙擊位']:.2f}",
                     )
-                    if entries:
-                        suggested_bid_str = f"{entries['日常波段']:.2f} | {entries['技術回測']:.2f} | {entries['狙擊位']:.2f}"
-                        daily_wave, tech_retest, sniper_pos = (
-                            f"{entries['日常波段']:.2f}",
-                            f"{entries['技術回測']:.2f}",
-                            f"{entries['狙擊位']:.2f}",
-                        )
 
                 m_price = comb.resample("ME").last()
                 m_ret = pd.DataFrame(
@@ -638,6 +639,8 @@ def run_advanced_analysis(df_res):
                         "_vol_ratio_raw": vol_ratio,
                         "_score": pct,
                         "tags": tags,
+                        "ATV模型": entries.get("model", "-") if entries else "-",
+                        "ATV趨勢": entries.get("regime", "-") if entries else "-",
                     }
                 )
             except Exception as e:

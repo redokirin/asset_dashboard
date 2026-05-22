@@ -67,3 +67,6 @@ ai_report.md
 .graphifyignore
 graphify-out/
 .claude/settings.local.json
+report
+install.cmd
+refactor.txt

@@ -8,6 +8,7 @@ def export_for_ai(df_res, adv_res=None):
     整合資產現況 (df_res) 與進階量化指標 (adv_res)。
     """
     report = ["# 🚀 個人財務資產 AI 診斷數據摘要\n"]
+    report.append(f"> 🕒 製表時間: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}\n")
 
     # --- 1. 整體組合摘要 ---
     total_val = df_res["市值"].sum()
