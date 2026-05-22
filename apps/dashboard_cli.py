@@ -5,6 +5,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import argparse
+import datetime
 import pandas as pd
 from core import dashboard_logic
 from ui.dashboard_ui import show_console_rich
@@ -67,12 +68,16 @@ def run_cli():
         dashboard_logic.run_advanced_analysis(df_final) if args.analyze else None
     )
 
-    # 當同時指定 --ai 與 --analyze 時，寫入整合後的 AI 報告檔案 ai_report.md
+    # 當同時指定 --ai 與 --analyze 時，寫入整合後的 AI 報告檔案
     if args.ai and args.analyze:
         ai_text = dashboard_logic.export_for_ai(df_final, adv_res=advanced_results)
-        with open("ai_report.md", "w", encoding="utf-8") as f:
+        analyze_dir = os.path.join(os.path.dirname(__file__), "..", "analyze")
+        os.makedirs(analyze_dir, exist_ok=True)
+        ts = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        report_path = os.path.join(analyze_dir, f"report_{ts}.md")
+        with open(report_path, "w", encoding="utf-8") as f:
             f.write(ai_text)
-        print(f"\n✅ AI 摘要與量化分析結果已合併寫入檔案: ai_report.md")
+        print(f"\n✅ AI 摘要與量化分析結果已合併寫入檔案: {report_path}")
     elif args.ai:
         print(dashboard_logic.export_for_ai(df_final, adv_res=advanced_results))
     else:

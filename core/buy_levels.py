@@ -109,11 +109,14 @@ ATV_CONFIGS: dict[str, ATVModelConfig] = {
 
 # ── Core Functions ───────────────────────────────────────────────────────────
 
+
 def compute_atr20(df: pd.DataFrame) -> float:
     hl = df["High"] - df["Low"]
     hc = (df["High"] - df["Close"].shift(1)).abs()
     lc = (df["Low"] - df["Close"].shift(1)).abs()
-    return float(pd.concat([hl, hc, lc], axis=1).max(axis=1).rolling(20).mean().iloc[-1])
+    return float(
+        pd.concat([hl, hc, lc], axis=1).max(axis=1).rolling(20).mean().iloc[-1]
+    )
 
 
 def detect_regime(data: MarketData) -> Regime:
@@ -197,35 +200,35 @@ def get_buy_levels(
     elif regime == "neutral" and ra.neutral_sniper is not None:
         sniper_mult = ra.neutral_sniper
 
-    daily    = trend_center + config.multipliers.daily    * atr20
+    daily = trend_center + config.multipliers.daily * atr20
     pullback = trend_center + config.multipliers.pullback * atr20
-    sniper   = trend_center + sniper_mult                 * atr20
+    sniper = trend_center + sniper_mult * atr20
 
     if g.use_ma_floor:
-        daily    = _apply_ma_floor(daily,    g.daily_floor,    data)
+        daily = _apply_ma_floor(daily, g.daily_floor, data)
         pullback = _apply_ma_floor(pullback, g.pullback_floor, data)
-        sniper   = _apply_ma_floor(sniper,   g.sniper_floor,   data)
+        sniper = _apply_ma_floor(sniper, g.sniper_floor, data)
 
     # RS P10 as hard floor on sniper (preserves existing RS logic)
     if rs_p10_price:
         sniper = max(sniper, rs_p10_price)
 
     # Price ceiling applied to all tiers
-    ceiling  = data.price * g.price_ceiling_pct
-    daily    = min(daily,    ceiling)
+    ceiling = data.price * g.price_ceiling_pct
+    daily = min(daily, ceiling)
     pullback = min(pullback, ceiling)
-    sniper   = min(sniper,   ceiling)
+    sniper = min(sniper, ceiling)
 
     # Enforce tier ordering with minimum gap
-    pullback = min(pullback, daily    * (1 - g.min_gap_pct))
-    sniper   = min(sniper,   pullback * (1 - g.min_gap_pct))
+    pullback = min(pullback, daily * (1 - g.min_gap_pct))
+    sniper = min(sniper, pullback * (1 - g.min_gap_pct))
 
     return {
-        "日常波段":     round(daily,        2),
-        "技術回測":     round(pullback,      2),
-        "狙擊位":       round(sniper,        2),
-        "model":        model_name,
-        "regime":       regime,
+        "日常波段": round(daily, 2),
+        "技術回測": round(pullback, 2),
+        "狙擊位": round(sniper, 2),
+        "model": model_name,
+        "regime": regime,
         "trend_center": round(trend_center, 2),
-        "atr20":        round(atr20,        2),
+        "atr20": round(atr20, 2),
     }
