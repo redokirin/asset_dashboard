@@ -60,6 +60,38 @@ def show_console_rich(
             console.print(
                 f"EPS:{row.get('EPS', 0):.2f} 本益比:{row.get('PE', 0):.1f} 殖利率:{row.get('殖利率', '-')} PEG:{row.get('PEG', '-')} 量比:{row.get('量比', '-')}"
             )
+
+            # ── 風險指標 helper ────────────────────────────────────────────────
+            _mdd      = row.get("maxDrawdownPct")
+            _curr_dd  = row.get("currentDrawdownPct")
+            _pain     = row.get("painRatio")
+            _comfort  = row.get("comfortScore") or "-"
+            _hold     = row.get("holdabilityScore")
+
+            def _dd_color(v):
+                """回撤深度語義色（Rich markup）"""
+                if v is None or not isinstance(v, (int, float)):
+                    return "white"
+                a = abs(v)
+                if a < 5:   return "green"
+                if a < 15:  return "yellow"
+                return "red"
+
+            def _hold_color(v):
+                """持有力語義色"""
+                if v is None or not isinstance(v, (int, float)):
+                    return "white"
+                if v >= 0.70: return "green"
+                if v >= 0.40: return "yellow"
+                return "red"
+
+            _comfort_color = {"High": "green", "Medium": "yellow", "Low": "red"}.get(_comfort, "white")
+
+            _mdd_str     = f"{_mdd:.1f}%"    if isinstance(_mdd,    float) else "-"
+            _curr_str    = f"{_curr_dd:.1f}%" if isinstance(_curr_dd, float) else "-"
+            _pain_str    = f"{_pain * 100:.0f}%" if isinstance(_pain, float) else "-"
+            _hold_str    = f"{_hold * 100:.0f}%" if isinstance(_hold, float) else "-"
+
             if is_list_mode:
                 val_alpha = (
                     str(row.get("月度 Alpha", "-"))
@@ -71,6 +103,13 @@ def show_console_rich(
                     f"  > 股價: {row.get('股價', '-')} | RS%: {row.get('RS 百分位', '-')} | RSI: {row.get('RSI', 0):.1f}",
                     f"  > Alpha勝率: {row.get('Alpha 勝率', '-')} | 月度Alpha: {val_alpha} | 夏普值: {row.get('夏普值', '-')}",
                     f"  > 建議位階: 波段 {row.get('日常波段', '-')} / 回測 {row.get('技術回測', '-')} / 狙擊 {row.get('狙擊位', '-')}",
+                    (
+                        f"  > 風險: MDD [{_dd_color(_mdd)}]{_mdd_str}[/] | "
+                        f"目前回撤 [{_dd_color(_curr_dd)}]{_curr_str}[/] | "
+                        f"Pain {_pain_str} | "
+                        f"舒適度 [{_comfort_color}]{_comfort}[/] | "
+                        f"持有力 [{_hold_color(_hold)}]{_hold_str}[/]"
+                    ),
                 ]
                 for line in metrics:
                     console.print(line)
@@ -113,10 +152,23 @@ def show_console_rich(
                     str(row.get("乖離率", "-")),
                 )
                 console.print(mini_table)
+
+                # ── 風險指標小表 ───────────────────────────────────────────────
+                risk_table = Table(box=box.SIMPLE, show_header=True)
+                for col in ["MDD", "目前回撤", "Pain Ratio", "舒適度", "持有力"]:
+                    risk_table.add_column(col, justify="right")
+                risk_table.add_row(
+                    f"[{_dd_color(_mdd)}]{_mdd_str}[/]",
+                    f"[{_dd_color(_curr_dd)}]{_curr_str}[/]",
+                    _pain_str,
+                    f"[{_comfort_color}]{_comfort}[/]",
+                    f"[{_hold_color(_hold)}]{_hold_str}[/]",
+                )
+                console.print(risk_table)
+
             console.print(
                 f"{' '.join(row.get('tags', []))}\n{row.get('技術診斷', '-')}"
             )
-            # console.print("\n" + "=" * 73)
 
     if show_report:
         console.print(

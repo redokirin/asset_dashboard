@@ -9,6 +9,7 @@ from core.fetchers import (
     get_ticker_fundamental_info,
 )
 from core.buy_levels import MarketData, get_buy_levels, compute_atr20
+from core.risk import calculateAssetDrawdown
 
 
 def calculate_buffered_entries_v2(df, ma5, ma20, ma250, current_price, rs_p10_price):
@@ -429,38 +430,58 @@ def run_advanced_analysis(df_res):
 
                 ma20_str, ma60_str, ma120_str = "-", "數據不足", "數據不足"
                 bias_str, bias_numeric = "-", float("nan")
-                ma20_val, ma60_val, ma120_val, ma250_val, ma250_str = None, None, None, None, "-"
+                ma20_val, ma60_val, ma120_val, ma250_val, ma250_str = (
+                    None,
+                    None,
+                    None,
+                    None,
+                    "-",
+                )
 
                 price_val = _to_float_scalar(t_df_clean["Close"].iloc[-1])
-                prev_close = _to_float_scalar(t_df_clean["Close"].iloc[-2]) if len(t_df_clean) >= 2 else price_val
+                prev_close = (
+                    _to_float_scalar(t_df_clean["Close"].iloc[-2])
+                    if len(t_df_clean) >= 2
+                    else price_val
+                )
 
                 day_change_pct = ((price_val - prev_close) / prev_close) * 100
 
                 # --- 關鍵更新：在計算均價前加入 MA5 濾網判斷 ---
                 ma5_val = None
                 if len(t_df_clean) >= 5:
-                    ma5_val = _to_float_scalar(t_df_clean["Close"].rolling(5).mean().iloc[-1])
+                    ma5_val = _to_float_scalar(
+                        t_df_clean["Close"].rolling(5).mean().iloc[-1]
+                    )
                 # ------------------------------------------------
 
                 if len(t_df_clean) >= 20:
-                    ma20_val = _to_float_scalar(t_df_clean["Close"].rolling(20).mean().iloc[-1])
+                    ma20_val = _to_float_scalar(
+                        t_df_clean["Close"].rolling(20).mean().iloc[-1]
+                    )
                     if ma20_val is not None and ma20_val > 0:
                         ma20_str = f"{ma20_val:.2f}"
                         bias_numeric = ((price_val - ma20_val) / ma20_val) * 100
                         bias_str = f"{bias_numeric:.2f}%"
 
                 if len(t_df_clean) >= 60:
-                    ma60_val = _to_float_scalar(t_df_clean["Close"].rolling(60).mean().iloc[-1])
+                    ma60_val = _to_float_scalar(
+                        t_df_clean["Close"].rolling(60).mean().iloc[-1]
+                    )
                     if ma60_val is not None:
                         ma60_str = f"{ma60_val:.2f}"
 
                 if len(t_df_clean) >= 120:
-                    ma120_val = _to_float_scalar(t_df_clean["Close"].rolling(120).mean().iloc[-1])
+                    ma120_val = _to_float_scalar(
+                        t_df_clean["Close"].rolling(120).mean().iloc[-1]
+                    )
                     if ma120_val is not None:
                         ma120_str = f"{ma120_val:.2f}"
 
                 if len(t_df_clean) >= 250:
-                    ma250_val = _to_float_scalar(t_df_clean["Close"].rolling(250).mean().iloc[-1])
+                    ma250_val = _to_float_scalar(
+                        t_df_clean["Close"].rolling(250).mean().iloc[-1]
+                    )
                     if ma250_val is not None:
                         ma250_str = f"{ma250_val:.2f}"
 
@@ -520,7 +541,11 @@ def run_advanced_analysis(df_res):
                 suggested_bid_str = "-"
                 daily_wave, tech_retest, sniper_pos = "-", "-", "-"
                 entries = None
-                if ma20_val is not None and ma60_val is not None and ma120_val is not None:
+                if (
+                    ma20_val is not None
+                    and ma60_val is not None
+                    and ma120_val is not None
+                ):
                     if not {"High", "Low", "Close"}.issubset(t_df_clean.columns):
                         logging.debug(f"[{ticker}] 買點計算跳過：缺少 OHLC 欄位")
                     else:
@@ -544,9 +569,15 @@ def run_advanced_analysis(df_res):
                                 rs_p10_price=rs_p10_price,
                             )
                 else:
-                    missing = [n for n, v in [("MA60", ma60_val), ("MA120", ma120_val)] if v is None]
+                    missing = [
+                        n
+                        for n, v in [("MA60", ma60_val), ("MA120", ma120_val)]
+                        if v is None
+                    ]
                     if missing:
-                        logging.debug(f"[{ticker}] 買點計算跳過：{', '.join(missing)} 資料不足")
+                        logging.debug(
+                            f"[{ticker}] 買點計算跳過：{', '.join(missing)} 資料不足"
+                        )
                 if entries:
                     suggested_bid_str = f"{entries['日常波段']:.2f} | {entries['技術回測']:.2f} | {entries['狙擊位']:.2f}"
                     daily_wave, tech_retest, sniper_pos = (
@@ -585,6 +616,51 @@ def run_advanced_analysis(df_res):
 
                 # 格式化 Alpha 勝率字串
                 alpha_win_str = f"{bat_avg:.1f}%" if not m_ret.empty else "0%"
+
+                # ── 回撤指標 (Risk Metrics) ──────────────────────────────────────────
+                drawdown_result = None
+                if len(t_df_clean) >= 2:
+                    price_hist = [
+                        {"date": str(idx.date()), "value": float(v)}
+                        for idx, v in zip(t_df_clean.index, t_df_clean["Close"])
+                        if pd.notnull(v) and float(v) > 0
+                    ]
+                    drawdown_result = calculateAssetDrawdown(price_hist)
+
+                # ── Holdability Score ─────────────────────────────────────────────────
+                # 公式: 0.35×Comfort + 0.25×SharpeNorm + 0.20×(1-PainRatio) + 0.20×Maturity
+                # Comfort:    High=1.0 / Medium=0.5 / Low=0.0
+                # SharpeNorm: clamp(Sharpe, 0, 2) / 2  → [0, 1]
+                # PainRatio:  已為 [0, 1]
+                # Maturity:   依歷史資料年數分級  ≥10y=1.0 / ≥5y=0.8 / ≥2y=0.6 / else=0.4
+                _comfort_map = {"High": 1.0, "Medium": 0.5, "Low": 0.0}
+                _comfort_num = _comfort_map.get(
+                    drawdown_result.comfortScore if drawdown_result else None, 0.5
+                )
+                _sharpe_norm = min(1.0, max(0.0, sharpe / 2.0))
+                _pain_num = drawdown_result.painRatio if drawdown_result else 0.5
+
+                _history_years = (
+                    (t_df_clean.index[-1] - t_df_clean.index[0]).days / 365.25
+                    if len(t_df_clean) >= 2
+                    else 0.0
+                )
+                if _history_years >= 10:
+                    _maturity_score = 1.0
+                elif _history_years >= 5:
+                    _maturity_score = 0.8
+                elif _history_years >= 2:
+                    _maturity_score = 0.6
+                else:
+                    _maturity_score = 0.4
+
+                holdabilityScore = round(
+                    0.35 * _comfort_num
+                    + 0.25 * _sharpe_norm
+                    + 0.20 * (1.0 - _pain_num)
+                    + 0.20 * _maturity_score,
+                    4,
+                )
 
                 full_diag_text, tags = generate_advanced_diagnosis(
                     bias=bias_numeric,
@@ -641,6 +717,22 @@ def run_advanced_analysis(df_res):
                         "tags": tags,
                         "ATV模型": entries.get("model", "-") if entries else "-",
                         "ATV趨勢": entries.get("regime", "-") if entries else "-",
+                        # ── 風險指標欄位 ──
+                        "maxDrawdownPct": drawdown_result.maxDrawdownPercent
+                        if drawdown_result
+                        else None,
+                        "currentDrawdownPct": drawdown_result.currentDrawdownPercent
+                        if drawdown_result
+                        else None,
+                        "painRatio": drawdown_result.painRatio
+                        if drawdown_result
+                        else None,
+                        "comfortScore": drawdown_result.comfortScore
+                        if drawdown_result
+                        else None,
+                        "holdabilityScore": holdabilityScore,
+                        "maturityScore": _maturity_score,
+                        "historyYears": round(_history_years, 1),
                     }
                 )
             except Exception as e:

@@ -64,10 +64,34 @@ def export_for_ai(df_res, adv_res=None):
             vol_ratio = row.get("量比", "-")
             diag = str(row.get("技術診斷", "-")).replace("\n", " ")
 
+            # 風險指標
+            mdd = row.get("maxDrawdownPct")
+            curr_dd = row.get("currentDrawdownPct")
+            pain = row.get("painRatio")
+            comfort = row.get("comfortScore", "-")
+            holdability = row.get("holdabilityScore")
+            if pd.notnull(mdd):
+                pain_pct = f"{pain * 100:.0f}%" if pd.notnull(pain) else "-"
+                hold_str = (
+                    f"{holdability * 100:.0f}%"
+                    if pd.notnull(holdability)
+                    else "-"
+                )
+                risk_line = (
+                    f"- **風險指標**: MDD {mdd:.1f}% | "
+                    f"目前回撤 {curr_dd:.1f}% | "
+                    f"Pain Ratio {pain_pct} | "
+                    f"舒適度 {comfort} | "
+                    f"持有力 {hold_str}"
+                )
+            else:
+                risk_line = None
+
             quant_info = (
                 f"- **基本面**: EPS {eps} | P/E {pe} | 殖利率 {yield_val} | PEG {peg}\n"
                 f"- **量化指標**: RS百分位 {row.get('RS 百分位', '-')} | 乖離率 {bias} | 量比 {vol_ratio} | RSI {row.get('RSI', 0):.1f} | 夏普值 {row.get('夏普值', '-')} | α勝率 {row.get('Alpha 勝率', '-')}\n"
-                f"- **掛單策略**: 日常 [{row.get('日常波段', '-')}] 回測 [{row.get('技術回測', '-')}] 狙擊 [{row.get('狙擊位', '-')}]\n"
+                + (f"{risk_line}\n" if risk_line else "")
+                + f"- **掛單策略**: 日常 [{row.get('日常波段', '-')}] 回測 [{row.get('技術回測', '-')}] 狙擊 [{row.get('狙擊位', '-')}]\n"
                 f"- **診斷標籤**: {' '.join(row['tags']) if isinstance(row.get('tags'), list) else '-'}\n"
                 f"- **AI 診斷建議**: {diag}"
             )

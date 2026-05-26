@@ -36,7 +36,7 @@ def render_price_chart(ticker):
 
         if selected_period and selected_period != st.session_state[period_key]:
             st.session_state[period_key] = selected_period
-            st.rerun() 
+            st.rerun()
 
         current_period = st.session_state[period_key]
 
@@ -268,113 +268,205 @@ def render_cost_component(row):
 
 
 def render_advanced_analysis_ui(res):
+    """
+    四層 Tab 決策 UI  ·  Decision → Risk → Quant → Fundamental
+    Hero 區塊使用 st.metric() 大字顯示，其餘格子使用 render_analysis_metrics_row()。
+    """
 
-    def get_anomaly_color(value, metric_type):
+    # ── 共用 color helpers ────────────────────────────────────────────────────
+    def _anomaly_color(value, metric_type):
         if value is None or str(value).strip() in ["-", ""]:
             return ""
-
         try:
             val = float(str(value).replace("%", "").replace(",", ""))
         except ValueError:
             return ""
-
-        thresholds = {
-            "yield": lambda x: x > 20.0,  # 20% 以上標紅
-            "vol_ratio": lambda x: x > 50,  # 量比過大標紅
-            "pe": lambda x: x > 500 or x < 0,  # PE 異常
-        }
-
         if metric_type == "bias":
-            if val > 15:
-                return "#FF4500"  # 橘紅色 (提醒技術面溢價)
-            elif val < -10:
-                return "#00FF00"  # 亮綠色 (跌深超賣折價)
-            elif abs(val) > 50:
-                return "#FF4B4B"  # 乖離過大標紅
-
-        if metric_type in thresholds and thresholds[metric_type](val):
-            return "#FF4B4B"  # 亮紅色
-
+            if val > 15:   return "#FF4500"
+            if val < -10:  return "#00FF00"
+            if abs(val) > 50: return "#FF4B4B"
+        if metric_type == "yield"    and val > 20.0:           return "#FF4B4B"
+        if metric_type == "vol_ratio" and val > 50:            return "#FF4B4B"
+        if metric_type == "pe"       and (val > 500 or val < 0): return "#FF4B4B"
         return ""
 
-    price_levels_dic = {
-        "股價": res["股價"],
-        "日常波段": res["日常波段"],
-        "技術回測": res["技術回測"],
-        "狙擊防守": res["狙擊位"],
-    }
-    ma_dic = {
-        "MA20": res["MA20"],
-        "MA60": res["MA60"],
-        "MA120": res["MA120"],
-        "MA250": res["MA250"],
-    }
+    def _dd_color(v):
+        if not isinstance(v, float): return ""
+        a = abs(v)
+        if a < 5:  return "#00C853"
+        if a < 15: return "#FF9800"
+        return "#FF4B4B"
 
-    fund_dic = {
-        "EPS": res.get("EPS", "-"),
-        "P/E": (f"{res['PE']:.1f}", get_anomaly_color(res["PE"], "pe")),
-        "殖利率": (
-            res.get("殖利率", "-"),
-            get_anomaly_color(res.get("殖利率", "-"), "yield"),
-        ),
-        "PEG": res.get("PEG", "-"),
-    }
+    def _pain_color(v):
+        if not isinstance(v, float): return ""
+        if v < 0.20: return "#00C853"
+        if v < 0.50: return "#FF9800"
+        return "#FF4B4B"
 
-    analyze_1_dic = {
-        "量比": (res["量比"], get_anomaly_color(res["量比"], "vol_ratio")),
-        "RS%": res["RS 百分位"],
-        "RSI": f"{res.get('RSI', 0):.1f}",
-        "Sharpe": res["夏普值"],
-    }
+    def _hold_color(v):
+        if not isinstance(v, float): return ""
+        if v >= 0.70: return "#00C853"
+        if v >= 0.40: return "#FF9800"
+        return "#FF4B4B"
 
-    analyze_2_dic = {
-        "α勝率": res["Alpha 勝率"],
-        "月度α": res["月度 Alpha"],
-        "Bias%": (
-            res["乖離率 (Bias)"],
-            get_anomaly_color(res["乖離率 (Bias)"], "bias"),
-        ),
-        "": "",
-    }
+    _comfort_colors = {"High": "#00C853", "Medium": "#FF9800", "Low": "#FF4B4B"}
 
-    # 使用自定義 DIV 代替 st.columns，移除縮排以避免 Markdown 誤解析
-    analysis_row_1 = render_analysis_metrics_row(price_levels_dic, "🎯 建議掛單位階")
+    def _stars(pct: int) -> str:
+        if pct >= 95: return "⭐⭐⭐⭐⭐"
+        if pct >= 80: return "⭐⭐⭐⭐"
+        if pct >= 65: return "⭐⭐⭐"
+        if pct >= 50: return "⭐⭐"
+        return "⭐"
 
-    analysis_row_2 = render_analysis_metrics_row(ma_dic, "📊 均線參考")
+    # ── 提取數值 ──────────────────────────────────────────────────────────────
+    _hold    = res.get("holdabilityScore")
+    _comfort = res.get("comfortScore") or "-"
+    _mdd_v   = res.get("maxDrawdownPct")
+    _curr_dd = res.get("currentDrawdownPct")
+    _pain    = res.get("painRatio")
 
-    analysis_row_3 = render_analysis_metrics_row(fund_dic, "📊 財務與核心指標")
+    hold_pct  = int(_hold * 100)   if isinstance(_hold,    float) else 0
+    pain_str  = f"{_pain * 100:.0f}%" if isinstance(_pain, float) else "-"
+    mdd_str   = f"{_mdd_v:.1f}%"    if isinstance(_mdd_v,  float) else "-"
+    curr_str  = f"{_curr_dd:.1f}%"  if isinstance(_curr_dd, float) else "-"
+    hold_str  = f"{hold_pct}%"
 
-    analysis_row_4 = render_analysis_metrics_row(analyze_1_dic)
-
-    analysis_row_5 = render_analysis_metrics_row(analyze_2_dic)
-
-    """合併後的進階量化分析渲染組件"""
-    if "tags" in res and res["tags"]:
-        tag_html = "".join(
-            [f'<span class="light_tags">{tag}</span>' for tag in res["tags"]]
-        )
-        st.markdown(
-            f"<div class='tag-report-row'>{tag_html}</div>", unsafe_allow_html=True
-        )
-        st.info(f"{res['技術診斷']}")
-
-    st.markdown(
-        f"""<div class="analysis-report-row">
-            <div class="analysis-report-col">
-            {analysis_row_1}
-            {analysis_row_2}
-            </div>
-            <div class="analysis-report-col">
-            {analysis_row_3}
-            {analysis_row_4}
-            {analysis_row_5}
-            </div>
-            </div>""",
-        unsafe_allow_html=True,
+    # ── Tabs ──────────────────────────────────────────────────────────────────
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        ["🎯 Decision", "⚠️ Risk", "📊 Quant", "📋 Fundamental", "📉 走勢圖"]
     )
 
-    # 渲染股價走勢圖
-    with st.expander("🔍 折線圖與均線", expanded=False):
+    # ════════════════════════════════════════════════════════════════
+    # Tab 1 · Decision
+    # ════════════════════════════════════════════════════════════════
+    with tab1:
+        # Hero：持有力大字 + 星等
+        col_hero, col_price = st.columns([1, 1])
+        with col_hero:
+            st.metric("🏆 持有力", hold_str)
+            st.markdown(
+                f"<div style='font-size:1.5rem;line-height:1;margin:-6px 0 8px 0;'>"
+                f"{_stars(hold_pct)}</div>",
+                unsafe_allow_html=True,
+            )
+            # 舒適度格子（單格）
+            comfort_row = render_analysis_metrics_row(
+                {"舒適度": (_comfort, _comfort_colors.get(_comfort, ""))}
+            )
+            st.markdown(comfort_row, unsafe_allow_html=True)
+
+        with col_price:
+            # 掛單位階格子
+            price_dic = {
+                "股價":   res.get("股價",    "-"),
+                "日常":   res.get("日常波段", "-"),
+                "回測":   res.get("技術回測", "-"),
+                "狙擊":   res.get("狙擊位",   "-"),
+            }
+            price_row = render_analysis_metrics_row(price_dic, "🎯 建議掛單")
+            st.markdown(price_row, unsafe_allow_html=True)
+
+        # 診斷標籤 + AI 建議
+        tags = res.get("tags")
+        if tags:
+            tag_html = "".join(
+                [f'<span class="light_tags">{t}</span>' for t in tags]
+            )
+            st.markdown(
+                f"<div class='tag-report-row'>{tag_html}</div>",
+                unsafe_allow_html=True,
+            )
+        diag = res.get("技術診斷")
+        if diag:
+            st.info(str(diag))
+
+
+    # ════════════════════════════════════════════════════════════════
+    # Tab 2 · Risk
+    # ════════════════════════════════════════════════════════════════
+    with tab2:
+        risk_row1 = render_analysis_metrics_row(
+            {
+                "MDD":      (mdd_str,  _dd_color(_mdd_v)),
+                "目前回撤": (curr_str, _dd_color(_curr_dd)),
+                "Pain Ratio": (pain_str, _pain_color(_pain)),
+                "舒適度":   (_comfort, _comfort_colors.get(_comfort, "")),
+            },
+            "⚠️ 風險指標",
+        )
+        risk_row2 = render_analysis_metrics_row(
+            {
+                "持有力":   (hold_str, _hold_color(_hold)),
+                "Sharpe":   res.get("夏普值",    "-"),
+                "Alpha 勝率": res.get("Alpha 勝率", "-"),
+                "月度 α":   res.get("月度 Alpha", "-"),
+            }
+        )
+        st.markdown(risk_row1 + risk_row2, unsafe_allow_html=True)
+
+    # ════════════════════════════════════════════════════════════════
+    # Tab 3 · Quant
+    # ════════════════════════════════════════════════════════════════
+    with tab3:
+        quant_row1 = render_analysis_metrics_row(
+            {
+                "RS%":   res.get("RS 百分位", "-"),
+                "RSI":   f"{res.get('RSI', 0):.1f}",
+                "Bias%": (
+                    res.get("乖離率 (Bias)", "-"),
+                    _anomaly_color(res.get("乖離率 (Bias)"), "bias"),
+                ),
+                "量比":  (
+                    res.get("量比", "-"),
+                    _anomaly_color(res.get("量比"), "vol_ratio"),
+                ),
+            },
+            "📊 量化分析",
+        )
+        ma_row = render_analysis_metrics_row(
+            {
+                "MA20":  res.get("MA20",  "-"),
+                "MA60":  res.get("MA60",  "-"),
+                "MA120": res.get("MA120", "-"),
+                "MA250": res.get("MA250", "-"),
+            },
+            "📈 均線參考",
+        )
+        st.markdown(quant_row1 + ma_row, unsafe_allow_html=True)
+
+    # ════════════════════════════════════════════════════════════════
+    # Tab 4 · Fundamental
+    # ════════════════════════════════════════════════════════════════
+    with tab4:
+        pe_v  = res.get("PE")
+        eps_v = res.get("EPS")
+        try:
+            pe_str = f"{float(pe_v):.1f}" if pe_v is not None else "-"
+        except (TypeError, ValueError):
+            pe_str = "-"
+        try:
+            eps_str = f"{float(eps_v):.2f}" if eps_v is not None else "-"
+        except (TypeError, ValueError):
+            eps_str = "-"
+
+        fund_row = render_analysis_metrics_row(
+            {
+                "EPS":   eps_str,
+                "P/E":   (pe_str,  _anomaly_color(pe_v,  "pe")),
+                "殖利率": (
+                    res.get("殖利率", "-"),
+                    _anomaly_color(res.get("殖利率"), "yield"),
+                ),
+                "PEG":   res.get("PEG", "-"),
+            },
+            "📋 基本面",
+        )
+        st.markdown(fund_row, unsafe_allow_html=True)
+
+    # ════════════════════════════════════════════════════════════════
+    # Tab 5 · 走勢圖
+    # ════════════════════════════════════════════════════════════════
+    with tab5:
         render_price_chart(res["代碼"])
 
 
