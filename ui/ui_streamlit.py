@@ -282,54 +282,73 @@ def render_advanced_analysis_ui(res):
         except ValueError:
             return ""
         if metric_type == "bias":
-            if val > 15:   return "#FF4500"
-            if val < -10:  return "#00FF00"
-            if abs(val) > 50: return "#FF4B4B"
-        if metric_type == "yield"    and val > 20.0:           return "#FF4B4B"
-        if metric_type == "vol_ratio" and val > 50:            return "#FF4B4B"
-        if metric_type == "pe"       and (val > 500 or val < 0): return "#FF4B4B"
+            if val > 15:
+                return "#FF4500"
+            if val < -10:
+                return "#00FF00"
+            if abs(val) > 50:
+                return "#FF4B4B"
+        if metric_type == "yield" and val > 20.0:
+            return "#FF4B4B"
+        if metric_type == "vol_ratio" and val > 50:
+            return "#FF4B4B"
+        if metric_type == "pe" and (val > 500 or val < 0):
+            return "#FF4B4B"
         return ""
 
     def _dd_color(v):
-        if not isinstance(v, float): return ""
+        if not isinstance(v, float):
+            return ""
         a = abs(v)
-        if a < 5:  return "#00C853"
-        if a < 15: return "#FF9800"
+        if a < 5:
+            return "#00C853"
+        if a < 15:
+            return "#FF9800"
         return "#FF4B4B"
 
     def _pain_color(v):
-        if not isinstance(v, float): return ""
-        if v < 0.20: return "#00C853"
-        if v < 0.50: return "#FF9800"
+        if not isinstance(v, float):
+            return ""
+        if v < 0.20:
+            return "#00C853"
+        if v < 0.50:
+            return "#FF9800"
         return "#FF4B4B"
 
     def _hold_color(v):
-        if not isinstance(v, float): return ""
-        if v >= 0.70: return "#00C853"
-        if v >= 0.40: return "#FF9800"
+        if not isinstance(v, float):
+            return ""
+        if v >= 0.70:
+            return "#00C853"
+        if v >= 0.40:
+            return "#FF9800"
         return "#FF4B4B"
 
     _comfort_colors = {"High": "#00C853", "Medium": "#FF9800", "Low": "#FF4B4B"}
 
     def _stars(pct: int) -> str:
-        if pct >= 95: return "⭐⭐⭐⭐⭐"
-        if pct >= 80: return "⭐⭐⭐⭐"
-        if pct >= 65: return "⭐⭐⭐"
-        if pct >= 50: return "⭐⭐"
+        if pct >= 95:
+            return "⭐⭐⭐⭐⭐"
+        if pct >= 80:
+            return "⭐⭐⭐⭐"
+        if pct >= 65:
+            return "⭐⭐⭐"
+        if pct >= 50:
+            return "⭐⭐"
         return "⭐"
 
     # ── 提取數值 ──────────────────────────────────────────────────────────────
-    _hold    = res.get("holdabilityScore")
+    _hold = res.get("holdabilityScore")
     _comfort = res.get("comfortScore") or "-"
-    _mdd_v   = res.get("maxDrawdownPct")
+    _mdd_v = res.get("maxDrawdownPct")
     _curr_dd = res.get("currentDrawdownPct")
-    _pain    = res.get("painRatio")
+    _pain = res.get("painRatio")
 
-    hold_pct  = int(_hold * 100)   if isinstance(_hold,    float) else 0
-    pain_str  = f"{_pain * 100:.0f}%" if isinstance(_pain, float) else "-"
-    mdd_str   = f"{_mdd_v:.1f}%"    if isinstance(_mdd_v,  float) else "-"
-    curr_str  = f"{_curr_dd:.1f}%"  if isinstance(_curr_dd, float) else "-"
-    hold_str  = f"{hold_pct}%"
+    hold_pct = int(_hold * 100) if isinstance(_hold, float) else 0
+    pain_str = f"{_pain * 100:.0f}%" if isinstance(_pain, float) else "-"
+    mdd_str = f"{_mdd_v:.1f}%" if isinstance(_mdd_v, float) else "-"
+    curr_str = f"{_curr_dd:.1f}%" if isinstance(_curr_dd, float) else "-"
+    hold_str = f"{hold_pct}%"
 
     # ── Tabs ──────────────────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4, tab5 = st.tabs(
@@ -340,38 +359,34 @@ def render_advanced_analysis_ui(res):
     # Tab 1 · Decision
     # ════════════════════════════════════════════════════════════════
     with tab1:
-        # Hero：持有力大字 + 星等
-        col_hero, col_price = st.columns([1, 1])
-        with col_hero:
-            st.metric("🏆 持有力", hold_str)
-            st.markdown(
-                f"<div style='font-size:1.5rem;line-height:1;margin:-6px 0 8px 0;'>"
-                f"{_stars(hold_pct)}</div>",
-                unsafe_allow_html=True,
-            )
-            # 舒適度格子（單格）
-            comfort_row = render_analysis_metrics_row(
-                {"舒適度": (_comfort, _comfort_colors.get(_comfort, ""))}
-            )
-            st.markdown(comfort_row, unsafe_allow_html=True)
-
-        with col_price:
-            # 掛單位階格子
-            price_dic = {
-                "股價":   res.get("股價",    "-"),
-                "日常":   res.get("日常波段", "-"),
-                "回測":   res.get("技術回測", "-"),
-                "狙擊":   res.get("狙擊位",   "-"),
+        # Hero：持有力 + 星等 + 舒適度，全部格子
+        hero_row = render_analysis_metrics_row(
+            {
+                "🏆 持有力": (
+                    f"{hold_str}"
+                    f"<span style='font-size:0.95rem;letter-spacing:1px;margin-left:6px;'>"
+                    f"{_stars(hold_pct)}</span>",
+                    _hold_color(_hold),
+                ),
+                "舒適度": (_comfort, _comfort_colors.get(_comfort, "")),
             }
-            price_row = render_analysis_metrics_row(price_dic, "🎯 建議掛單")
-            st.markdown(price_row, unsafe_allow_html=True)
+        )
+        st.markdown(hero_row, unsafe_allow_html=True)
+
+        # 掛單位階格子
+        price_dic = {
+            "股價": res.get("股價", "-"),
+            "日常": res.get("日常波段", "-"),
+            "回測": res.get("技術回測", "-"),
+            "狙擊": res.get("狙擊位", "-"),
+        }
+        price_row = render_analysis_metrics_row(price_dic, "🎯 建議掛單")
+        st.markdown(price_row, unsafe_allow_html=True)
 
         # 診斷標籤 + AI 建議
         tags = res.get("tags")
         if tags:
-            tag_html = "".join(
-                [f'<span class="light_tags">{t}</span>' for t in tags]
-            )
+            tag_html = "".join([f'<span class="light_tags">{t}</span>' for t in tags])
             st.markdown(
                 f"<div class='tag-report-row'>{tag_html}</div>",
                 unsafe_allow_html=True,
@@ -380,26 +395,25 @@ def render_advanced_analysis_ui(res):
         if diag:
             st.info(str(diag))
 
-
     # ════════════════════════════════════════════════════════════════
     # Tab 2 · Risk
     # ════════════════════════════════════════════════════════════════
     with tab2:
         risk_row1 = render_analysis_metrics_row(
             {
-                "MDD":      (mdd_str,  _dd_color(_mdd_v)),
+                "MDD": (mdd_str, _dd_color(_mdd_v)),
                 "目前回撤": (curr_str, _dd_color(_curr_dd)),
                 "Pain Ratio": (pain_str, _pain_color(_pain)),
-                "舒適度":   (_comfort, _comfort_colors.get(_comfort, "")),
+                "舒適度": (_comfort, _comfort_colors.get(_comfort, "")),
             },
             "⚠️ 風險指標",
         )
         risk_row2 = render_analysis_metrics_row(
             {
-                "持有力":   (hold_str, _hold_color(_hold)),
-                "Sharpe":   res.get("夏普值",    "-"),
+                "持有力": (hold_str, _hold_color(_hold)),
+                "Sharpe": res.get("夏普值", "-"),
                 "Alpha 勝率": res.get("Alpha 勝率", "-"),
-                "月度 α":   res.get("月度 Alpha", "-"),
+                "月度 α": res.get("月度 Alpha", "-"),
             }
         )
         st.markdown(risk_row1 + risk_row2, unsafe_allow_html=True)
@@ -410,13 +424,13 @@ def render_advanced_analysis_ui(res):
     with tab3:
         quant_row1 = render_analysis_metrics_row(
             {
-                "RS%":   res.get("RS 百分位", "-"),
-                "RSI":   f"{res.get('RSI', 0):.1f}",
+                "RS%": res.get("RS 百分位", "-"),
+                "RSI": f"{res.get('RSI', 0):.1f}",
                 "Bias%": (
                     res.get("乖離率 (Bias)", "-"),
                     _anomaly_color(res.get("乖離率 (Bias)"), "bias"),
                 ),
-                "量比":  (
+                "量比": (
                     res.get("量比", "-"),
                     _anomaly_color(res.get("量比"), "vol_ratio"),
                 ),
@@ -425,8 +439,8 @@ def render_advanced_analysis_ui(res):
         )
         ma_row = render_analysis_metrics_row(
             {
-                "MA20":  res.get("MA20",  "-"),
-                "MA60":  res.get("MA60",  "-"),
+                "MA20": res.get("MA20", "-"),
+                "MA60": res.get("MA60", "-"),
                 "MA120": res.get("MA120", "-"),
                 "MA250": res.get("MA250", "-"),
             },
@@ -438,26 +452,26 @@ def render_advanced_analysis_ui(res):
     # Tab 4 · Fundamental
     # ════════════════════════════════════════════════════════════════
     with tab4:
-        pe_v  = res.get("PE")
+        pe_v = res.get("PE")
         eps_v = res.get("EPS")
         try:
             pe_str = f"{float(pe_v):.1f}" if pe_v is not None else "-"
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             pe_str = "-"
         try:
             eps_str = f"{float(eps_v):.2f}" if eps_v is not None else "-"
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             eps_str = "-"
 
         fund_row = render_analysis_metrics_row(
             {
-                "EPS":   eps_str,
-                "P/E":   (pe_str,  _anomaly_color(pe_v,  "pe")),
+                "EPS": eps_str,
+                "P/E": (pe_str, _anomaly_color(pe_v, "pe")),
                 "殖利率": (
                     res.get("殖利率", "-"),
                     _anomaly_color(res.get("殖利率"), "yield"),
                 ),
-                "PEG":   res.get("PEG", "-"),
+                "PEG": res.get("PEG", "-"),
             },
             "📋 基本面",
         )
