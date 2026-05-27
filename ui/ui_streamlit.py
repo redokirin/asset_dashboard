@@ -352,7 +352,7 @@ def render_advanced_analysis_ui(res):
 
     # ── Tabs ──────────────────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4, tab5 = st.tabs(
-        ["🎯 Decision", "⚠️ Risk", "📊 Quant", "📋 Fundamental", "📉 走勢圖"]
+        ["🎯 Decision", "⚠️ Risk", "📊 Quant", "📋 FA", "📉 Charts"]
     )
 
     # ════════════════════════════════════════════════════════════════
