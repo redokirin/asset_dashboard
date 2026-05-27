@@ -34,15 +34,51 @@ class DrawdownResult:
     currentValue: float = 0.0  # 序列最新值
     comfortScore: str = "High"  # High / Medium / Low
 
+    @property
+    def max_drawdown_percent(self) -> float:
+        return self.maxDrawdownPercent
+
+    @property
+    def current_drawdown_percent(self) -> float:
+        return self.currentDrawdownPercent
+
+    @property
+    def pain_ratio(self) -> float:
+        return self.painRatio
+
+    @property
+    def peak_value(self) -> float:
+        return self.peakValue
+
+    @property
+    def trough_value(self) -> float:
+        return self.troughValue
+
+    @property
+    def peak_date(self) -> str:
+        return self.peakDate
+
+    @property
+    def trough_date(self) -> str:
+        return self.troughDate
+
+    @property
+    def current_value(self) -> float:
+        return self.currentValue
+
+    @property
+    def comfort_score(self) -> str:
+        return self.comfortScore
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 內部工具
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def _compute_comfort_score(maxDrawdownPercent: float) -> str:
+def _compute_comfort_score(max_drawdown_percent: float) -> str:
     """根據 maxDrawdownPercent 計算舒適度等級"""
-    abs_mdd = abs(maxDrawdownPercent)
+    abs_mdd = abs(max_drawdown_percent)
     if abs_mdd < 10:
         return "High"
     elif abs_mdd < 20:
@@ -56,86 +92,93 @@ def _compute_comfort_score(maxDrawdownPercent: float) -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def calculateDrawdown(
-    valueHistory: list[dict],
+def calculate_drawdown(
+    value_history: list[dict],
 ) -> Optional[DrawdownResult]:
     """
     核心回撤計算（O(n) 單次迴圈）。
 
     Args:
-        valueHistory: 按時間升冪排列的歷史序列，格式如：
+        value_history: 按時間升冪排列的歷史序列，格式如：
             [{"date": "2026-01-01", "value": 100.0}, ...]
 
     Returns:
         DrawdownResult，或在空資料 / 全部無效時回傳 None。
     """
-    if not valueHistory:
-        logger.debug("calculateDrawdown: 空資料，回傳 None")
+    if not value_history:
+        logger.debug("calculate_drawdown: 空資料，回傳 None")
         return None
 
     # 過濾 value <= 0 的異常資料
     valid_history = [
         item
-        for item in valueHistory
+        for item in value_history
         if isinstance(item.get("value"), (int, float)) and item["value"] > 0
     ]
 
     if not valid_history:
-        logger.debug("calculateDrawdown: 無有效資料 (value <= 0)，回傳 None")
+        logger.debug("calculate_drawdown: 無有效資料 (value <= 0)，回傳 None")
         return None
 
     # ── O(n) 單次迴圈計算 MDD ──────────────────────────────────────────────────
     first = valid_history[0]
-    rollingPeakValue: float = first["value"]
-    rollingPeakDate: str = first["date"]
+    rolling_peak_value: float = first["value"]
+    rolling_peak_date: str = first["date"]
 
-    maxDrawdown: float = 0.0  # 最大回撤 (負值)
-    mddPeakValue: float = first["value"]
-    mddPeakDate: str = first["date"]
-    mddTroughValue: float = first["value"]
-    mddTroughDate: str = first["date"]
+    max_drawdown: float = 0.0  # 最大回撤 (負值)
+    mdd_peak_value: float = first["value"]
+    mdd_peak_date: str = first["date"]
+    mdd_trough_value: float = first["value"]
+    mdd_trough_date: str = first["date"]
 
     for item in valid_history:
         val: float = item["value"]
         date: str = item["date"]
 
-        if val >= rollingPeakValue:
+        if val >= rolling_peak_value:
             # 創新高：更新 rolling peak
-            rollingPeakValue = val
-            rollingPeakDate = date
+            rolling_peak_value = val
+            rolling_peak_date = date
         else:
             # 回撤：檢查是否突破歷史最深回撤
-            drawdown = (val - rollingPeakValue) / rollingPeakValue * 100
-            if drawdown < maxDrawdown:
-                maxDrawdown = drawdown
-                mddPeakValue = rollingPeakValue
-                mddPeakDate = rollingPeakDate
-                mddTroughValue = val
-                mddTroughDate = date
+            drawdown = (val - rolling_peak_value) / rolling_peak_value * 100
+            if drawdown < max_drawdown:
+                max_drawdown = drawdown
+                mdd_peak_value = rolling_peak_value
+                mdd_peak_date = rolling_peak_date
+                mdd_trough_value = val
+                mdd_trough_date = date
 
     # ── 目前值與 Current Drawdown ─────────────────────────────────────────────
-    currentValue: float = valid_history[-1]["value"]
-    currentDrawdown = (currentValue - rollingPeakValue) / rollingPeakValue * 100
+    current_value: float = valid_history[-1]["value"]
+    current_drawdown = (current_value - rolling_peak_value) / rolling_peak_value * 100
 
     # ── Pain Ratio：clamp 在 0~1 ──────────────────────────────────────────────
-    if maxDrawdown == 0.0:
-        painRatio = 0.0
+    if max_drawdown == 0.0:
+        pain_ratio = 0.0
     else:
-        painRatio = min(1.0, max(0.0, abs(currentDrawdown) / abs(maxDrawdown)))
+        pain_ratio = min(
+            1.0, max(0.0, abs(current_drawdown) / abs(max_drawdown))
+        )
 
-    comfortScore = _compute_comfort_score(maxDrawdown)
+    comfort_score = _compute_comfort_score(max_drawdown)
 
     return DrawdownResult(
-        maxDrawdownPercent=round(maxDrawdown, 4),
-        currentDrawdownPercent=round(currentDrawdown, 4),
-        painRatio=round(painRatio, 4),
-        peakValue=mddPeakValue,
-        troughValue=mddTroughValue,
-        peakDate=mddPeakDate,
-        troughDate=mddTroughDate,
-        currentValue=currentValue,
-        comfortScore=comfortScore,
+        maxDrawdownPercent=round(max_drawdown, 4),
+        currentDrawdownPercent=round(current_drawdown, 4),
+        painRatio=round(pain_ratio, 4),
+        peakValue=mdd_peak_value,
+        troughValue=mdd_trough_value,
+        peakDate=mdd_peak_date,
+        troughDate=mdd_trough_date,
+        currentValue=current_value,
+        comfortScore=comfort_score,
     )
+
+
+def calculateDrawdown(valueHistory: list[dict]) -> Optional[DrawdownResult]:
+    """Compatibility wrapper for the legacy camelCase API."""
+    return calculate_drawdown(valueHistory)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -143,35 +186,47 @@ def calculateDrawdown(
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def calculateAssetDrawdown(
-    priceHistory: list[dict],
+def calculate_asset_drawdown(
+    price_history: list[dict],
 ) -> Optional[DrawdownResult]:
     """
     計算單一資產的回撤指標。
 
     Args:
-        priceHistory: [{"date": "YYYY-MM-DD", "value": float}, ...]
+        price_history: [{"date": "YYYY-MM-DD", "value": float}, ...]
 
     Returns:
         DrawdownResult 或 None
     """
-    return calculateDrawdown(priceHistory)
+    return calculate_drawdown(price_history)
 
 
-def calculatePortfolioDrawdown(
-    portfolioValueHistory: list[dict],
+def calculateAssetDrawdown(priceHistory: list[dict]) -> Optional[DrawdownResult]:
+    """Compatibility wrapper for the legacy camelCase API."""
+    return calculate_asset_drawdown(priceHistory)
+
+
+def calculate_portfolio_drawdown(
+    portfolio_value_history: list[dict],
 ) -> Optional[DrawdownResult]:
     """
     計算投資組合整體的回撤指標。
 
     Args:
-        portfolioValueHistory: 組合總市值的時間序列
+        portfolio_value_history: 組合總市值的時間序列
             [{"date": "YYYY-MM-DD", "value": float}, ...]
 
     Returns:
         DrawdownResult 或 None
     """
-    return calculateDrawdown(portfolioValueHistory)
+    return calculate_drawdown(portfolio_value_history)
+
+
+def calculatePortfolioDrawdown(
+    portfolioValueHistory: list[dict],
+) -> Optional[DrawdownResult]:
+    """Compatibility wrapper for the legacy camelCase API."""
+    return calculate_portfolio_drawdown(portfolioValueHistory)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -179,7 +234,7 @@ def calculatePortfolioDrawdown(
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def formatDrawdownForReport(
+def format_drawdown_for_report(
     ticker: str,
     name: str,
     result: Optional[DrawdownResult],
@@ -206,3 +261,12 @@ def formatDrawdownForReport(
         f"- Pain Ratio: {pain_pct}\n"
         f"- 舒適度: {result.comfortScore}\n"
     )
+
+
+def formatDrawdownForReport(
+    ticker: str,
+    name: str,
+    result: Optional[DrawdownResult],
+) -> str:
+    """Compatibility wrapper for the legacy camelCase API."""
+    return format_drawdown_for_report(ticker, name, result)

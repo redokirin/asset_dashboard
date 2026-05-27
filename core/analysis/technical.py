@@ -2,7 +2,7 @@
 import pandas as pd
 import numpy as np
 
-from core.risk import calculateAssetDrawdown
+from core.risk import calculate_asset_drawdown
 
 
 def to_float_scalar(value) -> float | None:
@@ -129,7 +129,7 @@ def calculate_drawdown_metrics(t_df_clean, sharpe):
             for idx, value in zip(t_df_clean.index, t_df_clean["Close"])
             if pd.notnull(value) and float(value) > 0
         ]
-        drawdown_result = calculateAssetDrawdown(price_history)
+        drawdown_result = calculate_asset_drawdown(price_history)
 
     comfort_map = {"High": 1.0, "Medium": 0.5, "Low": 0.0}
     comfort_num = comfort_map.get(
