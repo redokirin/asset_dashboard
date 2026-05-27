@@ -257,6 +257,152 @@ def _to_float_scalar(value) -> float | None:
     return float(value) if pd.notnull(value) else None
 
 
+def _get_clean_col(df, ticker_name, col_name):
+    try:
+        if isinstance(df.columns, pd.MultiIndex):
+            if ticker_name in df.columns.get_level_values(0):
+                s = df.xs(ticker_name, axis=1, level=0)[col_name]
+            else:
+                s = df[col_name]
+        else:
+            s = df[col_name]
+        if isinstance(s.index, pd.MultiIndex):
+            s.index = s.index.get_level_values(0)
+        s.index = pd.to_datetime(s.index)
+        if hasattr(s.index, "tz") and s.index.tz is not None:
+            s.index = s.index.tz_localize(None)
+        if isinstance(s, pd.DataFrame):
+            s = s.iloc[:, 0]
+        return s
+    except Exception:
+        return pd.Series()
+
+
+def _extract_ticker_frame(t_data_all_raw, ticker):
+    if isinstance(t_data_all_raw.columns, pd.MultiIndex):
+        if ticker not in t_data_all_raw.columns.get_level_values(0):
+            return None
+        t_df = t_data_all_raw.xs(ticker, axis=1, level=0).copy()
+    else:
+        t_df = t_data_all_raw.copy()
+
+    if isinstance(t_df.columns, pd.MultiIndex):
+        t_df.columns = t_df.columns.get_level_values(-1)
+    t_df.index = pd.to_datetime(t_df.index)
+    if hasattr(t_df.index, "tz") and t_df.index.tz is not None:
+        t_df.index = t_df.index.tz_localize(None)
+
+    if "Close" not in t_df.columns:
+        return None
+
+    t_df_clean = t_df[t_df["Close"].notnull()].copy()
+    return t_df_clean if not t_df_clean.empty else None
+
+
+def _calculate_moving_averages(t_df_clean):
+    ma_values = {
+        "ma5": None,
+        "ma20": None,
+        "ma60": None,
+        "ma120": None,
+        "ma250": None,
+    }
+    ma_labels = {"ma20": "-", "ma60": "數據不足", "ma120": "數據不足", "ma250": "-"}
+
+    windows = [
+        (5, "ma5"),
+        (20, "ma20"),
+        (60, "ma60"),
+        (120, "ma120"),
+        (250, "ma250"),
+    ]
+    for window, key in windows:
+        if len(t_df_clean) >= window:
+            ma_values[key] = _to_float_scalar(
+                t_df_clean["Close"].rolling(window).mean().iloc[-1]
+            )
+
+    for key in ["ma20", "ma60", "ma120", "ma250"]:
+        if ma_values[key] is not None:
+            ma_labels[key] = f"{ma_values[key]:.2f}"
+
+    return ma_values, ma_labels
+
+
+def _calculate_rsi(t_df_clean):
+    if len(t_df_clean) < 15:
+        return 0.0
+
+    delta = t_df_clean["Close"].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rs_val = gain / loss
+        rsi_series = 100 - (100 / (1 + rs_val))
+    return float(rsi_series.iloc[-1]) if not pd.isna(rsi_series.iloc[-1]) else 0.0
+
+
+def _calculate_alpha_metrics(comb):
+    m_price = comb.resample("ME").last()
+    m_ret = pd.DataFrame(
+        {
+            "target_ret": (m_price["p"] * m_price["r"]).pct_change(),
+            "bench_ret": m_price["b"].pct_change(),
+        }
+    ).dropna()
+
+    if m_ret.empty or len(m_ret) < 2:
+        return m_ret, 0.0, 0.0, 0.0
+
+    m_ret["Alpha"] = m_ret["target_ret"] - m_ret["bench_ret"]
+    avg_alpha = m_ret["Alpha"].mean() * 100
+    bat_avg = (m_ret["Alpha"] > 0).mean() * 100
+    std_r = m_ret["target_ret"].std()
+    sharpe = (m_ret["target_ret"].mean() / std_r * (12**0.5)) if std_r != 0 else 0.0
+    return m_ret, bat_avg, avg_alpha, sharpe
+
+
+def _calculate_drawdown_metrics(t_df_clean, sharpe):
+    drawdown_result = None
+    if len(t_df_clean) >= 2:
+        price_hist = [
+            {"date": str(idx.date()), "value": float(v)}
+            for idx, v in zip(t_df_clean.index, t_df_clean["Close"])
+            if pd.notnull(v) and float(v) > 0
+        ]
+        drawdown_result = calculateAssetDrawdown(price_hist)
+
+    comfort_map = {"High": 1.0, "Medium": 0.5, "Low": 0.0}
+    comfort_num = comfort_map.get(
+        drawdown_result.comfortScore if drawdown_result else None, 0.5
+    )
+    sharpe_norm = min(1.0, max(0.0, sharpe / 2.0))
+    pain_num = drawdown_result.painRatio if drawdown_result else 0.5
+
+    history_years = (
+        (t_df_clean.index[-1] - t_df_clean.index[0]).days / 365.25
+        if len(t_df_clean) >= 2
+        else 0.0
+    )
+    if history_years >= 10:
+        maturity_score = 1.0
+    elif history_years >= 5:
+        maturity_score = 0.8
+    elif history_years >= 2:
+        maturity_score = 0.6
+    else:
+        maturity_score = 0.4
+
+    holdability_score = round(
+        0.35 * comfort_num
+        + 0.25 * sharpe_norm
+        + 0.20 * (1.0 - pain_num)
+        + 0.20 * maturity_score,
+        4,
+    )
+    return drawdown_result, holdability_score, maturity_score, round(history_years, 1)
+
+
 def run_advanced_analysis(df_res):
     """
     合併執行 RS (相對強度) 與 Alpha (穩定性) 進階分析。
@@ -286,27 +432,6 @@ def run_advanced_analysis(df_res):
         logging.info(f"正在批次抓取智能基準數據: {all_bench_tickers}")
         common_raw = fetch_common_data(tuple(all_bench_tickers), period="2y")
 
-        def get_clean_col(df, ticker_name, col_name):
-            try:
-                if isinstance(df.columns, pd.MultiIndex):
-                    if ticker_name in df.columns.get_level_values(0):
-                        s = df.xs(ticker_name, axis=1, level=0)[col_name]
-                    else:
-                        # 處理單一 Ticker 時可能是原本的欄位
-                        s = df[col_name]
-                else:
-                    s = df[col_name]
-                if isinstance(s.index, pd.MultiIndex):
-                    s.index = s.index.get_level_values(0)
-                s.index = pd.to_datetime(s.index)
-                if hasattr(s.index, "tz") and s.index.tz is not None:
-                    s.index = s.index.tz_localize(None)
-                if isinstance(s, pd.DataFrame):
-                    s = s.iloc[:, 0]
-                return s
-            except:
-                return pd.Series()
-
         t_data_all_raw = fetch_historical_data(
             tuple(active_tickers), period="2y", group_by="ticker"
         )
@@ -319,7 +444,7 @@ def run_advanced_analysis(df_res):
 
                 # 動態取得當前標的對應的基準
                 current_benchmark = get_smart_benchmark(ticker)
-                b_series_final = get_clean_col(common_raw, current_benchmark, "Close")
+                b_series_final = _get_clean_col(common_raw, current_benchmark, "Close")
 
                 if b_series_final.empty:
                     logging.warning(
@@ -328,36 +453,9 @@ def run_advanced_analysis(df_res):
                     continue
 
                 # 取得標的數據 (t_df)
-                if isinstance(t_data_all_raw.columns, pd.MultiIndex):
-                    if ticker in t_data_all_raw.columns.get_level_values(0):
-                        t_df = t_data_all_raw.xs(ticker, axis=1, level=0).copy()
-                    else:
-                        continue
-                else:
-                    t_df = t_data_all_raw.copy()
-
-                if isinstance(t_df.columns, pd.MultiIndex):
-                    t_df.columns = t_df.columns.get_level_values(-1)
-                t_df.index = pd.to_datetime(t_df.index)
-                if hasattr(t_df.index, "tz") and t_df.index.tz is not None:
-                    t_df.index = t_df.index.tz_localize(None)
-
-                if "Close" not in t_df.columns:
+                t_df_clean = _extract_ticker_frame(t_data_all_raw, ticker)
+                if t_df_clean is None:
                     continue
-
-                t_df_clean = t_df[t_df["Close"].notnull()].copy()
-                if len(t_df_clean) == 0:
-                    continue
-
-                ma20_str, ma60_str, ma120_str = "-", "數據不足", "數據不足"
-                bias_str, bias_numeric = "-", float("nan")
-                ma20_val, ma60_val, ma120_val, ma250_val, ma250_str = (
-                    None,
-                    None,
-                    None,
-                    None,
-                    "-",
-                )
 
                 price_val = _to_float_scalar(t_df_clean["Close"].iloc[-1])
                 prev_close = (
@@ -368,43 +466,21 @@ def run_advanced_analysis(df_res):
 
                 day_change_pct = ((price_val - prev_close) / prev_close) * 100
 
-                # --- 關鍵更新：在計算均價前加入 MA5 濾網判斷 ---
-                ma5_val = None
-                if len(t_df_clean) >= 5:
-                    ma5_val = _to_float_scalar(
-                        t_df_clean["Close"].rolling(5).mean().iloc[-1]
-                    )
-                # ------------------------------------------------
+                ma_values, ma_labels = _calculate_moving_averages(t_df_clean)
+                ma5_val = ma_values["ma5"]
+                ma20_val = ma_values["ma20"]
+                ma60_val = ma_values["ma60"]
+                ma120_val = ma_values["ma120"]
+                ma250_val = ma_values["ma250"]
+                ma20_str = ma_labels["ma20"]
+                ma60_str = ma_labels["ma60"]
+                ma120_str = ma_labels["ma120"]
+                ma250_str = ma_labels["ma250"]
 
-                if len(t_df_clean) >= 20:
-                    ma20_val = _to_float_scalar(
-                        t_df_clean["Close"].rolling(20).mean().iloc[-1]
-                    )
-                    if ma20_val is not None and ma20_val > 0:
-                        ma20_str = f"{ma20_val:.2f}"
-                        bias_numeric = ((price_val - ma20_val) / ma20_val) * 100
-                        bias_str = f"{bias_numeric:.2f}%"
-
-                if len(t_df_clean) >= 60:
-                    ma60_val = _to_float_scalar(
-                        t_df_clean["Close"].rolling(60).mean().iloc[-1]
-                    )
-                    if ma60_val is not None:
-                        ma60_str = f"{ma60_val:.2f}"
-
-                if len(t_df_clean) >= 120:
-                    ma120_val = _to_float_scalar(
-                        t_df_clean["Close"].rolling(120).mean().iloc[-1]
-                    )
-                    if ma120_val is not None:
-                        ma120_str = f"{ma120_val:.2f}"
-
-                if len(t_df_clean) >= 250:
-                    ma250_val = _to_float_scalar(
-                        t_df_clean["Close"].rolling(250).mean().iloc[-1]
-                    )
-                    if ma250_val is not None:
-                        ma250_str = f"{ma250_val:.2f}"
+                bias_str, bias_numeric = "-", float("nan")
+                if ma20_val is not None and ma20_val > 0:
+                    bias_numeric = ((price_val - ma20_val) / ma20_val) * 100
+                    bias_str = f"{bias_numeric:.2f}%"
 
                 p_series = t_df_clean["Close"].copy()
                 if isinstance(p_series, pd.DataFrame):
@@ -419,9 +495,9 @@ def run_advanced_analysis(df_res):
                     else:
                         ccy = "USD"
                 if ccy == "JPY":
-                    r_series = get_clean_col(common_raw, "JPYTWD=X", "Close")
+                    r_series = _get_clean_col(common_raw, "JPYTWD=X", "Close")
                 elif ccy == "USD":
-                    r_series = get_clean_col(common_raw, "USDTWD=X", "Close")
+                    r_series = _get_clean_col(common_raw, "USDTWD=X", "Close")
                 else:
                     r_series = 1.0
 
@@ -442,19 +518,7 @@ def run_advanced_analysis(df_res):
                 curr_rs = float(rs_series.iloc[-1])
                 pct = stats.percentileofscore(rs_series.values.flatten(), curr_rs)
 
-                rsi_val = 0.0
-                if len(t_df_clean) >= 15:
-                    delta = t_df_clean["Close"].diff()
-                    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-                    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-                    with np.errstate(divide="ignore", invalid="ignore"):
-                        rs_val = gain / loss
-                        rsi_series = 100 - (100 / (1 + rs_val))
-                    rsi_val = (
-                        float(rsi_series.iloc[-1])
-                        if not pd.isna(rsi_series.iloc[-1])
-                        else 0.0
-                    )
+                rsi_val = _calculate_rsi(t_df_clean)
 
                 rs_p10 = float(np.percentile(rs_series.values.flatten(), 10))
                 rs_p10_price = (rs_p10 * comb["b"].iloc[-1]) / comb["r"].iloc[-1]
@@ -507,26 +571,7 @@ def run_advanced_analysis(df_res):
                         f"{entries['狙擊位']:.2f}",
                     )
 
-                m_price = comb.resample("ME").last()
-                m_ret = pd.DataFrame(
-                    {
-                        "target_ret": (m_price["p"] * m_price["r"]).pct_change(),
-                        "bench_ret": m_price["b"].pct_change(),
-                    }
-                ).dropna()
-                bat_avg, avg_alpha, sharpe = 0.0, 0.0, 0.0
-                if not m_ret.empty and len(m_ret) >= 2:
-                    m_ret["Alpha"] = m_ret["target_ret"] - m_ret["bench_ret"]
-                    avg_alpha, bat_avg = (
-                        m_ret["Alpha"].mean() * 100,
-                        (m_ret["Alpha"] > 0).mean() * 100,
-                    )
-                    std_r = m_ret["target_ret"].std()
-                    sharpe = (
-                        (m_ret["target_ret"].mean() / std_r * (12**0.5))
-                        if std_r != 0
-                        else 0.0
-                    )
+                m_ret, bat_avg, avg_alpha, sharpe = _calculate_alpha_metrics(comb)
 
                 fundamentals = get_ticker_fundamental_info(ticker)
                 vol_ratio = (
@@ -538,50 +583,12 @@ def run_advanced_analysis(df_res):
                 # 格式化 Alpha 勝率字串
                 alpha_win_str = f"{bat_avg:.1f}%" if not m_ret.empty else "0%"
 
-                # ── 回撤指標 (Risk Metrics) ──────────────────────────────────────────
-                drawdown_result = None
-                if len(t_df_clean) >= 2:
-                    price_hist = [
-                        {"date": str(idx.date()), "value": float(v)}
-                        for idx, v in zip(t_df_clean.index, t_df_clean["Close"])
-                        if pd.notnull(v) and float(v) > 0
-                    ]
-                    drawdown_result = calculateAssetDrawdown(price_hist)
-
-                # ── Holdability Score ─────────────────────────────────────────────────
-                # 公式: 0.35×Comfort + 0.25×SharpeNorm + 0.20×(1-PainRatio) + 0.20×Maturity
-                # Comfort:    High=1.0 / Medium=0.5 / Low=0.0
-                # SharpeNorm: clamp(Sharpe, 0, 2) / 2  → [0, 1]
-                # PainRatio:  已為 [0, 1]
-                # Maturity:   依歷史資料年數分級  ≥10y=1.0 / ≥5y=0.8 / ≥2y=0.6 / else=0.4
-                _comfort_map = {"High": 1.0, "Medium": 0.5, "Low": 0.0}
-                _comfort_num = _comfort_map.get(
-                    drawdown_result.comfortScore if drawdown_result else None, 0.5
-                )
-                _sharpe_norm = min(1.0, max(0.0, sharpe / 2.0))
-                _pain_num = drawdown_result.painRatio if drawdown_result else 0.5
-
-                _history_years = (
-                    (t_df_clean.index[-1] - t_df_clean.index[0]).days / 365.25
-                    if len(t_df_clean) >= 2
-                    else 0.0
-                )
-                if _history_years >= 10:
-                    _maturity_score = 1.0
-                elif _history_years >= 5:
-                    _maturity_score = 0.8
-                elif _history_years >= 2:
-                    _maturity_score = 0.6
-                else:
-                    _maturity_score = 0.4
-
-                holdabilityScore = round(
-                    0.35 * _comfort_num
-                    + 0.25 * _sharpe_norm
-                    + 0.20 * (1.0 - _pain_num)
-                    + 0.20 * _maturity_score,
-                    4,
-                )
+                (
+                    drawdown_result,
+                    holdability_score,
+                    _maturity_score,
+                    _history_years,
+                ) = _calculate_drawdown_metrics(t_df_clean, sharpe)
 
                 full_diag_text, tags = generate_advanced_diagnosis(
                     bias=bias_numeric,
@@ -651,7 +658,7 @@ def run_advanced_analysis(df_res):
                         "comfortScore": drawdown_result.comfortScore
                         if drawdown_result
                         else None,
-                        "holdabilityScore": holdabilityScore,
+                        "holdabilityScore": holdability_score,
                         "maturityScore": _maturity_score,
                         "historyYears": round(_history_years, 1),
                     }

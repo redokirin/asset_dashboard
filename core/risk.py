@@ -5,6 +5,7 @@ risk.py - 風險指標計算模組
 提供 MDD (最大回撤)、Current Drawdown、Pain Ratio 與 Comfort Score。
 所有函式均以 O(n) 單次迴圈完成主要計算，支援 type hints。
 """
+
 from __future__ import annotations
 
 import logging
@@ -18,23 +19,26 @@ logger = logging.getLogger(__name__)
 # 資料結構
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class DrawdownResult:
     """回撤分析結果"""
-    maxDrawdownPercent: float = 0.0        # 歷史最大回撤 (負值, e.g. -18.18)
-    currentDrawdownPercent: float = 0.0   # 目前回撤，相對歷史高點 (負值)
-    painRatio: float = 0.0                # 目前痛感 / 歷史最大痛感，0~1
-    peakValue: float = 0.0                # MDD 期間的高點值
-    troughValue: float = 0.0             # MDD 期間的低點值
-    peakDate: str = ""                    # MDD 高點日期
-    troughDate: str = ""                  # MDD 低點日期
-    currentValue: float = 0.0            # 序列最新值
-    comfortScore: str = "High"           # High / Medium / Low
+
+    maxDrawdownPercent: float = 0.0  # 歷史最大回撤 (負值, e.g. -18.18)
+    currentDrawdownPercent: float = 0.0  # 目前回撤，相對歷史高點 (負值)
+    painRatio: float = 0.0  # 目前痛感 / 歷史最大痛感，0~1
+    peakValue: float = 0.0  # MDD 期間的高點值
+    troughValue: float = 0.0  # MDD 期間的低點值
+    peakDate: str = ""  # MDD 高點日期
+    troughDate: str = ""  # MDD 低點日期
+    currentValue: float = 0.0  # 序列最新值
+    comfortScore: str = "High"  # High / Medium / Low
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 內部工具
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def _compute_comfort_score(maxDrawdownPercent: float) -> str:
     """根據 maxDrawdownPercent 計算舒適度等級"""
@@ -50,6 +54,7 @@ def _compute_comfort_score(maxDrawdownPercent: float) -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 # 核心計算
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def calculateDrawdown(
     valueHistory: list[dict],
@@ -70,7 +75,8 @@ def calculateDrawdown(
 
     # 過濾 value <= 0 的異常資料
     valid_history = [
-        item for item in valueHistory
+        item
+        for item in valueHistory
         if isinstance(item.get("value"), (int, float)) and item["value"] > 0
     ]
 
@@ -83,7 +89,7 @@ def calculateDrawdown(
     rollingPeakValue: float = first["value"]
     rollingPeakDate: str = first["date"]
 
-    maxDrawdown: float = 0.0          # 最大回撤 (負值)
+    maxDrawdown: float = 0.0  # 最大回撤 (負值)
     mddPeakValue: float = first["value"]
     mddPeakDate: str = first["date"]
     mddTroughValue: float = first["value"]
@@ -136,6 +142,7 @@ def calculateDrawdown(
 # 公開介面（語義化包裝）
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def calculateAssetDrawdown(
     priceHistory: list[dict],
 ) -> Optional[DrawdownResult]:
@@ -170,6 +177,7 @@ def calculatePortfolioDrawdown(
 # ──────────────────────────────────────────────────────────────────────────────
 # Report 輸出工具
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def formatDrawdownForReport(
     ticker: str,
