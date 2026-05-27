@@ -74,4 +74,12 @@ analyze/report_20260522171214.md
 docs
 analyze
 tests
+!tests/
+tests/*
+!tests/test_analysis_quant.py
+!tests/test_buy_levels.py
 refactor
+!refactor/
+refactor/*
+!refactor/project_refactor_plan.md
+ai_advice.txt
