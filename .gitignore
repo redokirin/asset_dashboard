@@ -80,6 +80,7 @@ tests/*
 !tests/test_buy_levels.py
 !tests/test_columns.py
 !tests/test_data_loader.py
+!tests/test_calculators.py
 refactor
 !refactor/
 refactor/*
