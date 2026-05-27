@@ -26,6 +26,49 @@ SPREADSHEET_ID = get_secret(
 )
 
 
+def _parse_numeric(value) -> float:
+    if value == "":
+        return 0.0
+    try:
+        return float(str(value).replace(",", ""))
+    except Exception:
+        return 0.0
+
+
+def _parse_bool(value) -> bool:
+    return str(value).upper() in ["TRUE", "1", "YES", "T"]
+
+
+def _clean_asset_rows(rows, key_candidates, numeric_cols, bool_cols):
+    cleaned_assets = {}
+    numeric_set = {col.lower() for col in numeric_cols}
+    bool_set = {col.lower() for col in bool_cols}
+
+    for raw_row in rows:
+        row = dict(raw_row)
+        key = ""
+        for candidate in key_candidates:
+            key = str(row.pop(candidate, "")).strip()
+            if key:
+                break
+        if not key:
+            continue
+
+        cleaned_row = {"id": key}
+        for column_name, value in row.items():
+            low_key = column_name.lower()
+            if low_key in numeric_set:
+                cleaned_row[low_key] = _parse_numeric(value)
+            elif low_key in bool_set:
+                cleaned_row[low_key] = _parse_bool(value)
+            elif value != "":
+                cleaned_row[low_key] = value
+
+        cleaned_assets[key] = cleaned_row
+
+    return cleaned_assets
+
+
 def get_config_from_gsheets():
     """從 Google Sheets 讀取資產配置，支援本地檔案與 Streamlit Secrets"""
     creds = None
@@ -87,30 +130,12 @@ def get_config_from_gsheets():
         try:
             ws_funds = sh.worksheet("funds")
             funds_data = ws_funds.get_all_records()
-            funds_dict = {}
-            numeric_cols = ["nav", "units", "cost", "shares"]
-            bool_cols = ["enabled", "get_value"]
-            for row in funds_data:
-                key = str(row.pop("Key", "") or row.pop("key", "")).strip()
-                if key:
-                    cleaned_row = {}
-                    cleaned_row["id"] = key
-                    for k, v in row.items():
-                        low_k = k.lower()
-                        if low_k in numeric_cols:
-                            try:
-                                cleaned_row[low_k] = (
-                                    float(str(v).replace(",", "")) if v != "" else 0.0
-                                )
-                            except:
-                                cleaned_row[low_k] = 0.0
-                        elif low_k in bool_cols:
-                            val_str = str(v).upper()
-                            cleaned_row[low_k] = val_str in ["TRUE", "1", "YES", "T"]
-                        elif v != "":
-                            cleaned_row[low_k] = v
-                    funds_dict[key] = cleaned_row
-            config["funds"] = funds_dict
+            config["funds"] = _clean_asset_rows(
+                funds_data,
+                key_candidates=["Key", "key"],
+                numeric_cols=["nav", "units", "cost", "shares"],
+                bool_cols=["enabled", "get_value"],
+            )
         except Exception as e:
             logging.error(f"讀取 funds 分頁失敗: {e}")
 
@@ -118,30 +143,12 @@ def get_config_from_gsheets():
         try:
             ws_etfs = sh.worksheet("etfs")
             etfs_data = ws_etfs.get_all_records()
-            etfs_dict = {}
-            numeric_cols = ["shares", "cost", "discount", "units"]
-            bool_cols = ["enabled", "get_value"]
-            for row in etfs_data:
-                ticker_key = str(row.pop("Ticker", "") or row.pop("ticker", "")).strip()
-                if ticker_key:
-                    cleaned_row = {}
-                    cleaned_row["id"] = ticker_key
-                    for k, v in row.items():
-                        low_k = k.lower()
-                        if low_k in numeric_cols:
-                            try:
-                                cleaned_row[low_k] = (
-                                    float(str(v).replace(",", "")) if v != "" else 0.0
-                                )
-                            except:
-                                cleaned_row[low_k] = 0.0
-                        elif low_k in bool_cols:
-                            val_str = str(v).upper()
-                            cleaned_row[low_k] = val_str in ["TRUE", "1", "YES", "T"]
-                        elif v != "":
-                            cleaned_row[low_k] = v
-                    etfs_dict[ticker_key] = cleaned_row
-            config["etfs"] = etfs_dict
+            config["etfs"] = _clean_asset_rows(
+                etfs_data,
+                key_candidates=["Ticker", "ticker"],
+                numeric_cols=["shares", "cost", "discount", "units"],
+                bool_cols=["enabled", "get_value"],
+            )
         except Exception as e:
             logging.error(f"讀取 etfs 分頁失敗: {e}")
 
@@ -149,30 +156,12 @@ def get_config_from_gsheets():
         try:
             ws_stocks = sh.worksheet("stocks")
             stocks_data = ws_stocks.get_all_records()
-            stocks_dict = {}
-            numeric_cols = ["shares", "cost", "discount", "units"]
-            bool_cols = ["enabled", "get_value"]
-            for row in stocks_data:
-                ticker_key = str(row.pop("Ticker", "") or row.pop("ticker", "")).strip()
-                if ticker_key:
-                    cleaned_row = {}
-                    cleaned_row["id"] = ticker_key
-                    for k, v in row.items():
-                        low_k = k.lower()
-                        if low_k in numeric_cols:
-                            try:
-                                cleaned_row[low_k] = (
-                                    float(str(v).replace(",", "")) if v != "" else 0.0
-                                )
-                            except:
-                                cleaned_row[low_k] = 0.0
-                        elif low_k in bool_cols:
-                            val_str = str(v).upper()
-                            cleaned_row[low_k] = val_str in ["TRUE", "1", "YES", "T"]
-                        elif v != "":
-                            cleaned_row[low_k] = v
-                    stocks_dict[ticker_key] = cleaned_row
-            config["stocks"] = stocks_dict
+            config["stocks"] = _clean_asset_rows(
+                stocks_data,
+                key_candidates=["Ticker", "ticker"],
+                numeric_cols=["shares", "cost", "discount", "units"],
+                bool_cols=["enabled", "get_value"],
+            )
         except Exception as e:
             logging.error(f"讀取 stocks 分頁失敗: {e}")
 
