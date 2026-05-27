@@ -167,7 +167,7 @@ def get_buy_levels(
     """
     Returns buy levels dict or None when MA data is insufficient.
     Output keys: 日常波段, 技術回測, 狙擊位, model, regime, trend_center, atr20.
-    The first three keys are backward-compatible with calculate_buffered_entries_v2().
+    The first three keys preserve the existing dashboard output contract.
     """
     if any(
         v is None or (isinstance(v, float) and np.isnan(v))

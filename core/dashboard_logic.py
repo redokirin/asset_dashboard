@@ -15,7 +15,6 @@ from core.fetchers import (
 )
 from core.calculators import calculate_tick_price, exchange_rate, calculate_assets_data
 from core.analysis_quant import (
-    calculate_buffered_entries, 
     generate_advanced_diagnosis, 
     run_advanced_analysis
 )
