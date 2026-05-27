@@ -81,6 +81,7 @@ tests/*
 !tests/test_columns.py
 !tests/test_data_loader.py
 !tests/test_calculators.py
+!tests/test_fetchers.py
 refactor
 !refactor/
 refactor/*
