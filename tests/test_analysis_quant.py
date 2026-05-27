@@ -3,6 +3,18 @@ import numpy as np
 import pandas as pd
 
 from core import analysis_quant
+from core.columns import (
+    COL_ASSET_TYPE,
+    COL_COMFORT_SCORE,
+    COL_CURRENCY,
+    COL_HISTORY_YEARS,
+    COL_HOLDABILITY_SCORE,
+    COL_MARKET_VALUE,
+    COL_MATURITY_SCORE,
+    COL_NAME,
+    COL_PRICE,
+    COL_TICKER,
+)
 
 
 def _price_frame(length=300):
@@ -74,12 +86,12 @@ def test_run_advanced_analysis_preserves_ui_output_contract(monkeypatch):
     asset_df = pd.DataFrame(
         [
             {
-                "代碼": ticker,
-                "名稱": "Vanguard S&P 500 ETF",
-                "類型": "ETF",
-                "幣別": "USD",
-                "股價": 0.0,
-                "市值": 0,
+                COL_TICKER: ticker,
+                COL_NAME: "Vanguard S&P 500 ETF",
+                COL_ASSET_TYPE: "ETF",
+                COL_CURRENCY: "USD",
+                COL_PRICE: 0.0,
+                COL_MARKET_VALUE: 0,
                 "_get_value": True,
             }
         ]
@@ -126,8 +138,12 @@ def test_run_advanced_analysis_preserves_ui_output_contract(monkeypatch):
 
     assert len(result) == 1
     row = result.iloc[0]
-    for key in ["holdabilityScore", "comfortScore", "maturityScore", "historyYears"]:
+    for key in [
+        COL_HOLDABILITY_SCORE,
+        COL_COMFORT_SCORE,
+        COL_MATURITY_SCORE,
+        COL_HISTORY_YEARS,
+    ]:
         assert key in result.columns
         assert key in row
-    assert isinstance(row["holdabilityScore"], float)
-
+    assert isinstance(row[COL_HOLDABILITY_SCORE], float)

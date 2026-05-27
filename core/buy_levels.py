@@ -7,6 +7,8 @@ from typing import Literal, Optional
 import numpy as np
 import pandas as pd
 
+from core.columns import COL_DAILY_LEVEL, COL_PULLBACK_LEVEL, COL_SNIPER_LEVEL, COL_TICKER
+
 MarketModel = Literal["ATV_US", "ATV_JP", "ATV_TW"]
 Regime = Literal["bull", "neutral", "bear"]
 
@@ -133,7 +135,7 @@ def select_atv_model(asset: dict) -> MarketModel:
         return asset["atv_model"]
 
     market = str(asset.get("市場") or asset.get("market") or "")
-    ticker = str(asset.get("代碼") or asset.get("id") or "").upper()
+    ticker = str(asset.get(COL_TICKER) or asset.get("id") or "").upper()
 
     # US ETFs cross-listed on TSE must be caught before the .T check
     if ticker.endswith(".T") and any(p in ticker for p in _US_ON_TSE):
@@ -224,9 +226,9 @@ def get_buy_levels(
     sniper = min(sniper, pullback * (1 - g.min_gap_pct))
 
     return {
-        "日常波段": round(daily, 2),
-        "技術回測": round(pullback, 2),
-        "狙擊位": round(sniper, 2),
+        COL_DAILY_LEVEL: round(daily, 2),
+        COL_PULLBACK_LEVEL: round(pullback, 2),
+        COL_SNIPER_LEVEL: round(sniper, 2),
         "model": model_name,
         "regime": regime,
         "trend_center": round(trend_center, 2),

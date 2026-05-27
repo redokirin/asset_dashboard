@@ -78,6 +78,7 @@ tests
 tests/*
 !tests/test_analysis_quant.py
 !tests/test_buy_levels.py
+!tests/test_columns.py
 refactor
 !refactor/
 refactor/*

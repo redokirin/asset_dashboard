@@ -1,6 +1,27 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
 
+from core.columns import (
+    COL_ASSET_TYPE,
+    COL_AVG_COST,
+    COL_CHANGE,
+    COL_COMFORT_SCORE,
+    COL_COST,
+    COL_DAILY_LEVEL,
+    COL_HOLDABILITY_SCORE,
+    COL_MARKET_VALUE,
+    COL_NAME,
+    COL_PRICE,
+    COL_PROFIT_LOSS,
+    COL_PULLBACK_LEVEL,
+    COL_RETURN_PCT,
+    COL_SNIPER_LEVEL,
+    COL_TECH_DIAGNOSIS,
+    COL_TICKER,
+    COL_UNITS,
+    COL_WEIGHT,
+)
+
 
 def export_for_ai(df_res, adv_res=None):
     """
@@ -11,8 +32,8 @@ def export_for_ai(df_res, adv_res=None):
     report.append(f"> 🕒 製表時間: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}\n")
 
     # --- 1. 整體組合摘要 ---
-    total_val = df_res["市值"].sum()
-    total_pl = df_res["損益"].sum()
+    total_val = df_res[COL_MARKET_VALUE].sum()
+    total_pl = df_res[COL_PROFIT_LOSS].sum()
     invested_capital = total_val - total_pl
     total_roi = (total_pl / invested_capital * 100) if invested_capital != 0 else 0
 
@@ -28,31 +49,31 @@ def export_for_ai(df_res, adv_res=None):
     work_df = df_res.copy()
     if adv_res is not None and not adv_res.empty:
         # 以代碼為 key 合併 (確保 adv_res 有代碼欄位)
-        if "代碼" in adv_res.columns:
+        if COL_TICKER in adv_res.columns:
             # 移除 adv_res 中與 work_df 重複的非 key 欄位 (除了代碼)
             cols_to_use = adv_res.columns.difference(
-                work_df.columns.difference(["代碼"])
+                work_df.columns.difference([COL_TICKER])
             )
-            work_df = pd.merge(work_df, adv_res[cols_to_use], on="代碼", how="left")
+            work_df = pd.merge(work_df, adv_res[cols_to_use], on=COL_TICKER, how="left")
 
     for _, row in work_df.iterrows():
-        ticker = row["代碼"]
-        name = row["名稱"]
-        asset_type = row.get("類型", "個股")
+        ticker = row[COL_TICKER]
+        name = row[COL_NAME]
+        asset_type = row.get(COL_ASSET_TYPE, "個股")
 
         # 基礎狀況
-        change_val = row.get("漲跌", 0)
+        change_val = row.get(COL_CHANGE, 0)
         change_str = f"{change_val:+.2f}" if pd.notnull(change_val) else "0.00"
 
         base_info = (
             f"### [{ticker}] {name} ({asset_type})\n"
-            f"- **資產現況**: 類型 {asset_type}, 股價 [{row.get('股價', 0):,.2f}] ({change_str}), 報酬率 {row.get('報酬率', 0):.2f}%, 佔比 {row.get('佔比', 0):.1f}%\n"
-            f"- **持倉明細**: 單位 {row.get('單位數', 0):,.2f}, 平均成本 {row.get('平均成本', 0):.2f}, 總成本 ${row.get('成本', 0):,.0f}"
+            f"- **資產現況**: 類型 {asset_type}, 股價 [{row.get(COL_PRICE, 0):,.2f}] ({change_str}), 報酬率 {row.get(COL_RETURN_PCT, 0):.2f}%, 佔比 {row.get(COL_WEIGHT, 0):.1f}%\n"
+            f"- **持倉明細**: 單位 {row.get(COL_UNITS, 0):,.2f}, 平均成本 {row.get(COL_AVG_COST, 0):.2f}, 總成本 ${row.get(COL_COST, 0):,.0f}"
         )
         report.append(base_info)
 
         # 進階量化數據 (若存在)
-        if "技術診斷" in row and pd.notnull(row["技術診斷"]):
+        if COL_TECH_DIAGNOSIS in row and pd.notnull(row[COL_TECH_DIAGNOSIS]):
             # 處理基本面指標
             eps = row.get("EPS", "-")
             pe = row.get("PE", "-")
@@ -62,14 +83,14 @@ def export_for_ai(df_res, adv_res=None):
             # 處理量化指標
             bias = row.get("乖離率 (Bias)", "-")
             vol_ratio = row.get("量比", "-")
-            diag = str(row.get("技術診斷", "-")).replace("\n", " ")
+            diag = str(row.get(COL_TECH_DIAGNOSIS, "-")).replace("\n", " ")
 
             # 風險指標
             mdd = row.get("maxDrawdownPct")
             curr_dd = row.get("currentDrawdownPct")
             pain = row.get("painRatio")
-            comfort = row.get("comfortScore", "-")
-            holdability = row.get("holdabilityScore")
+            comfort = row.get(COL_COMFORT_SCORE, "-")
+            holdability = row.get(COL_HOLDABILITY_SCORE)
             if pd.notnull(mdd):
                 pain_pct = f"{pain * 100:.0f}%" if pd.notnull(pain) else "-"
                 hold_str = (
@@ -91,7 +112,7 @@ def export_for_ai(df_res, adv_res=None):
                 f"- **基本面**: EPS {eps} | P/E {pe} | 殖利率 {yield_val} | PEG {peg}\n"
                 f"- **量化指標**: RS百分位 {row.get('RS 百分位', '-')} | 乖離率 {bias} | 量比 {vol_ratio} | RSI {row.get('RSI', 0):.1f} | 夏普值 {row.get('夏普值', '-')} | α勝率 {row.get('Alpha 勝率', '-')}\n"
                 + (f"{risk_line}\n" if risk_line else "")
-                + f"- **掛單策略**: 日常 [{row.get('日常波段', '-')}] 回測 [{row.get('技術回測', '-')}] 狙擊 [{row.get('狙擊位', '-')}]\n"
+                + f"- **掛單策略**: 日常 [{row.get(COL_DAILY_LEVEL, '-')}] 回測 [{row.get(COL_PULLBACK_LEVEL, '-')}] 狙擊 [{row.get(COL_SNIPER_LEVEL, '-')}]\n"
                 f"- **診斷標籤**: {' '.join(row['tags']) if isinstance(row.get('tags'), list) else '-'}\n"
                 f"- **AI 診斷建議**: {diag}"
             )

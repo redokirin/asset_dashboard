@@ -2,6 +2,26 @@
 import math
 import logging
 import pandas as pd
+from core.columns import (
+    COL_ASSET_TYPE,
+    COL_AVG_COST,
+    COL_BUY_LEVELS,
+    COL_CHANGE,
+    COL_COST,
+    COL_CURRENCY,
+    COL_GET_VALUE,
+    COL_MARKET,
+    COL_MARKET_VALUE,
+    COL_NAME,
+    COL_PRICE,
+    COL_PROFIT_LOSS,
+    COL_RETURN_PCT,
+    COL_TICKER,
+    COL_UNITS,
+    COL_UPDATED_AT,
+    COL_VALUE,
+    COL_WEIGHT,
+)
 from core.data_loader import get_assets
 from core.fetchers import fetch_historical_data
 
@@ -25,10 +45,10 @@ def calculate_tick_price(target_price, market_type):
 def exchange_rate(radar):
     """從雷達數據中提取匯率"""
     jpy_rate = next(
-        (item["數值"] for item in radar if item["代碼"] == "JPYTWD=X"), None
+        (item[COL_VALUE] for item in radar if item[COL_TICKER] == "JPYTWD=X"), None
     )
     usd_rate = next(
-        (item["數值"] for item in radar if item["代碼"] == "USDTWD=X"), None
+        (item[COL_VALUE] for item in radar if item[COL_TICKER] == "USDTWD=X"), None
     )
 
     if jpy_rate is None:
@@ -68,21 +88,21 @@ def calculate_assets_data(exchange_rates):
         pl_val = val_twd - cost_twd
 
         return {
-            "市場": asset["market"],
-            "類型": category,
-            "名稱": asset["name"],
-            "代碼": asset["id"],
-            "幣別": asset["ccy"],
-            "單位數": units,
-            "平均成本": avg_cost,
-            "漲跌": change_val,
-            "股價": current_price,
-            "更新時間": update_time or "",
-            "成本": round(cost_twd),
-            "市值": round(val_twd),
-            "損益": round(pl_val),
-            "報酬率": (pl_val / cost_twd * 100) if cost_twd != 0 else 0,
-            "_get_value": asset.get("get_value", True),
+            COL_MARKET: asset["market"],
+            COL_ASSET_TYPE: category,
+            COL_NAME: asset["name"],
+            COL_TICKER: asset["id"],
+            COL_CURRENCY: asset["ccy"],
+            COL_UNITS: units,
+            COL_AVG_COST: avg_cost,
+            COL_CHANGE: change_val,
+            COL_PRICE: current_price,
+            COL_UPDATED_AT: update_time or "",
+            COL_COST: round(cost_twd),
+            COL_MARKET_VALUE: round(val_twd),
+            COL_PROFIT_LOSS: round(pl_val),
+            COL_RETURN_PCT: (pl_val / cost_twd * 100) if cost_twd != 0 else 0,
+            COL_GET_VALUE: asset.get("get_value", True),
         }
 
     # 分開處理基金與 ETF 的價格抓取
@@ -181,29 +201,32 @@ def calculate_assets_data(exchange_rates):
     df = pd.DataFrame(results)
     if df.empty:
         columns = [
-            "市場",
-            "類型",
-            "名稱",
-            "代碼",
-            "幣別",
-            "單位數",
-            "平均成本",
-            "漲跌",
-            "股價",
-            "更新時間",
-            "建議掛單",
-            "成本",
-            "市值",
-            "損益",
-            "報酬率",
-            "佔比",
+            COL_MARKET,
+            COL_ASSET_TYPE,
+            COL_NAME,
+            COL_TICKER,
+            COL_CURRENCY,
+            COL_UNITS,
+            COL_AVG_COST,
+            COL_CHANGE,
+            COL_PRICE,
+            COL_UPDATED_AT,
+            COL_BUY_LEVELS,
+            COL_COST,
+            COL_MARKET_VALUE,
+            COL_PROFIT_LOSS,
+            COL_RETURN_PCT,
+            COL_WEIGHT,
         ]
         return pd.DataFrame(columns=columns), {}
 
-    total_val = df["市值"].sum()
-    df["佔比"] = df["市值"] / total_val * 100
-    market_sum = df.groupby("市場")["市值"].sum()
+    total_val = df[COL_MARKET_VALUE].sum()
+    df[COL_WEIGHT] = df[COL_MARKET_VALUE] / total_val * 100
+    market_sum = df.groupby(COL_MARKET)[COL_MARKET_VALUE].sum()
     market_share = pd.DataFrame(
-        {"市值": market_sum, "佔比": (market_sum / total_val * 100).round(1)}
+        {
+            COL_MARKET_VALUE: market_sum,
+            COL_WEIGHT: (market_sum / total_val * 100).round(1),
+        }
     ).to_dict(orient="index")
     return df, market_share

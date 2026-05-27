@@ -9,6 +9,23 @@ from core.fetchers import (
     get_ticker_fundamental_info,
 )
 from core.buy_levels import MarketData, get_buy_levels, compute_atr20
+from core.columns import (
+    COL_ASSET_TYPE,
+    COL_BUY_LEVELS,
+    COL_COMFORT_SCORE,
+    COL_CURRENCY,
+    COL_DAILY_LEVEL,
+    COL_GET_VALUE,
+    COL_HISTORY_YEARS,
+    COL_HOLDABILITY_SCORE,
+    COL_MATURITY_SCORE,
+    COL_NAME,
+    COL_PRICE,
+    COL_PULLBACK_LEVEL,
+    COL_SNIPER_LEVEL,
+    COL_TECH_DIAGNOSIS,
+    COL_TICKER,
+)
 from core.risk import calculateAssetDrawdown
 
 
@@ -417,12 +434,12 @@ def run_advanced_analysis(df_res):
         return pd.DataFrame()
 
     # 只過濾出需要抓取現價的標的
-    if "_get_value" in df_res.columns:
-        df_to_analyze = df_res[df_res["_get_value"] == True]
+    if COL_GET_VALUE in df_res.columns:
+        df_to_analyze = df_res[df_res[COL_GET_VALUE] == True]
     else:
         df_to_analyze = df_res
 
-    active_tickers = df_to_analyze["代碼"].tolist()
+    active_tickers = df_to_analyze[COL_TICKER].tolist()
 
     results = []
     try:
@@ -439,8 +456,8 @@ def run_advanced_analysis(df_res):
         for ticker in active_tickers:
             try:
                 # 獲取該標的的原始數據行以取得其類型
-                row_data = df_to_analyze[df_to_analyze["代碼"] == ticker].iloc[0]
-                asset_type = row_data.get("類型", "個股")
+                row_data = df_to_analyze[df_to_analyze[COL_TICKER] == ticker].iloc[0]
+                asset_type = row_data.get(COL_ASSET_TYPE, "個股")
 
                 # 動態取得當前標的對應的基準
                 current_benchmark = get_smart_benchmark(ticker)
@@ -486,7 +503,7 @@ def run_advanced_analysis(df_res):
                 if isinstance(p_series, pd.DataFrame):
                     p_series = p_series.iloc[:, 0]
 
-                ccy = str(row_data.get("幣別", "")).strip().upper()
+                ccy = str(row_data.get(COL_CURRENCY, "")).strip().upper()
                 if ccy not in {"TWD", "USD", "JPY"}:
                     if ticker.endswith(".T"):
                         ccy = "JPY"
@@ -612,15 +629,15 @@ def run_advanced_analysis(df_res):
 
                 results.append(
                     {
-                        "代碼": ticker,
-                        "名稱": fundamentals.get("name", ticker),
-                        "股價": f"{price_val:.2f}",
+                        COL_TICKER: ticker,
+                        COL_NAME: fundamentals.get("name", ticker),
+                        COL_PRICE: f"{price_val:.2f}",
                         "乖離率 (Bias)": bias_str,
-                        "技術診斷": full_diag_text,
-                        "建議掛單": suggested_bid_str,
-                        "日常波段": daily_wave,
-                        "技術回測": tech_retest,
-                        "狙擊位": sniper_pos,
+                        COL_TECH_DIAGNOSIS: full_diag_text,
+                        COL_BUY_LEVELS: suggested_bid_str,
+                        COL_DAILY_LEVEL: daily_wave,
+                        COL_PULLBACK_LEVEL: tech_retest,
+                        COL_SNIPER_LEVEL: sniper_pos,
                         "MA20": ma20_str,
                         "MA60": ma60_str,
                         "MA120": ma120_str,
@@ -655,12 +672,12 @@ def run_advanced_analysis(df_res):
                         "painRatio": drawdown_result.painRatio
                         if drawdown_result
                         else None,
-                        "comfortScore": drawdown_result.comfortScore
+                        COL_COMFORT_SCORE: drawdown_result.comfortScore
                         if drawdown_result
                         else None,
-                        "holdabilityScore": holdability_score,
-                        "maturityScore": _maturity_score,
-                        "historyYears": round(_history_years, 1),
+                        COL_HOLDABILITY_SCORE: holdability_score,
+                        COL_MATURITY_SCORE: _maturity_score,
+                        COL_HISTORY_YEARS: round(_history_years, 1),
                     }
                 )
             except Exception as e:

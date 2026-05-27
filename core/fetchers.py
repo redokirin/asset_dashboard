@@ -4,6 +4,7 @@ import pandas as pd
 import logging
 import requests_cache
 from functools import lru_cache
+from core.columns import COL_CHANGE_PCT, COL_NAME, COL_TICKER, COL_VALUE
 from core.data_loader import get_radar_tickers
 
 # 設定 10 分鐘 (600 秒) 的 Requests 快取，減輕 API 負擔並加速執行
@@ -278,7 +279,12 @@ def get_market_radar_data():
                 else 0.0
             )
             data.append(
-                {"代碼": ticker, "名稱": name, "數值": last_price, "漲跌幅": change_pct}
+                {
+                    COL_TICKER: ticker,
+                    COL_NAME: name,
+                    COL_VALUE: last_price,
+                    COL_CHANGE_PCT: change_pct,
+                }
             )
         except Exception as e:
             logging.warning(f"無法獲取雷達數據 [{ticker}]: {e}")

@@ -10,6 +10,7 @@ from core.buy_levels import (
     get_buy_levels,
     select_atv_model,
 )
+from core.columns import COL_DAILY_LEVEL, COL_PULLBACK_LEVEL, COL_SNIPER_LEVEL
 
 
 def test_compute_atr20_uses_true_range():
@@ -51,8 +52,9 @@ def test_get_buy_levels_returns_ordered_contract_fields():
     assert result["trend_center"] == 98.6
     assert result["atr20"] == 4.0
 
-    level_keys = list(result.keys())[:3]
-    daily, pullback, sniper = (result[key] for key in level_keys)
+    daily = result[COL_DAILY_LEVEL]
+    pullback = result[COL_PULLBACK_LEVEL]
+    sniper = result[COL_SNIPER_LEVEL]
     assert daily > pullback > sniper
 
 
@@ -63,4 +65,3 @@ def test_get_buy_levels_returns_none_when_required_data_missing():
     )
 
     assert result is None
-
