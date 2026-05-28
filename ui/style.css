@@ -312,7 +312,7 @@ div[data-testid="stMetricDelta"] > div {
 	justify-content: space-between;
 	align-items: baseline;
 	width: 100%;
-	margin-bottom: 0.8rem;
+	/* margin-bottom: 0.8rem; */
 }
 
 .inline-metric-details {

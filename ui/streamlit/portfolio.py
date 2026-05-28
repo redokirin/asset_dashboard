@@ -35,7 +35,7 @@ def render_profit_and_loss_component(df):
                 roi = (total_pl / total_cost * 100) if total_cost != 0 else 0
 
                 st.markdown(
-                    f"""<div class='inline-metric-label'>💰 帳戶總損益</div>
+                    f"""<div class='inline-metric-label'>💰 投資資產</div>
                         <div class='total-pl-wrapper'>
                             <div class='inline-metric-row'>
                                 <span class='inline-metric-value'>${df["市值"].sum():,}</span>
@@ -79,7 +79,7 @@ def render_liquidity_component(df):
         return
 
     with st.container(border=True):
-        render_title_component("資產水位")
+        # render_title_component("資產水位")
         bar_palettes = [
             ("#4f8cff", "#f5c542"),
             ("#00a878", "#ff8a3d"),
@@ -101,7 +101,7 @@ def render_liquidity_component(df):
 
             st.markdown(
                 f"""
-                <div style="margin-top:5px;">
+                <div style="padding-left: 0.5rem;padding-right: 0.5rem;">
                     <div class="asset-price-main" style="margin-bottom:4px;">{ccy}</div>
                     <div style="display:flex; height:16px; width:100%; overflow:hidden; border-radius:6px; background:rgba(255,255,255,0.08);">
                         <div title="投資資產 {ccy_investment_pct:.1f}%" style="width:{ccy_investment_pct:.4f}%; background:{investment_color};"></div>
