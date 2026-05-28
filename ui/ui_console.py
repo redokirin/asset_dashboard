@@ -75,21 +75,26 @@ def show_console_rich(
         if total_value:
             console.print("[bold cyan]--- 資產水位 ---[/bold cyan]")
             liquidity_table = Table(box=box.SIMPLE_HEAD, show_header=True)
-            liquidity_table.add_column("分類", style="cyan")
-            liquidity_table.add_column("金額", justify="right")
-            liquidity_table.add_column("佔比", justify="right")
-            investment_value = investment_df["市值"].sum()
-            cash_value = cash_df["市值"].sum()
-            liquidity_table.add_row(
-                "投資資產",
-                f"${investment_value:,.0f}",
-                f"{investment_value / total_value * 100:.1f}%",
-            )
-            liquidity_table.add_row(
-                "現金部位",
-                f"${cash_value:,.0f}",
-                f"{cash_value / total_value * 100:.1f}%",
-            )
+            liquidity_table.add_column("幣別", style="cyan")
+            liquidity_table.add_column("投資資產", justify="right")
+            liquidity_table.add_column("現金部位", justify="right")
+            liquidity_table.add_column("投資佔比", justify="right")
+            liquidity_table.add_column("現金佔比", justify="right")
+            for ccy in sorted(df["幣別"].dropna().astype(str).unique()):
+                ccy_df = df[df["幣別"].astype(str) == ccy]
+                ccy_cash_mask = _cash_mask(ccy_df)
+                ccy_total = ccy_df["市值"].sum()
+                if ccy_total == 0:
+                    continue
+                investment_value = ccy_df[~ccy_cash_mask]["市值"].sum()
+                cash_value = ccy_df[ccy_cash_mask]["市值"].sum()
+                liquidity_table.add_row(
+                    ccy,
+                    f"${investment_value:,.0f}",
+                    f"${cash_value:,.0f}",
+                    f"{investment_value / ccy_total * 100:.1f}%",
+                    f"{cash_value / ccy_total * 100:.1f}%",
+                )
             console.print(liquidity_table)
 
         if show_detail and not cash_df.empty:

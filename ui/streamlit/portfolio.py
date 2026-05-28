@@ -27,7 +27,7 @@ def render_profit_and_loss_component(df):
     investment_df = df[~cash_mask]
 
     with st.container(border=True):
-        col_total, col_market = st.columns([0.5, 0.5])
+        col_market, col_total = st.columns([0.5, 0.5])
         with col_total:
             with st.container():
                 total_pl = investment_df["損益"].sum()
@@ -78,35 +78,56 @@ def render_liquidity_component(df):
     if total_value == 0:
         return
 
-    investment_value = investment_df["市值"].sum()
-    cash_value = cash_df["市值"].sum()
-    investment_pct = investment_value / total_value * 100
-    cash_pct = cash_value / total_value * 100
-
     with st.container(border=True):
         render_title_component("資產水位")
-        st.markdown(
-            f"""
-            <div style="display:flex; height:18px; width:100%; overflow:hidden; border-radius:6px; background:rgba(255,255,255,0.08);">
-                <div title="投資資產 {investment_pct:.1f}%" style="width:{investment_pct:.4f}%; background:#4f8cff;"></div>
-                <div title="現金部位 {cash_pct:.1f}%" style="width:{cash_pct:.4f}%; background:#f5c542;"></div>
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
-                <div>
-                    <div class="asset-value-label">投資資產 {investment_pct:.1f}%</div>
-                    <div class="asset-price-main">${investment_value:,.0f}</div>
+        bar_palettes = [
+            ("#4f8cff", "#f5c542"),
+            ("#00a878", "#ff8a3d"),
+            ("#8b5cf6", "#f472b6"),
+            ("#14b8a6", "#eab308"),
+        ]
+        for idx, ccy in enumerate(sorted(df["幣別"].dropna().astype(str).unique())):
+            investment_color, cash_color = bar_palettes[idx % len(bar_palettes)]
+            ccy_df = df[df["幣別"].astype(str) == ccy]
+            ccy_cash_mask = _cash_mask(ccy_df)
+            ccy_total = ccy_df["市值"].sum()
+            if ccy_total == 0:
+                continue
+
+            ccy_investment_value = ccy_df[~ccy_cash_mask]["市值"].sum()
+            ccy_cash_value = ccy_df[ccy_cash_mask]["市值"].sum()
+            ccy_investment_pct = ccy_investment_value / ccy_total * 100
+            ccy_cash_pct = ccy_cash_value / ccy_total * 100
+
+            st.markdown(
+                f"""
+                <div style="margin-top:5px;">
+                    <div class="asset-price-main" style="margin-bottom:4px;">{ccy}</div>
+                    <div style="display:flex; height:16px; width:100%; overflow:hidden; border-radius:6px; background:rgba(255,255,255,0.08);">
+                        <div title="投資資產 {ccy_investment_pct:.1f}%" style="width:{ccy_investment_pct:.4f}%; background:{investment_color};"></div>
+                        <div title="現金部位 {ccy_cash_pct:.1f}%" style="width:{ccy_cash_pct:.4f}%; background:{cash_color};"></div>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:6px;">
+                        <div>
+                            <div class="asset-value-label">投資
+                            <span class="asset-price-main">${ccy_investment_value:,.0f}</span>
+                            ({ccy_investment_pct:.1f}%)
+                            </div>
+                        </div>
+                        <div>
+                            <div class="asset-value-label">可用現金
+                            <span class="asset-price-main">${ccy_cash_value:,.0f}</span>
+                            ({ccy_cash_pct:.1f}%)
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    <div class="asset-value-label">現金部位 {cash_pct:.1f}%</div>
-                    <div class="asset-price-main">${cash_value:,.0f}</div>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+                """,
+                unsafe_allow_html=True,
+            )
 
         if not cash_df.empty:
-            with st.expander("現金帳戶明細", expanded=False):
+            with st.expander("可投入帳戶明細", expanded=False):
                 cash_df = cash_df.sort_values("市值", ascending=False)
                 cash_df["餘額"] = cash_df["單位數"]
                 view_df = cash_df[["名稱", "幣別", "餘額", "市值", "佔比"]]
