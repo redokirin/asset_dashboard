@@ -194,9 +194,11 @@ def render_shareholding_component(df):
                         </div>""",
                         unsafe_allow_html=True,
                     )
-                render_cost_component(row)
+
             if st.session_state.get(f"analyze_{row['代碼']}", False):
                 ticker = row["代碼"]
+
+                render_cost_component(row)
 
                 if hasattr(dashboard_logic, "clear_ticker_cache"):
                     dashboard_logic.clear_ticker_cache(ticker)
