@@ -115,6 +115,31 @@ def calculate_asset_row(
     }
 
 
+def calculate_bank_row(asset, exchange_rates):
+    ccy = str(asset.get("ccy", "TWD")).upper()
+    rate = exchange_rates.get(ccy, 1.0)
+    balance = float(asset.get("balance", 0))
+    val_twd = balance * rate
+
+    return {
+        COL_MARKET: asset.get("market", "Bank"),
+        COL_ASSET_TYPE: "Bank",
+        COL_NAME: asset.get("name", asset["id"]),
+        COL_TICKER: asset["id"],
+        COL_CURRENCY: ccy,
+        COL_UNITS: balance,
+        COL_AVG_COST: 0,
+        COL_CHANGE: None,
+        COL_PRICE: 1,
+        COL_UPDATED_AT: "",
+        COL_COST: 0,
+        COL_MARKET_VALUE: round(val_twd),
+        COL_PROFIT_LOSS: 0,
+        COL_RETURN_PCT: 0,
+        COL_GET_VALUE: False,
+    }
+
+
 def _empty_assets_frame():
     columns = [
         COL_MARKET,
@@ -166,7 +191,7 @@ def fetch_batch_prices(assets, cat_key):
     batch_changes = {}
     batch_times = {}
     tickers = []
-    for asset in assets[cat_key].values():
+    for asset in assets.get(cat_key, {}).values():
         if _is_enabled(asset.get("enabled")) and _is_enabled(asset.get("get_value")):
             tickers.append(asset["id"])
 
@@ -235,12 +260,12 @@ def calculate_assets_data(exchange_rates):
         batch_times.update(times)
 
     for cat_key, cat_name in [("etfs", "ETF"), ("stocks", "個股"), ("funds", "基金")]:
-        for asset in assets[cat_key].values():
-            if not asset.get("enabled", True):
+        for asset in assets.get(cat_key, {}).values():
+            if not _is_enabled(asset.get("enabled", True)):
                 continue
 
             price, change_val, update_time = None, None, None
-            if asset.get("get_value"):
+            if _is_enabled(asset.get("get_value", True)):
                 price = batch_prices.get(asset["id"])
                 update_time = batch_times.get(asset["id"], "")
                 # 無論是 ETF 還是個股，都讀取漲跌幅
@@ -252,6 +277,11 @@ def calculate_assets_data(exchange_rates):
             )
             if res:
                 results.append(res)
+
+    for asset in assets.get("banks", {}).values():
+        if not _is_enabled(asset.get("enabled", True)):
+            continue
+        results.append(calculate_bank_row(asset, exchange_rates))
 
     df = pd.DataFrame(results)
     if df.empty:

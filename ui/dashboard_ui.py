@@ -14,6 +14,8 @@ from ui.ui_streamlit import (
     show_manual_analysis_page,
     render_title_component,
     render_profit_and_loss_component,
+    render_cash_component,
+    render_liquidity_component,
     render_vertical_component,
     render_horizontal_component,
     render_dataframe_component,

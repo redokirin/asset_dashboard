@@ -8,6 +8,7 @@ from core.columns import (
     COL_AVG_COST,
     COL_CHANGE,
     COL_COST,
+    COL_GET_VALUE,
     COL_MARKET,
     COL_MARKET_VALUE,
     COL_PRICE,
@@ -143,6 +144,24 @@ def test_calculate_assets_data_facade_keeps_output_contract(monkeypatch):
                 get_value=False,
             )
         },
+        "banks": {
+            "USD_BANK": {
+                "id": "USD_BANK",
+                "name": "USD Bank",
+                "market": "Bank",
+                "ccy": "USD",
+                "balance": 100,
+                "enabled": 1,
+            },
+            "DISABLED_BANK": {
+                "id": "DISABLED_BANK",
+                "name": "Disabled Bank",
+                "market": "Bank",
+                "ccy": "TWD",
+                "balance": 999,
+                "enabled": False,
+            },
+        },
     }
 
     def fake_fetch_batch_prices(all_assets, cat_key):
@@ -158,10 +177,16 @@ def test_calculate_assets_data_facade_keeps_output_contract(monkeypatch):
 
     df, market_share = calculators.calculate_assets_data({"TWD": 1.0, "USD": 30.0})
 
-    assert df[COL_TICKER].tolist() == ["0050.TW", "2330.TW", "FUND"]
-    assert df[COL_ASSET_TYPE].tolist() == ["ETF", "個股", "基金"]
-    assert df[COL_MARKET_VALUE].tolist() == [1200, 1200, 1080]
+    assert df[COL_TICKER].tolist() == ["0050.TW", "2330.TW", "FUND", "USD_BANK"]
+    assert df[COL_ASSET_TYPE].tolist() == ["ETF", "個股", "基金", "Bank"]
+    assert df[COL_MARKET_VALUE].tolist() == [1200, 1200, 1080, 3000]
     assert df[COL_CHANGE].iloc[:2].tolist() == [2.0, 10.0]
     assert pd.isna(df[COL_CHANGE].iloc[2])
+    bank_row = df[df[COL_TICKER] == "USD_BANK"].iloc[0]
+    assert bank_row[COL_COST] == 0
+    assert bank_row[COL_PROFIT_LOSS] == 0
+    assert bank_row[COL_RETURN_PCT] == 0
+    assert not bool(bank_row[COL_GET_VALUE])
     assert market_share["TW"][COL_MARKET_VALUE] == 2400
     assert market_share["US"][COL_MARKET_VALUE] == 1080
+    assert market_share["Bank"][COL_MARKET_VALUE] == 3000

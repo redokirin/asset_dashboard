@@ -87,6 +87,9 @@ def test_get_config_from_gsheets_returns_same_shape(monkeypatch):
                 "stocks": FakeWorksheet(
                     [{"Ticker": "2330.TW", "Cost": "1,000", "Get_Value": "FALSE"}]
                 ),
+                "Bank": FakeWorksheet(
+                    [{"Key": "TWD_BANK", "Name": "TWD Bank", "Balance": "10,000", "Enabled": "1"}]
+                ),
             }
             return worksheets[name]
 
@@ -115,4 +118,5 @@ def test_get_config_from_gsheets_returns_same_shape(monkeypatch):
     assert config["etfs"]["VOO"]["enabled"] is True
     assert config["stocks"]["2330.TW"]["cost"] == 1000.0
     assert config["stocks"]["2330.TW"]["get_value"] is False
-
+    assert config["banks"]["TWD_BANK"]["balance"] == 10000.0
+    assert config["banks"]["TWD_BANK"]["enabled"] is True

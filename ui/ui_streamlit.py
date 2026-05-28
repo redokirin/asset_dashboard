@@ -25,9 +25,19 @@ from ui.streamlit.components import (
 from ui.streamlit.filters import render_asset_filter
 from ui.streamlit.portfolio import (
     render_dataframe_component,
+    render_cash_component,
+    render_liquidity_component,
     render_profit_and_loss_component,
     render_shareholding_component,
 )
+
+
+def _split_cash_and_investments(df):
+    if "市場" not in df.columns:
+        return df, df.iloc[0:0]
+    market_names = df["市場"].astype(str).str.strip().str.lower()
+    cash_mask = market_names.isin({"cash", "現金"})
+    return df[~cash_mask], df[cash_mask]
 
 
 def show_streamlit(df, radar_data, exchange_rates):
@@ -37,9 +47,10 @@ def show_streamlit(df, radar_data, exchange_rates):
     with col_mid:
         with st.container(border=False):
             filtered_df = render_asset_filter(df)
+            investment_df, _ = _split_cash_and_investments(filtered_df)
             render_profit_and_loss_component(filtered_df)
         with st.container(border=False):
-            render_shareholding_component(filtered_df)
+            render_shareholding_component(investment_df)
     with col_right:
         with st.container(border=False):
             indices = [item for item in radar_data]
@@ -48,8 +59,9 @@ def show_streamlit(df, radar_data, exchange_rates):
                     render_tracking_metrics_row(indices[i : i + 3]),
                     unsafe_allow_html=True,
                 )
+        render_liquidity_component(filtered_df)
         with st.container(border=False, gap="xxsmall"):
-            if not filtered_df.empty:
-                render_plotly_pie_charts(filtered_df)
+            if not investment_df.empty:
+                render_plotly_pie_charts(investment_df)
             else:
                 st.info("無符合條件的資產可供分析")

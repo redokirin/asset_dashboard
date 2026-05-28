@@ -12,6 +12,16 @@ except ImportError:
     HAS_RICH = False
 
 
+CASH_MARKETS = {"cash", "現金"}
+
+
+def _cash_mask(df):
+    if "市場" not in df.columns:
+        return pd.Series(False, index=df.index)
+    market_names = df["市場"].astype(str).str.strip().str.lower()
+    return market_names.isin(CASH_MARKETS)
+
+
 def show_console_rich(
     df,
     radar_data,
@@ -25,6 +35,10 @@ def show_console_rich(
     if not HAS_RICH:
         print(df.to_string())
         return
+    cash_mask = _cash_mask(df)
+    investment_df = df[~cash_mask]
+    cash_df = df[cash_mask]
+
     console = console or Console()
     console.print("\n[bold cyan]--- 全球市場即時雷達 ---[/bold cyan]")
     radar_table = Table(box=box.SIMPLE_HEAD)
@@ -46,11 +60,55 @@ def show_console_rich(
         market_share_table.add_column("市場", style="cyan")
         market_share_table.add_column("總市值", justify="right")
         market_share_table.add_column("佔比", justify="right")
-        for market, data in market_share_data.items():
-            market_share_table.add_row(
-                market, f"${data['市值']:,.0f}", f"{data['佔比']:.1f}%"
-            )
+        investment_total = investment_df["市值"].sum()
+        if investment_total:
+            investment_market_sum = investment_df.groupby("市場")["市值"].sum()
+            for market, market_value in investment_market_sum.items():
+                market_share_table.add_row(
+                    market,
+                    f"${market_value:,.0f}",
+                    f"{market_value / investment_total * 100:.1f}%",
+                )
         console.print(market_share_table)
+
+        total_value = df["市值"].sum()
+        if total_value:
+            console.print("[bold cyan]--- 資產水位 ---[/bold cyan]")
+            liquidity_table = Table(box=box.SIMPLE_HEAD, show_header=True)
+            liquidity_table.add_column("分類", style="cyan")
+            liquidity_table.add_column("金額", justify="right")
+            liquidity_table.add_column("佔比", justify="right")
+            investment_value = investment_df["市值"].sum()
+            cash_value = cash_df["市值"].sum()
+            liquidity_table.add_row(
+                "投資資產",
+                f"${investment_value:,.0f}",
+                f"{investment_value / total_value * 100:.1f}%",
+            )
+            liquidity_table.add_row(
+                "現金部位",
+                f"${cash_value:,.0f}",
+                f"{cash_value / total_value * 100:.1f}%",
+            )
+            console.print(liquidity_table)
+
+        if show_detail and not cash_df.empty:
+            console.print("[bold cyan]--- 現金帳戶明細 ---[/bold cyan]")
+            cash_table = Table(box=box.SIMPLE_HEAD, show_header=True)
+            cash_table.add_column("名稱", style="white")
+            cash_table.add_column("幣別", style="yellow", justify="center")
+            cash_table.add_column("餘額", justify="right")
+            cash_table.add_column("市值", justify="right")
+            cash_table.add_column("佔比", justify="right")
+            for _, row in cash_df.sort_values("市值", ascending=False).iterrows():
+                cash_table.add_row(
+                    str(row["名稱"]),
+                    str(row["幣別"]),
+                    f"{row['單位數']:,.0f}",
+                    f"${row['市值']:,.0f}",
+                    f"{row['佔比']:.1f}%",
+                )
+            console.print(cash_table)
 
     if advanced_results is not None and not advanced_results.empty:
         console.print("\n[bold cyan]--- 進階量化分析 ---[/bold cyan]")
@@ -62,35 +120,41 @@ def show_console_rich(
             )
 
             # ── 風險指標 helper ────────────────────────────────────────────────
-            _mdd      = row.get("maxDrawdownPct")
-            _curr_dd  = row.get("currentDrawdownPct")
-            _pain     = row.get("painRatio")
-            _comfort  = row.get("comfortScore") or "-"
-            _hold     = row.get("holdabilityScore")
+            _mdd = row.get("maxDrawdownPct")
+            _curr_dd = row.get("currentDrawdownPct")
+            _pain = row.get("painRatio")
+            _comfort = row.get("comfortScore") or "-"
+            _hold = row.get("holdabilityScore")
 
             def _dd_color(v):
                 """回撤深度語義色（Rich markup）"""
                 if v is None or not isinstance(v, (int, float)):
                     return "white"
                 a = abs(v)
-                if a < 5:   return "green"
-                if a < 15:  return "yellow"
+                if a < 5:
+                    return "green"
+                if a < 15:
+                    return "yellow"
                 return "red"
 
             def _hold_color(v):
                 """持有力語義色"""
                 if v is None or not isinstance(v, (int, float)):
                     return "white"
-                if v >= 0.70: return "green"
-                if v >= 0.40: return "yellow"
+                if v >= 0.70:
+                    return "green"
+                if v >= 0.40:
+                    return "yellow"
                 return "red"
 
-            _comfort_color = {"High": "green", "Medium": "yellow", "Low": "red"}.get(_comfort, "white")
+            _comfort_color = {"High": "green", "Medium": "yellow", "Low": "red"}.get(
+                _comfort, "white"
+            )
 
-            _mdd_str     = f"{_mdd:.1f}%"    if isinstance(_mdd,    float) else "-"
-            _curr_str    = f"{_curr_dd:.1f}%" if isinstance(_curr_dd, float) else "-"
-            _pain_str    = f"{_pain * 100:.0f}%" if isinstance(_pain, float) else "-"
-            _hold_str    = f"{_hold * 100:.0f}%" if isinstance(_hold, float) else "-"
+            _mdd_str = f"{_mdd:.1f}%" if isinstance(_mdd, float) else "-"
+            _curr_str = f"{_curr_dd:.1f}%" if isinstance(_curr_dd, float) else "-"
+            _pain_str = f"{_pain * 100:.0f}%" if isinstance(_pain, float) else "-"
+            _hold_str = f"{_hold * 100:.0f}%" if isinstance(_hold, float) else "-"
 
             if is_list_mode:
                 val_alpha = (
@@ -193,12 +257,22 @@ def show_console_rich(
         ]
 
         if not show_detail:
-            cols_to_keep = ["市場", "名稱", "幣別", "股價", "漲跌", "市值", "損益", "報酬率", "佔比"]
+            cols_to_keep = [
+                "市場",
+                "名稱",
+                "幣別",
+                "股價",
+                "漲跌",
+                "市值",
+                "損益",
+                "報酬率",
+                "佔比",
+            ]
             cols_config = [c for c in cols_config if c[0] in cols_to_keep]
 
         for c, s, j in cols_config:
             table.add_column(c, style=s, justify=j)
-        for _, row in df.iterrows():
+        for _, row in investment_df.iterrows():
             color = "red" if row["損益"] > 0 else "green"
             change_str = (
                 f"[{'red' if row['漲跌'] > 0 else 'green'}]{row['漲跌']:+,.2f}[/]"
@@ -224,5 +298,5 @@ def show_console_rich(
             table.add_row(*[data_map[c[0]] for c in cols_config])
         console.print(table)
         console.print(
-            f"\n💰 [bold]總市值: ${df['市值'].sum():,}[/] | 📈 [bold]總損益: {df['損益'].sum():+,.0f}[/]"
+            f"\n💰 [bold]總市值: ${df['市值'].sum():,}[/] | 📈 [bold]總損益: {investment_df['損益'].sum():+,.0f}[/]"
         )

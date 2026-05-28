@@ -6,6 +6,16 @@ import streamlit as st
 from core import dashboard_logic
 
 
+CASH_MARKETS = {"cash", "現金"}
+
+
+def _investment_df(df):
+    if "市場" not in df.columns:
+        return df
+    market_names = df["市場"].astype(str).str.strip().str.lower()
+    return df[~market_names.isin(CASH_MARKETS)]
+
+
 def render_price_chart(ticker):
     """渲染股價折線圖與均線"""
     try:
@@ -148,6 +158,11 @@ def render_price_chart(ticker):
 def render_plotly_pie_charts(df):
     import plotly.express as px
 
+    df = _investment_df(df)
+    if df.empty:
+        st.info("無投資標的可供分析")
+        return
+
     market_colors = {
         "美股": px.colors.sequential.Tealgrn,
         "台股": px.colors.sequential.Sunset,
@@ -168,15 +183,16 @@ def render_plotly_pie_charts(df):
         market_df,
         values="市值",
         names="市場",
-        title="資產分析-市場別",
+        title="投資分析-市場別",
         color="市場",
+        hole=0.5,
         color_discrete_map=market_color_map,
     )
     fig_market.update_layout(
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.5, xanchor="center", x=0.5),
         margin=dict(t=40, b=80, l=0, r=0),
-        height=300,
+        height=400,
     )
     with st.container(border=True):
         st.plotly_chart(fig_market, width="stretch")
@@ -207,7 +223,7 @@ def render_plotly_pie_charts(df):
         item_df,
         values="市值",
         names="顯示名稱",
-        title="資產分析-項目別",
+        title="投資分析-項目別",
         hole=0.5,
         color_discrete_sequence=colors_seq,
     )
@@ -216,7 +232,7 @@ def render_plotly_pie_charts(df):
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.5, xanchor="center", x=0.5),
         margin=dict(t=40, b=80, l=0, r=0),
-        height=480,
+        height=400,
     )
     with st.container(border=True):
         st.plotly_chart(fig_item, width="stretch")

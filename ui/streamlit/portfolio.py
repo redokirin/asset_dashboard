@@ -12,13 +12,26 @@ from ui.streamlit.components import (
 )
 
 
+CASH_MARKETS = {"cash", "現金"}
+
+
+def _cash_mask(df):
+    if "市場" not in df.columns:
+        return pd.Series(False, index=df.index)
+    market_names = df["市場"].astype(str).str.strip().str.lower()
+    return market_names.isin(CASH_MARKETS)
+
+
 def render_profit_and_loss_component(df):
+    cash_mask = _cash_mask(df)
+    investment_df = df[~cash_mask]
+
     with st.container(border=True):
         col_total, col_market = st.columns([0.5, 0.5])
         with col_total:
             with st.container():
-                total_pl = df["損益"].sum()
-                total_cost = df["成本"].sum()
+                total_pl = investment_df["損益"].sum()
+                total_cost = investment_df["成本"].sum()
                 roi = (total_pl / total_cost * 100) if total_cost != 0 else 0
 
                 st.markdown(
@@ -34,7 +47,9 @@ def render_profit_and_loss_component(df):
                 )
         with col_market:
             with st.container(gap="xxsmall"):
-                market_stats = df.groupby("市場").agg({"損益": "sum", "成本": "sum"})
+                market_stats = investment_df.groupby("市場").agg(
+                    {"損益": "sum", "成本": "sum"}
+                )
                 market_stats = market_stats.sort_values("損益", ascending=False)
 
                 market_items = []
@@ -47,11 +62,70 @@ def render_profit_and_loss_component(df):
                         {"名稱": market, "數值": market_pl, "漲跌幅": market_roi}
                     )
 
-                for i in range(0, len(market_items), 3):
+                for i in range(0, len(market_items), 4):
                     st.markdown(
-                        render_tracking_metrics_row(market_items[i : i + 3]),
+                        render_tracking_metrics_row(market_items[i : i + 4]),
                         unsafe_allow_html=True,
                     )
+
+
+def render_liquidity_component(df):
+    cash_mask = _cash_mask(df)
+    cash_df = df[cash_mask].copy()
+    investment_df = df[~cash_mask]
+
+    total_value = df["市值"].sum() if "市值" in df.columns else 0
+    if total_value == 0:
+        return
+
+    investment_value = investment_df["市值"].sum()
+    cash_value = cash_df["市值"].sum()
+    investment_pct = investment_value / total_value * 100
+    cash_pct = cash_value / total_value * 100
+
+    with st.container(border=True):
+        render_title_component("資產水位")
+        st.markdown(
+            f"""
+            <div style="display:flex; height:18px; width:100%; overflow:hidden; border-radius:6px; background:rgba(255,255,255,0.08);">
+                <div title="投資資產 {investment_pct:.1f}%" style="width:{investment_pct:.4f}%; background:#4f8cff;"></div>
+                <div title="現金部位 {cash_pct:.1f}%" style="width:{cash_pct:.4f}%; background:#f5c542;"></div>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
+                <div>
+                    <div class="asset-value-label">投資資產 {investment_pct:.1f}%</div>
+                    <div class="asset-price-main">${investment_value:,.0f}</div>
+                </div>
+                <div>
+                    <div class="asset-value-label">現金部位 {cash_pct:.1f}%</div>
+                    <div class="asset-price-main">${cash_value:,.0f}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if not cash_df.empty:
+            with st.expander("現金帳戶明細", expanded=False):
+                cash_df = cash_df.sort_values("市值", ascending=False)
+                cash_df["餘額"] = cash_df["單位數"]
+                view_df = cash_df[["名稱", "幣別", "餘額", "市值", "佔比"]]
+                st.dataframe(
+                    view_df.style.format(
+                        {
+                            "餘額": "{:,.0f}",
+                            "市值": "${:,.0f}",
+                            "佔比": "{:.1f}%",
+                        },
+                        na_rep="0",
+                    ),
+                    width="stretch",
+                    hide_index=True,
+                )
+
+
+def render_cash_component(df):
+    render_liquidity_component(df)
 
 
 def render_dataframe_component(df):
@@ -138,7 +212,9 @@ def render_dataframe_component(df):
 
 
 def render_shareholding_component(df):
-    for idx, row in df.iterrows():
+    investment_df = df[~_cash_mask(df)]
+
+    for idx, row in investment_df.iterrows():
         with st.container(border=True):
             with st.container():
                 c1, c2, c3, c4 = st.columns([0.65, 2.2, 1, 1])

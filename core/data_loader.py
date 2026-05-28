@@ -165,6 +165,18 @@ def get_config_from_gsheets():
         except Exception as e:
             logging.error(f"讀取 stocks 分頁失敗: {e}")
 
+        try:
+            ws_banks = sh.worksheet("Bank")
+            banks_data = ws_banks.get_all_records()
+            config["banks"] = _clean_asset_rows(
+                banks_data,
+                key_candidates=["Key", "key"],
+                numeric_cols=["balance"],
+                bool_cols=["enabled"],
+            )
+        except Exception as e:
+            logging.error(f"讀取 Bank 分頁失敗: {e}")
+
         return config
     except Exception as e:
         logging.error(f"Google Sheets 讀取失敗: {e}")
@@ -235,6 +247,7 @@ def get_assets():
         "etfs": _ensure_id(config.get("etfs", {})),
         "stocks": _ensure_id(config.get("stocks", {})),
         "funds": _ensure_id(config.get("funds", {})),
+        "banks": _ensure_id(config.get("banks", {})),
     }
 
 
