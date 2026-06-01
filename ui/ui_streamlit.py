@@ -27,7 +27,9 @@ from ui.streamlit.portfolio import (
     render_dataframe_component,
     render_cash_component,
     render_liquidity_component,
+    render_market_card,
     render_profit_and_loss_component,
+    render_schedule_of_assets,
     render_shareholding_component,
 )
 
@@ -45,10 +47,19 @@ def show_streamlit(df, radar_data, exchange_rates):
 
     col_mid, col_right = st.columns([0.7, 1.3])
     with col_mid:
-        with st.container(border=False):
+        summary_container = st.container(border=False)
+        filter_container = st.container(border=False)
+
+        with filter_container:
             filtered_df = render_asset_filter(df)
-            investment_df, _ = _split_cash_and_investments(filtered_df)
-            render_profit_and_loss_component(filtered_df, radar_data)
+        investment_df, _ = _split_cash_and_investments(filtered_df)
+
+        with summary_container:
+            render_schedule_of_assets(filtered_df, investment_df)
+
+        render_liquidity_component(filtered_df)
+        render_market_card(investment_df, radar_data)
+
         with st.container(border=False, gap="xxsmall"):
             if not investment_df.empty:
                 render_plotly_pie_charts(investment_df)

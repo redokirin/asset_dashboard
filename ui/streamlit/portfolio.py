@@ -31,10 +31,7 @@ def _cash_mask(df):
     return market_names.isin(CASH_MARKETS)
 
 
-def render_profit_and_loss_component(df, radar_data):
-    cash_mask = _cash_mask(df)
-    investment_df = df[~cash_mask]
-
+def render_schedule_of_assets(df, investment_df):
     with st.container():
         total_pl = investment_df["損益"].sum()
         total_cost = investment_df["成本"].sum()
@@ -51,11 +48,9 @@ def render_profit_and_loss_component(df, radar_data):
             """,
             unsafe_allow_html=True,
         )
-        render_liquidity_component(df)
 
-    # with st.container(border=True):
-    #     col_market, col_total = st.columns([0.5, 0.5])
-    #     with col_market:
+
+def render_market_card(investment_df, radar_data):
     with st.container(border=True, gap="xxsmall"):
         market_stats = investment_df.groupby("市場").agg({"損益": "sum", "成本": "sum"})
         market_stats = market_stats.sort_values("損益", ascending=False)
@@ -79,7 +74,17 @@ def render_profit_and_loss_component(df, radar_data):
                 render_tracking_metrics_row(indices[i : i + 3]),
                 unsafe_allow_html=True,
             )
-    # with col_total:
+
+
+def render_profit_and_loss_component(df, radar_data):
+    cash_mask = _cash_mask(df)
+    investment_df = df[~cash_mask]
+
+    render_schedule_of_assets(df, investment_df)
+
+    render_liquidity_component(df)
+
+    render_market_card(investment_df, radar_data)
 
 
 def _settlement_values(frame):
@@ -114,10 +119,10 @@ def render_liquidity_component(df):
 
     with st.container(border=True):
         bar_palettes = [
-            ("#4f8cff", "#f5c542"),
-            ("#00a878", "#ff8a3d"),
-            ("#8b5cf6", "#f472b6"),
-            ("#14b8a6", "#eab308"),
+            ("#2563eb", "#93c5fd"),
+            ("#059669", "#86efac"),
+            ("#7c3aed", "#c4b5fd"),
+            ("#0f766e", "#99f6e4"),
         ]
         for idx, bank_key in enumerate(group_keys):
             investment_color, cash_color = bar_palettes[idx % len(bar_palettes)]
