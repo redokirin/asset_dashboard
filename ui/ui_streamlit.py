@@ -49,7 +49,6 @@ def show_streamlit(df, radar_data, exchange_rates):
             filtered_df = render_asset_filter(df)
             investment_df, _ = _split_cash_and_investments(filtered_df)
             render_profit_and_loss_component(filtered_df, radar_data)
-            # render_liquidity_component(filtered_df)
         with st.container(border=False, gap="xxsmall"):
             if not investment_df.empty:
                 render_plotly_pie_charts(investment_df)

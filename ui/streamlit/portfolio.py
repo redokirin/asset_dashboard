@@ -150,24 +150,24 @@ def render_liquidity_component(df):
             st.markdown(
                 f"""
                 <div style="padding-left: 0.5rem;padding-right: 0.5rem;">
-                    <div class="asset-price-main" style="margin-bottom:4px;">{title}</div>
-                    <div style="display:flex; height:16px; width:100%; overflow:hidden; border-radius:6px; background:rgba(255,255,255,0.08);">
-                        <div title="投資 {investment_pct:.1f}%" style="width:{investment_pct:.4f}%; background:{investment_color};"></div>
-                        <div title="現金 {cash_pct:.1f}%" style="width:{cash_pct:.4f}%; background:{cash_color};"></div>
-                    </div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:6px;">
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:6px;">
                         <div>
                             <div class="asset-value-label">投資
                             <span class="asset-price-main">${investment_value:,.0f}</span>
                             ({investment_pct:.1f}%)
                             </div>
                         </div>
-                        <div>
+                        <div class="asset-price-main" style="text-align: center;">{title}</div>
+                        <div style="text-align: right;">
                             <div class="asset-value-label">現金
                             <span class="asset-price-main">${cash_value:,.0f}</span>
                             ({cash_pct:.1f}%)
                             </div>
                         </div>
+                    </div>
+                    <div style="display:flex; height:16px; width:100%; overflow:hidden; border-radius:6px; background:rgba(255,255,255,0.08);">
+                        <div title="投資 {investment_pct:.1f}%" style="width:{investment_pct:.4f}%; background:{investment_color};"></div>
+                        <div title="現金 {cash_pct:.1f}%" style="width:{cash_pct:.4f}%; background:{cash_color};"></div>
                     </div>
                 </div>
                 """,
