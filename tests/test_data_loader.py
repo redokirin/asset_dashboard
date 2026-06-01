@@ -79,7 +79,14 @@ def test_get_config_from_gsheets_returns_same_shape(monkeypatch):
                     [{"Ticker": "USDTWD=X", "Name": "USD/TWD"}]
                 ),
                 "funds": FakeWorksheet(
-                    [{"Key": "FUND-A", "Name": "Fund A", "Units": "2"}]
+                    [
+                        {
+                            "Key": "FUND-A",
+                            "Name": "Fund A",
+                            "Units": "2",
+                            "Settlement": "TWD_BANK",
+                        }
+                    ]
                 ),
                 "etfs": FakeWorksheet(
                     [{"Ticker": "VOO", "Shares": "3", "Enabled": "TRUE"}]
@@ -115,6 +122,7 @@ def test_get_config_from_gsheets_returns_same_shape(monkeypatch):
 
     assert config["radar_tickers"] == {"USDTWD=X": "USD/TWD"}
     assert config["funds"]["FUND-A"]["units"] == 2.0
+    assert config["funds"]["FUND-A"]["settlement"] == "TWD_BANK"
     assert config["etfs"]["VOO"]["enabled"] is True
     assert config["stocks"]["2330.TW"]["cost"] == 1000.0
     assert config["stocks"]["2330.TW"]["get_value"] is False

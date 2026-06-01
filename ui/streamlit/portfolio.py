@@ -1,8 +1,17 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 import pandas as pd
 import streamlit as st
 
 from core import dashboard_logic
+from core.columns import (
+    COL_CURRENCY,
+    COL_MARKET_VALUE,
+    COL_NAME,
+    COL_SETTLEMENT,
+    COL_TICKER,
+    COL_UNITS,
+    COL_WEIGHT,
+)
 from ui.streamlit.advanced_analysis import render_advanced_analysis_ui
 from ui.streamlit.components import (
     render_cost_component,
@@ -12,7 +21,7 @@ from ui.streamlit.components import (
 )
 
 
-CASH_MARKETS = {"cash", "現金"}
+CASH_MARKETS = {"bank", "cash", "現金"}
 
 
 def _cash_mask(df):
@@ -22,102 +31,141 @@ def _cash_mask(df):
     return market_names.isin(CASH_MARKETS)
 
 
-def render_profit_and_loss_component(df):
+def render_profit_and_loss_component(df, radar_data):
     cash_mask = _cash_mask(df)
     investment_df = df[~cash_mask]
 
-    with st.container(border=True):
-        col_market, col_total = st.columns([0.5, 0.5])
-        with col_total:
-            with st.container():
-                total_pl = investment_df["損益"].sum()
-                total_cost = investment_df["成本"].sum()
-                roi = (total_pl / total_cost * 100) if total_cost != 0 else 0
+    with st.container():
+        total_pl = investment_df["損益"].sum()
+        total_cost = investment_df["成本"].sum()
+        roi = (total_pl / total_cost * 100) if total_cost != 0 else 0
 
-                st.markdown(
-                    f"""<div class='inline-metric-label'>💰 投資資產</div>
-                        <div class='total-pl-wrapper'>
-                            <div class='inline-metric-row'>
-                                <span class='inline-metric-value'>${df["市值"].sum():,}</span>
-                            </div>
-                            {render_vertical_value_tag_component(f"{total_pl:+,.0f}", roi)}
-                        </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-        with col_market:
-            with st.container(gap="xxsmall"):
-                market_stats = investment_df.groupby("市場").agg(
-                    {"損益": "sum", "成本": "sum"}
-                )
-                market_stats = market_stats.sort_values("損益", ascending=False)
+        st.markdown(
+            f"""<div class='inline-metric-label'>💰 投資資產</div>
+                <div class='total-pl-wrapper'>
+                    <div class='inline-metric-row'>
+                        <span class='inline-metric-value'>${df["市值"].sum():,}</span>
+                    </div>
+                    {render_vertical_value_tag_component(f"{total_pl:+,.0f}", roi)}
+                </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        render_liquidity_component(df)
 
-                market_items = []
-                for market, row in market_stats.iterrows():
-                    market_pl = row["損益"]
-                    market_roi = (
-                        market_pl / row["成本"] * 100 if row["成本"] != 0 else 0
-                    )
-                    market_items.append(
-                        {"名稱": market, "數值": market_pl, "漲跌幅": market_roi}
-                    )
+    # with st.container(border=True):
+    #     col_market, col_total = st.columns([0.5, 0.5])
+    #     with col_market:
+    with st.container(border=True, gap="xxsmall"):
+        market_stats = investment_df.groupby("市場").agg({"損益": "sum", "成本": "sum"})
+        market_stats = market_stats.sort_values("損益", ascending=False)
 
-                for i in range(0, len(market_items), 4):
-                    st.markdown(
-                        render_tracking_metrics_row(market_items[i : i + 4]),
-                        unsafe_allow_html=True,
-                    )
+        market_items = []
+        for market, row in market_stats.iterrows():
+            market_pl = row["損益"]
+            market_roi = market_pl / row["成本"] * 100 if row["成本"] != 0 else 0
+            market_items.append(
+                {"名稱": market, "數值": market_pl, "漲跌幅": market_roi}
+            )
+
+        for i in range(0, len(market_items), 4):
+            st.markdown(
+                render_tracking_metrics_row(market_items[i : i + 4]),
+                unsafe_allow_html=True,
+            )
+        indices = [item for item in radar_data]
+        for i in range(0, len(indices), 3):
+            st.markdown(
+                render_tracking_metrics_row(indices[i : i + 3]),
+                unsafe_allow_html=True,
+            )
+    # with col_total:
+
+
+def _settlement_values(frame):
+    if COL_SETTLEMENT not in frame.columns:
+        return pd.Series("", index=frame.index)
+    return frame[COL_SETTLEMENT].fillna("").astype(str).str.strip()
 
 
 def render_liquidity_component(df):
-    cash_mask = _cash_mask(df)
-    cash_df = df[cash_mask].copy()
-    investment_df = df[~cash_mask]
+    if COL_MARKET_VALUE not in df.columns:
+        return
 
-    total_value = df["市值"].sum() if "市值" in df.columns else 0
+    total_value = df[COL_MARKET_VALUE].sum()
     if total_value == 0:
         return
 
+    cash_mask = _cash_mask(df)
+    cash_df = df[cash_mask].copy()
+    investment_df = df[~cash_mask].copy()
+    settlement_values = _settlement_values(investment_df)
+
+    bank_rows = {
+        str(row[COL_TICKER]).strip(): row
+        for _, row in cash_df.iterrows()
+        if str(row.get(COL_TICKER, "")).strip()
+    }
+    settlement_keys = [key for key in settlement_values.unique() if key]
+    group_keys = list(bank_rows.keys())
+    group_keys.extend(key for key in settlement_keys if key not in bank_rows)
+    if settlement_values.eq("").any():
+        group_keys.append("")
+
     with st.container(border=True):
-        # render_title_component("資產水位")
         bar_palettes = [
             ("#4f8cff", "#f5c542"),
             ("#00a878", "#ff8a3d"),
             ("#8b5cf6", "#f472b6"),
             ("#14b8a6", "#eab308"),
         ]
-        for idx, ccy in enumerate(sorted(df["幣別"].dropna().astype(str).unique())):
+        for idx, bank_key in enumerate(group_keys):
             investment_color, cash_color = bar_palettes[idx % len(bar_palettes)]
-            ccy_df = df[df["幣別"].astype(str) == ccy]
-            ccy_cash_mask = _cash_mask(ccy_df)
-            ccy_total = ccy_df["市值"].sum()
-            if ccy_total == 0:
+            if bank_key:
+                bank_row = bank_rows.get(bank_key)
+                bank_name = (
+                    str(bank_row.get(COL_NAME, bank_key))
+                    if bank_row is not None
+                    else bank_key
+                )
+                title = f"{bank_name}"  # ({bank_key})"
+                matched_investments = investment_df[settlement_values == bank_key]
+                matched_cash = cash_df[
+                    cash_df[COL_TICKER].fillna("").astype(str).str.strip() == bank_key
+                ]
+            else:
+                title = "未指定交割銀行"
+                matched_investments = investment_df[settlement_values == ""]
+                matched_cash = cash_df.iloc[0:0]
+
+            investment_value = matched_investments[COL_MARKET_VALUE].sum()
+            cash_value = matched_cash[COL_MARKET_VALUE].sum()
+            bank_total = investment_value + cash_value
+            if bank_total == 0:
                 continue
 
-            ccy_investment_value = ccy_df[~ccy_cash_mask]["市值"].sum()
-            ccy_cash_value = ccy_df[ccy_cash_mask]["市值"].sum()
-            ccy_investment_pct = ccy_investment_value / ccy_total * 100
-            ccy_cash_pct = ccy_cash_value / ccy_total * 100
+            investment_pct = investment_value / bank_total * 100
+            cash_pct = cash_value / bank_total * 100
 
             st.markdown(
                 f"""
                 <div style="padding-left: 0.5rem;padding-right: 0.5rem;">
-                    <div class="asset-price-main" style="margin-bottom:4px;">{ccy}</div>
+                    <div class="asset-price-main" style="margin-bottom:4px;">{title}</div>
                     <div style="display:flex; height:16px; width:100%; overflow:hidden; border-radius:6px; background:rgba(255,255,255,0.08);">
-                        <div title="投資資產 {ccy_investment_pct:.1f}%" style="width:{ccy_investment_pct:.4f}%; background:{investment_color};"></div>
-                        <div title="現金部位 {ccy_cash_pct:.1f}%" style="width:{ccy_cash_pct:.4f}%; background:{cash_color};"></div>
+                        <div title="投資 {investment_pct:.1f}%" style="width:{investment_pct:.4f}%; background:{investment_color};"></div>
+                        <div title="現金 {cash_pct:.1f}%" style="width:{cash_pct:.4f}%; background:{cash_color};"></div>
                     </div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:6px;">
                         <div>
                             <div class="asset-value-label">投資
-                            <span class="asset-price-main">${ccy_investment_value:,.0f}</span>
-                            ({ccy_investment_pct:.1f}%)
+                            <span class="asset-price-main">${investment_value:,.0f}</span>
+                            ({investment_pct:.1f}%)
                             </div>
                         </div>
                         <div>
-                            <div class="asset-value-label">可用現金
-                            <span class="asset-price-main">${ccy_cash_value:,.0f}</span>
-                            ({ccy_cash_pct:.1f}%)
+                            <div class="asset-value-label">現金
+                            <span class="asset-price-main">${cash_value:,.0f}</span>
+                            ({cash_pct:.1f}%)
                             </div>
                         </div>
                     </div>
@@ -126,23 +174,36 @@ def render_liquidity_component(df):
                 unsafe_allow_html=True,
             )
 
-        if not cash_df.empty:
-            with st.expander("可投入帳戶明細", expanded=False):
-                cash_df = cash_df.sort_values("市值", ascending=False)
-                cash_df["餘額"] = cash_df["單位數"]
-                view_df = cash_df[["名稱", "幣別", "餘額", "市值", "佔比"]]
-                st.dataframe(
-                    view_df.style.format(
-                        {
-                            "餘額": "{:,.0f}",
-                            "市值": "${:,.0f}",
-                            "佔比": "{:.1f}%",
-                        },
-                        na_rep="0",
-                    ),
-                    width="stretch",
-                    hide_index=True,
-                )
+        # if not cash_df.empty:
+        #     with st.expander("銀行現金明細", expanded=False):
+        #         cash_df = cash_df.sort_values(COL_MARKET_VALUE, ascending=False)
+        #         cash_df["餘額"] = cash_df[COL_UNITS]
+        #         view_df = cash_df[
+        #             [
+        #                 COL_NAME,
+        #                 COL_TICKER,
+        #                 COL_CURRENCY,
+        #                 "餘額",
+        #                 COL_MARKET_VALUE,
+        #                 COL_WEIGHT,
+        #             ]
+        #         ]
+        #         st.dataframe(
+        #             view_df.style.format(
+        #                 {
+        #                     "餘額": "{:,.0f}",
+        #                     COL_MARKET_VALUE: "${:,.0f}",
+        #                     COL_WEIGHT: "{:.1f}%",
+        #                 },
+        #                 na_rep="0",
+        #             ),
+        #             width="stretch",
+        #             hide_index=True,
+        #         )
+
+
+# def render_liquidity_component(df):
+#     return _render_liquidity_by_bank(df)
 
 
 def render_cash_component(df):

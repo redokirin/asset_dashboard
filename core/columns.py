@@ -22,6 +22,7 @@ COL_PROFIT_LOSS = "損益"
 COL_RETURN_PCT = "報酬率"
 COL_WEIGHT = "佔比"
 COL_GET_VALUE = "_get_value"
+COL_SETTLEMENT = "Settlement"
 
 COL_VALUE = "數值"
 COL_CHANGE_PCT = "漲跌幅"

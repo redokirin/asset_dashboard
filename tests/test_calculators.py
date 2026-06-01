@@ -14,6 +14,7 @@ from core.columns import (
     COL_PRICE,
     COL_PROFIT_LOSS,
     COL_RETURN_PCT,
+    COL_SETTLEMENT,
     COL_TICKER,
     COL_UNITS,
     COL_UPDATED_AT,
@@ -32,6 +33,7 @@ def _asset(**overrides):
         "nav": 500,
         "enabled": True,
         "get_value": True,
+        "settlement": "",
     }
     asset.update(overrides)
     return asset
@@ -56,6 +58,7 @@ def test_calculate_asset_row_uses_price_and_exchange_rate():
     assert row[COL_MARKET_VALUE] == 4800
     assert row[COL_PROFIT_LOSS] == 1800
     assert row[COL_RETURN_PCT] == pytest.approx(60.0)
+    assert row[COL_SETTLEMENT] == ""
 
 
 def test_calculate_asset_row_falls_back_to_investment_lots():
@@ -163,6 +166,9 @@ def test_calculate_assets_data_facade_keeps_output_contract(monkeypatch):
             },
         },
     }
+    assets["etfs"]["0050.TW"]["settlement"] = "TWD_BANK"
+    assets["stocks"]["2330.TW"]["settlement"] = "TWD_BANK"
+    assets["funds"]["FUND"]["settlement"] = "USD_BANK"
 
     def fake_fetch_batch_prices(all_assets, cat_key):
         assert all_assets is assets
@@ -180,6 +186,7 @@ def test_calculate_assets_data_facade_keeps_output_contract(monkeypatch):
     assert df[COL_TICKER].tolist() == ["0050.TW", "2330.TW", "FUND", "USD_BANK"]
     assert df[COL_ASSET_TYPE].tolist() == ["ETF", "個股", "基金", "Bank"]
     assert df[COL_MARKET_VALUE].tolist() == [1200, 1200, 1080, 3000]
+    assert df[COL_SETTLEMENT].tolist() == ["TWD_BANK", "TWD_BANK", "USD_BANK", ""]
     assert df[COL_CHANGE].iloc[:2].tolist() == [2.0, 10.0]
     assert pd.isna(df[COL_CHANGE].iloc[2])
     bank_row = df[df[COL_TICKER] == "USD_BANK"].iloc[0]

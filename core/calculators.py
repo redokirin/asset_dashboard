@@ -16,6 +16,7 @@ from core.columns import (
     COL_PRICE,
     COL_PROFIT_LOSS,
     COL_RETURN_PCT,
+    COL_SETTLEMENT,
     COL_TICKER,
     COL_UNITS,
     COL_UPDATED_AT,
@@ -112,6 +113,7 @@ def calculate_asset_row(
         COL_PROFIT_LOSS: round(pl_val),
         COL_RETURN_PCT: (pl_val / cost_twd * 100) if cost_twd != 0 else 0,
         COL_GET_VALUE: asset.get("get_value", True),
+        COL_SETTLEMENT: str(asset.get("settlement", "")).strip(),
     }
 
 
@@ -137,6 +139,7 @@ def calculate_bank_row(asset, exchange_rates):
         COL_PROFIT_LOSS: 0,
         COL_RETURN_PCT: 0,
         COL_GET_VALUE: False,
+        COL_SETTLEMENT: "",
     }
 
 
@@ -158,6 +161,7 @@ def _empty_assets_frame():
         COL_PROFIT_LOSS,
         COL_RETURN_PCT,
         COL_WEIGHT,
+        COL_SETTLEMENT,
     ]
     return pd.DataFrame(columns=columns)
 
