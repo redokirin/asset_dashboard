@@ -58,8 +58,11 @@ def run_cli():
                     "佔比": 100.0,
                     "_get_value": True,
                 }
+                mock_df = pd.DataFrame([mock_record]).reindex(
+                    columns=df_to_analyze.columns
+                )
                 df_to_analyze = pd.concat(
-                    [df_to_analyze, pd.DataFrame([mock_record])], ignore_index=True
+                    [df_to_analyze, mock_df], ignore_index=True
                 )
         df_final = df_to_analyze
     else:

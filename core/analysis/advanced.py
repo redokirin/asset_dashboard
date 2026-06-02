@@ -153,7 +153,7 @@ def run_advanced_analysis(df_res):
                 if comb.empty:
                     continue
 
-                rs_series = (comb["p"] * comb["r"]) / comb["b"]
+                rs_series = comb["p"] / comb["b"]
                 if len(rs_series) < 20:
                     continue
                 curr_rs = float(rs_series.iloc[-1])
@@ -162,7 +162,7 @@ def run_advanced_analysis(df_res):
                 rsi_val = calculate_rsi(t_df_clean)
 
                 rs_p10 = float(np.percentile(rs_series.values.flatten(), 10))
-                rs_p10_price = (rs_p10 * comb["b"].iloc[-1]) / comb["r"].iloc[-1]
+                rs_p10_price = rs_p10 * comb["b"].iloc[-1]
 
                 suggested_bid_str = "-"
                 daily_wave, tech_retest, sniper_pos = "-", "-", "-"
