@@ -20,6 +20,7 @@ def generate_advanced_diagnosis(
     peg_ratio=None,
     asset_type="個股",
     alpha_win_rate="0%",
+    history_years=None,
 ):
     """綜合量化診斷邏輯 (整合基本面、技術位、RS、RSI 與量價關係)"""
     tags = []
@@ -164,12 +165,21 @@ def generate_advanced_diagnosis(
             tags.append("⚪量縮止跌")
             vp_advice = "量縮下跌，賣壓出現竭盡跡象，有利於短線止跌整理。"
 
+    stress_advice = ""
+    if history_years is not None and history_years < 2:
+        history_months = max(1, round(history_years * 12))
+        tags.append("⚠️壓力測試不足")
+        if history_years < 1:
+            stress_advice = f"\n⚠️ 本標的歷史僅 {history_months} 個月，從未經歷完整市場壓力測試，MDD 不具參考性，持有力評分偏高存在高估風險。"
+        else:
+            stress_advice = f"\n⚠️ 本標的歷史不足 2 年（{history_months} 個月），壓力測試樣本有限，MDD 與舒適度參考性有限。"
+
     advice_base_display = f"\n{advice_base}" if advice_base else ""
     fund_display = f"\n{fund_advice}" if fund_advice else ""
     bias_advice_display = f"\n{bias_advice}" if bias_advice else ""
     vp_advice_display = f"\n{vp_advice}" if vp_advice else ""
 
     full_advice = (
-        f"{advice_base_display}{fund_display}{bias_advice_display}{vp_advice_display}"
+        f"{advice_base_display}{fund_display}{bias_advice_display}{vp_advice_display}{stress_advice}"
     )
     return full_advice, tags

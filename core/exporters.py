@@ -154,17 +154,30 @@ def export_for_ai(df_res, adv_res=None, guide_path=None):
             pain = row.get("painRatio")
             comfort = row.get(COL_COMFORT_SCORE, "-")
             hold_ability = row.get(COL_HOLD_ABILITY_SCORE)
+            history_yrs = row.get("historyYears")
+            bench_mdd = row.get("benchmarkMddPct")
+            bench_name = row.get("benchmarkName", "-")
             if pd.notnull(mdd):
                 pain_pct = f"{pain * 100:.0f}%" if pd.notnull(pain) else "-"
                 hold_str = (
                     f"{hold_ability * 100:.0f}%" if pd.notnull(hold_ability) else "-"
                 )
+                history_note = ""
+                if history_yrs is not None and pd.notnull(history_yrs) and float(history_yrs) < 2:
+                    history_months = max(1, round(float(history_yrs) * 12))
+                    history_note = f"（⚠️歷史僅 {history_months} 個月）"
+                bench_note = (
+                    f" | 基準({bench_name}) MDD {bench_mdd:.1f}%"
+                    if bench_mdd is not None and pd.notnull(bench_mdd)
+                    else ""
+                )
                 risk_line = (
-                    f"- **風險指標**: MDD {mdd:.1f}% | "
+                    f"- **風險指標**: MDD {mdd:.1f}%{history_note} | "
                     f"目前回撤 {curr_dd:.1f}% | "
                     f"Pain Ratio {pain_pct} | "
                     f"舒適度 {comfort} | "
                     f"持有力 {hold_str}"
+                    f"{bench_note}"
                 )
             else:
                 risk_line = None

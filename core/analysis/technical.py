@@ -136,7 +136,7 @@ def calculate_drawdown_metrics(t_df_clean, sharpe):
         drawdown_result.comfortScore if drawdown_result else None, 0.5
     )
     sharpe_norm = min(1.0, max(0.0, sharpe / 2.0))
-    pain_num = drawdown_result.painRatio if drawdown_result else 0.5
+    pain_num = min(1.0, drawdown_result.painRatio if drawdown_result else 0.5)
 
     history_years = (
         (t_df_clean.index[-1] - t_df_clean.index[0]).days / 365.25
@@ -152,10 +152,19 @@ def calculate_drawdown_metrics(t_df_clean, sharpe):
     else:
         maturity_score = 0.4
 
+    # 方案 A：短期樣本指標向中性值 0.5 收斂
+    # confidence = maturity_score，歷史越短，指標可信度越低
+    confidence = maturity_score
+    # 高於中性（comfort > 0.5）→ 向下收斂（打折）
+    # 低於中性（comfort < 0.5）→ 維持原值或加重懲罰，不向上收斂
+    comfort_adjusted = min(0.5 + (comfort_num - 0.5) * confidence, comfort_num)
+    sharpe_adjusted = 0.5 + (sharpe_norm - 0.5) * confidence
+    pain_adjusted = 0.5 + ((1.0 - pain_num) - 0.5) * confidence
+
     hold_ability_score = round(
-        0.35 * comfort_num
-        + 0.25 * sharpe_norm
-        + 0.20 * (1.0 - pain_num)
+        0.35 * comfort_adjusted
+        + 0.25 * sharpe_adjusted
+        + 0.20 * pain_adjusted
         + 0.20 * maturity_score,
         4,
     )

@@ -38,6 +38,7 @@ from core.fetchers import (
     fetch_historical_data,
     get_ticker_fundamental_info,
 )
+from core.risk import calculate_asset_drawdown
 
 
 def run_advanced_analysis(df_res):
@@ -84,6 +85,14 @@ def run_advanced_analysis(df_res):
                         f"標的 {ticker} 的基準 {current_benchmark} 無數據，跳過分析"
                     )
                     continue
+
+                bench_price_history = [
+                    {"date": str(idx.date()), "value": float(v)}
+                    for idx, v in b_series_final.items()
+                    if pd.notnull(v) and float(v) > 0
+                ]
+                bench_drawdown = calculate_asset_drawdown(bench_price_history)
+                bench_mdd = bench_drawdown.maxDrawdownPercent if bench_drawdown else None
 
                 t_df_clean = extract_ticker_frame(t_data_all_raw, ticker)
                 if t_df_clean is None:
@@ -239,6 +248,7 @@ def run_advanced_analysis(df_res):
                     peg_ratio=fundamentals.get("pegRatio"),
                     asset_type=asset_type,
                     alpha_win_rate=alpha_win_str,
+                    history_years=history_years,
                 )
 
                 results.append(
@@ -291,6 +301,8 @@ def run_advanced_analysis(df_res):
                         COL_HOLD_ABILITY_SCORE: hold_ability_score,
                         COL_MATURITY_SCORE: maturity_score,
                         COL_HISTORY_YEARS: round(history_years, 1),
+                        "benchmarkMddPct": bench_mdd,
+                        "benchmarkName": current_benchmark,
                     }
                 )
             except Exception as exc:
