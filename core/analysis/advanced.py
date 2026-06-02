@@ -24,7 +24,7 @@ from core.columns import (
     COL_DAILY_LEVEL,
     COL_GET_VALUE,
     COL_HISTORY_YEARS,
-    COL_HOLDABILITY_SCORE,
+    COL_HOLD_ABILITY_SCORE,
     COL_MATURITY_SCORE,
     COL_NAME,
     COL_PRICE,
@@ -216,7 +216,7 @@ def run_advanced_analysis(df_res):
 
                 (
                     drawdown_result,
-                    holdability_score,
+                    hold_ability_score,
                     maturity_score,
                     history_years,
                 ) = calculate_drawdown_metrics(t_df_clean, sharpe)
@@ -288,7 +288,7 @@ def run_advanced_analysis(df_res):
                         COL_COMFORT_SCORE: drawdown_result.comfortScore
                         if drawdown_result
                         else None,
-                        COL_HOLDABILITY_SCORE: holdability_score,
+                        COL_HOLD_ABILITY_SCORE: hold_ability_score,
                         COL_MATURITY_SCORE: maturity_score,
                         COL_HISTORY_YEARS: round(history_years, 1),
                     }

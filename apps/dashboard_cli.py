@@ -8,6 +8,7 @@ import argparse
 import datetime
 import pandas as pd
 from core import dashboard_logic
+from core.exporters import _SUGGESTION_PATH
 from ui.dashboard_ui import show_console_rich
 
 
@@ -34,8 +35,9 @@ def run_cli():
     df_res, market_share_data = dashboard_logic.calculate_assets_data(exchange_rates)
 
     if args.code:
-        df_to_analyze = df_res[df_res["代碼"].isin(args.code)].copy()
         existing_codes = df_res["代碼"].tolist()
+        is_suggestion = not any(c in existing_codes for c in args.code)
+        df_to_analyze = df_res[df_res["代碼"].isin(args.code)].copy()
         for c in args.code:
             if c not in existing_codes:
                 mock_record = {
@@ -61,6 +63,7 @@ def run_cli():
                 )
         df_final = df_to_analyze
     else:
+        is_suggestion = False
         df_final = df_res
 
     # 判斷是否需要執行進階分析
@@ -68,9 +71,11 @@ def run_cli():
         dashboard_logic.run_advanced_analysis(df_final) if args.analyze else None
     )
 
+    guide_path = _SUGGESTION_PATH if is_suggestion else None
+
     # 當同時指定 --ai 與 --analyze 時，寫入整合後的 AI 報告檔案
     if args.ai and args.analyze:
-        ai_text = dashboard_logic.export_for_ai(df_final, adv_res=advanced_results)
+        ai_text = dashboard_logic.export_for_ai(df_final, adv_res=advanced_results, guide_path=guide_path)
         analyze_dir = os.path.join(os.path.dirname(__file__), "..", "analyze")
         os.makedirs(analyze_dir, exist_ok=True)
         ts = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
@@ -79,7 +84,7 @@ def run_cli():
             f.write(ai_text)
         print(f"\n✅ AI 摘要與量化分析結果已合併寫入檔案: {report_path}")
     elif args.ai:
-        print(dashboard_logic.export_for_ai(df_final, adv_res=advanced_results))
+        print(dashboard_logic.export_for_ai(df_final, adv_res=advanced_results, guide_path=guide_path))
     else:
         show_console_rich(
             df_final,

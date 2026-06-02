@@ -152,11 +152,11 @@ def calculate_drawdown_metrics(t_df_clean, sharpe):
     else:
         maturity_score = 0.4
 
-    holdability_score = round(
+    hold_ability_score = round(
         0.35 * comfort_num
         + 0.25 * sharpe_norm
         + 0.20 * (1.0 - pain_num)
         + 0.20 * maturity_score,
         4,
     )
-    return drawdown_result, holdability_score, maturity_score, round(history_years, 1)
+    return drawdown_result, hold_ability_score, maturity_score, round(history_years, 1)

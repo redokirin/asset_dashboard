@@ -144,7 +144,14 @@ def fetch_common_data(tickers, period="2y", fetchers=None):
 
     active_fetchers = fetchers or FETCHERS
     try:
-        return active_fetchers["common"](normalized_tickers, period=period)
+        df = active_fetchers["common"](normalized_tickers, period=period)
     except Exception as exc:
         logging.error(f"抓取共用數據失敗: {exc}")
         return pd.DataFrame()
+
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    df = normalize_yfinance_columns(df)
+    df = apply_yahoo_price_patches(df, normalized_tickers)
+    return df

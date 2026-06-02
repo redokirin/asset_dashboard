@@ -8,7 +8,7 @@ from core.columns import (
     COL_COMFORT_SCORE,
     COL_CURRENCY,
     COL_HISTORY_YEARS,
-    COL_HOLDABILITY_SCORE,
+    COL_HOLD_ABILITY_SCORE,
     COL_MARKET_VALUE,
     COL_MATURITY_SCORE,
     COL_NAME,
@@ -70,13 +70,13 @@ def test_calculate_drawdown_metrics_returns_contract_values():
         index=pd.date_range("2026-01-01", periods=4, freq="D"),
     )
 
-    drawdown_result, holdability_score, maturity_score, history_years = (
+    drawdown_result, hold_ability_score, maturity_score, history_years = (
         analysis_quant._calculate_drawdown_metrics(df, sharpe=1.0)
     )
 
     assert drawdown_result is not None
     assert drawdown_result.comfortScore == "Low"
-    assert 0.0 <= holdability_score <= 1.0
+    assert 0.0 <= hold_ability_score <= 1.0
     assert maturity_score == 0.4
     assert history_years == 0.0
 
@@ -103,7 +103,9 @@ def test_run_advanced_analysis_preserves_ui_output_contract(monkeypatch):
     common_index = price_df.index
     common = pd.concat(
         {
-            "VOO": pd.DataFrame({"Close": np.linspace(400.0, 450.0, 300)}, index=common_index),
+            "VOO": pd.DataFrame(
+                {"Close": np.linspace(400.0, 450.0, 300)}, index=common_index
+            ),
             "USDTWD=X": pd.DataFrame({"Close": 32.0}, index=common_index),
             "JPYTWD=X": pd.DataFrame({"Close": 0.22}, index=common_index),
         },
@@ -139,11 +141,11 @@ def test_run_advanced_analysis_preserves_ui_output_contract(monkeypatch):
     assert len(result) == 1
     row = result.iloc[0]
     for key in [
-        COL_HOLDABILITY_SCORE,
+        COL_HOLD_ABILITY_SCORE,
         COL_COMFORT_SCORE,
         COL_MATURITY_SCORE,
         COL_HISTORY_YEARS,
     ]:
         assert key in result.columns
         assert key in row
-    assert isinstance(row[COL_HOLDABILITY_SCORE], float)
+    assert isinstance(row[COL_HOLD_ABILITY_SCORE], float)

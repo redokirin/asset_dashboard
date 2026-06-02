@@ -129,7 +129,7 @@ def show_console_rich(
             _curr_dd = row.get("currentDrawdownPct")
             _pain = row.get("painRatio")
             _comfort = row.get("comfortScore") or "-"
-            _hold = row.get("holdabilityScore")
+            _hold = row.get("hold_abilityScore")
 
             def _dd_color(v):
                 """回撤深度語義色（Rich markup）"""

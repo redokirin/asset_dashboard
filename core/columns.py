@@ -32,7 +32,7 @@ COL_DAILY_LEVEL = "日常波段"
 COL_PULLBACK_LEVEL = "技術回測"
 COL_SNIPER_LEVEL = "狙擊位"
 
-COL_HOLDABILITY_SCORE = "holdabilityScore"
+COL_HOLD_ABILITY_SCORE = "hold_abilityScore"
 COL_COMFORT_SCORE = "comfortScore"
 COL_MATURITY_SCORE = "maturityScore"
 COL_HISTORY_YEARS = "historyYears"

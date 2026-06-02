@@ -76,13 +76,13 @@ def render_advanced_analysis_ui(res):
             return "⭐⭐"
         return "⭐"
 
-    holdability = res.get("holdabilityScore")
+    hold_ability = res.get("hold_abilityScore")
     comfort = res.get("comfortScore") or "-"
     max_drawdown = res.get("maxDrawdownPct")
     current_drawdown = res.get("currentDrawdownPct")
     pain = res.get("painRatio")
 
-    hold_pct = int(holdability * 100) if isinstance(holdability, float) else 0
+    hold_pct = int(hold_ability * 100) if isinstance(hold_ability, float) else 0
     pain_str = f"{pain * 100:.0f}%" if isinstance(pain, float) else "-"
     mdd_str = f"{max_drawdown:.1f}%" if isinstance(max_drawdown, float) else "-"
     curr_str = (
@@ -101,7 +101,7 @@ def render_advanced_analysis_ui(res):
                     f"{hold_str}"
                     f"<span style='font-size:0.95rem;letter-spacing:1px;margin-left:6px;'>"
                     f"{_stars(hold_pct)}</span>",
-                    _hold_color(holdability),
+                    _hold_color(hold_ability),
                 ),
                 "舒適度": (comfort, comfort_colors.get(comfort, "")),
             }
@@ -142,7 +142,7 @@ def render_advanced_analysis_ui(res):
         )
         risk_row2 = render_analysis_metrics_row(
             {
-                "持有力": (hold_str, _hold_color(holdability)),
+                "持有力": (hold_str, _hold_color(hold_ability)),
                 "Sharpe": res.get("夏普值", "-"),
                 "Alpha 勝率": res.get("Alpha 勝率", "-"),
                 "月度 α": res.get("月度 Alpha", "-"),
@@ -182,11 +182,11 @@ def render_advanced_analysis_ui(res):
         eps_v = res.get("EPS")
         try:
             pe_str = f"{float(pe_v):.1f}" if pe_v is not None else "-"
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             pe_str = "-"
         try:
             eps_str = f"{float(eps_v):.2f}" if eps_v is not None else "-"
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             eps_str = "-"
 
         fund_row = render_analysis_metrics_row(
