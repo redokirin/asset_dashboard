@@ -22,6 +22,7 @@ def generate_advanced_diagnosis(
     asset_type="個股",
     alpha_win_rate="0%",
     history_years=None,
+    entry_zone_status=None,
 ):
     """綜合量化診斷邏輯 (整合基本面、技術位、RS、RSI 與量價關係)"""
     tags = []
@@ -185,6 +186,7 @@ def generate_advanced_diagnosis(
             tags.append("⚪量縮止跌")
             vp_advice = "量縮下跌，賣壓出現竭盡跡象，有利於短線止跌整理。"
 
+    # 先不加入持有力的壓力測試
     # stress_advice = ""
     # if history_years is not None and history_years < 2:
     #     history_months = max(1, round(history_years * 12))
@@ -193,6 +195,9 @@ def generate_advanced_diagnosis(
     #         stress_advice = f"⚠️ 本標的歷史僅 {history_months} 個月，從未經歷完整市場壓力測試，MDD 不具參考性，持有力評分偏高存在高估風險。"
     #     else:
     #         stress_advice = f"⚠️ 本標的歷史不足 2 年（{history_months} 個月），壓力測試樣本有限，MDD 與舒適度參考性有限。"
+
+    if entry_zone_status and entry_zone_status != "-":
+        tags.append(entry_zone_status)
 
     advice_base_display = f"\n{advice_base}" if advice_base else ""
     fund_display = f"\n{fund_advice}" if fund_advice else ""

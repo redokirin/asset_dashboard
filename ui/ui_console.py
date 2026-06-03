@@ -161,6 +161,16 @@ def show_console_rich(
             _pain_str = f"{_pain * 100:.0f}%" if isinstance(_pain, float) else "-"
             _hold_str = f"{_hold * 100:.0f}%" if isinstance(_hold, float) else "-"
 
+            _ann_vol = row.get("annualizedVol")
+            _vol_grade = row.get("volGrade") or "-"
+            _vol_str = (
+                f"{_ann_vol:.1%} ({_vol_grade})" if isinstance(_ann_vol, float) else "-"
+            )
+            _daily_upper = row.get("dailyUpper")
+            _retest_upper = row.get("retestUpper")
+            _sniper_upper = row.get("sniperUpper")
+            _zone_status = row.get("entryZoneStatus") or "-"
+
             if is_list_mode:
                 val_alpha = (
                     str(row.get("月度 Alpha", "-"))
@@ -168,12 +178,18 @@ def show_console_rich(
                     .replace("[green]", "")
                     .replace("[/]", "")
                 )
+                _daily_line = (
+                    f"{row.get('日常波段', '-')} (上限 {_daily_upper:.2f})"
+                    if _daily_upper
+                    else str(row.get("日常波段", "-"))
+                )
                 metrics = [
                     f"  > 股價: {row.get('股價', '-')} | RS%: {row.get('RS 百分位', '-')} | RSI: {row.get('RSI', 0):.1f}",
                     f"  > Alpha勝率: {row.get('Alpha 勝率', '-')} | 月度Alpha: {val_alpha} | 夏普值: {row.get('夏普值', '-')}",
-                    f"  > 建議位階: 波段 {row.get('日常波段', '-')} / 回測 {row.get('技術回測', '-')} / 狙擊 {row.get('狙擊位', '-')}",
+                    f"  > 建議位階: 日常 {_daily_line} / 回測 {row.get('技術回測', '-')} / 狙擊 {row.get('狙擊位', '-')} | 進場: {_zone_status}",
                     (
-                        f"  > 風險: MDD [{_dd_color(_mdd)}]{_mdd_str}[/] | "
+                        f"  > 風險: 波動率 {_vol_str} | "
+                        f"MDD [{_dd_color(_mdd)}]{_mdd_str}[/] | "
                         f"目前回撤 [{_dd_color(_curr_dd)}]{_curr_str}[/] | "
                         f"Pain {_pain_str} | "
                         f"舒適度 [{_comfort_color}]{_comfort}[/] | "
@@ -183,50 +199,61 @@ def show_console_rich(
                 for line in metrics:
                     console.print(line)
             else:
+                # ── 掛單位階小表 ───────────────────────────────────────────────
+                price_table = Table(box=box.SIMPLE, show_header=True)
+                for col in ["股價", "日常", "回測", "狙擊"]:
+                    price_table.add_column(col, justify="right")
+                _fmt = lambda bid, upper: f"{bid} ~ {upper:.2f}" if upper else str(bid)
+                price_table.add_row(
+                    str(row.get("股價", "-")),
+                    _fmt(row.get("日常波段", "-"), _daily_upper),
+                    _fmt(row.get("技術回測", "-"), _retest_upper),
+                    _fmt(row.get("狙擊位", "-"), _sniper_upper),
+                )
+                console.print(price_table)
+
+                # ── 量化指標小表 ───────────────────────────────────────────────
                 mini_table = Table(box=box.SIMPLE, show_header=True)
-                cols = [
-                    "股價",
-                    "日常波段",
-                    "技術回測",
-                    "狙擊目標",
+                for col in [
                     "MA20",
                     "MA60",
                     "MA120",
                     "MA250",
-                    "RS",
                     "RS%",
                     "RSI",
                     "α勝率",
                     "月度α",
                     "夏普值",
                     "乖離率",
-                ]
-                for col in cols:
+                ]:
                     mini_table.add_column(col, justify="right")
                 mini_table.add_row(
-                    str(row.get("股價", "-")),
-                    str(row.get("日常波段", "-")),
-                    str(row.get("技術回測", "-")),
-                    str(row.get("狙擊位", "-")),
                     str(row.get("MA20", "-")),
                     str(row.get("MA60", "-")),
                     str(row.get("MA120", "-")),
                     str(row.get("MA250", "-")),
-                    str(row.get("RS", "-")),
-                    str(row.get("RS%", "-")),
+                    str(row.get("RS 百分位", "-")),
                     f"{row.get('RSI', 0):.1f}",
                     str(row.get("Alpha 勝率", "-")),
                     str(row.get("月度 Alpha", "-")),
                     str(row.get("夏普值", "-")),
-                    str(row.get("乖離率", "-")),
+                    str(row.get("乖離率 (Bias)", "-")),
                 )
                 console.print(mini_table)
 
                 # ── 風險指標小表 ───────────────────────────────────────────────
                 risk_table = Table(box=box.SIMPLE, show_header=True)
-                for col in ["MDD", "目前回撤", "Pain Ratio", "舒適度", "持有力"]:
+                for col in [
+                    "年化波動率",
+                    "MDD",
+                    "目前回撤",
+                    "Pain Ratio",
+                    "舒適度",
+                    "持有力",
+                ]:
                     risk_table.add_column(col, justify="right")
                 risk_table.add_row(
+                    _vol_str,
                     f"[{_dd_color(_mdd)}]{_mdd_str}[/]",
                     f"[{_dd_color(_curr_dd)}]{_curr_str}[/]",
                     _pain_str,

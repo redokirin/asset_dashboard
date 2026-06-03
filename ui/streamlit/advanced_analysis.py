@@ -97,47 +97,75 @@ def render_advanced_analysis_ui(res):
     )
 
     with tab1:
-        hero_row = render_analysis_metrics_row(
-            {
-                "🏆 持有力": (
-                    f"{hold_str}"
-                    f"<span style='font-size:0.95rem;letter-spacing:1px;margin-left:6px;'>"
-                    f"{_stars(hold_pct)}</span>",
-                    _hold_color(hold_ability),
-                ),
-                "舒適度": (comfort, comfort_colors.get(comfort, "")),
-            }
-        )
-        st.markdown(hero_row, unsafe_allow_html=True)
-
-        price_dic = {
-            "股價": res.get("股價", "-"),
-            "日常": res.get("日常波段", "-"),
-            "回測": res.get("技術回測", "-"),
-            "狙擊": res.get("狙擊位", "-"),
-        }
-        st.markdown(
-            render_analysis_metrics_row(price_dic, "🎯 建議掛單"),
-            unsafe_allow_html=True,
-        )
-
         _daily_upper = res.get("dailyUpper")
-        _zone_status = res.get("entryZoneStatus", "-")
+        _zone_status = res.get("entryZoneStatus") or "-"
+        _price_now = res.get("股價", "-")
+        _daily_bid = res.get("日常波段", "-")
+        _retest_bid = res.get("技術回測", "-")
+        _sniper_bid = res.get("狙擊位", "-")
+        _retest_upper = res.get("retestUpper")
+        _sniper_upper = res.get("sniperUpper")
+
+        def _secondary_line(*parts):
+            return "<div style='font-size:0.78rem;color:#888;padding:2px 0 6px 4px;'>" + " ／ ".join(parts) + "</div>"
+
+        def _fmt_range(bid, upper):
+            return f"{bid} ~ {upper:.2f}" if upper else str(bid)
+
         if _daily_upper is not None:
-            _daily_bid = res.get("日常波段", "-")
-            _retest_bid = res.get("技術回測", "-")
-            _sniper_bid = res.get("狙擊位", "-")
-            _retest_upper = res.get("retestUpper")
-            _sniper_upper = res.get("sniperUpper")
-            _price_now = res.get("股價", "-")
-            _retest_part = f" ／ 回測 [{_retest_bid}] 上限 [{_retest_upper:.2f}]" if _retest_upper else ""
-            _sniper_part = f" ／ 狙擊 [{_sniper_bid}] 上限 [{_sniper_upper:.2f}]" if _sniper_upper else ""
-            zone_line = (
-                f"📐 掛單容忍帶：日常 [{_daily_bid}] 上限 [{_daily_upper:.2f}]"
-                f"{_retest_part}{_sniper_part} ／ 現價 {_price_now} {_zone_status}"
-            )
+            _retest_range = _fmt_range(_retest_bid, _retest_upper)
+            _sniper_range = _fmt_range(_sniper_bid, _sniper_upper)
+
+            if "日常加碼" in _zone_status:
+                st.markdown(
+                    render_analysis_metrics_row(
+                        {"股價": _price_now, "✅ 日常加碼": _daily_bid},
+                        "🎯 建議掛單",
+                    ),
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    _secondary_line(
+                        f"容忍上限 {_daily_upper:.2f}",
+                        f"回測 {_retest_range}",
+                        f"狙擊 {_sniper_range}",
+                    ),
+                    unsafe_allow_html=True,
+                )
+            elif "區間內" in _zone_status:
+                st.markdown(
+                    render_analysis_metrics_row(
+                        {"股價": _price_now, "🟡 容忍帶": f"{_daily_bid} ~ {_daily_upper:.2f}"},
+                        "🎯 建議掛單",
+                    ),
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    _secondary_line(
+                        f"回測 {_retest_range}",
+                        f"狙擊 {_sniper_range}",
+                    ),
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    "<div class='analysis-report-title'>🎯 建議掛單 &nbsp;—&nbsp; 🔴 追價警戒，暫停</div>",
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    _secondary_line(
+                        f"日常 {_fmt_range(_daily_bid, _daily_upper)}",
+                        f"回測 {_retest_range}",
+                        f"狙擊 {_sniper_range}",
+                    ),
+                    unsafe_allow_html=True,
+                )
+        else:
             st.markdown(
-                f"<div style='font-size:0.85rem;color:#bbb;padding:2px 0 6px 0;'>{zone_line}</div>",
+                render_analysis_metrics_row(
+                    {"日常": _daily_bid, "回測": _retest_bid, "狙擊": _sniper_bid},
+                    "🎯 建議掛單",
+                ),
                 unsafe_allow_html=True,
             )
 
@@ -153,20 +181,30 @@ def render_advanced_analysis_ui(res):
             st.info(str(diag))
 
     with tab2:
+        hero_row = render_analysis_metrics_row(
+            {
+                "🏆 持有力": (
+                    f"{hold_str}"
+                    f"<span style='font-size:0.95rem;letter-spacing:1px;margin-left:6px;'>"
+                    f"{_stars(hold_pct)}</span>",
+                    _hold_color(hold_ability),
+                ),
+                "舒適度": (comfort, comfort_colors.get(comfort, "")),
+            }
+        )
+        st.markdown(hero_row, unsafe_allow_html=True)
         vol_str = f"{ann_vol:.1%} ({vol_grade})" if isinstance(ann_vol, float) else "-"
         risk_row1 = render_analysis_metrics_row(
             {
                 "年化波動率": vol_str,
                 "MDD": (mdd_str, _dd_color(max_drawdown)),
                 "目前回撤": (curr_str, _dd_color(current_drawdown)),
-                "Pain Ratio": (pain_str, _pain_color(pain)),
             },
             "⚠️ 風險指標",
         )
         risk_row2 = render_analysis_metrics_row(
             {
-                "持有力": (hold_str, _hold_color(hold_ability)),
-                "舒適度": (comfort, comfort_colors.get(comfort, "")),
+                "Pain Ratio": (pain_str, _pain_color(pain)),
                 "Sharpe": res.get("夏普值", "-"),
                 "Alpha 勝率": res.get("Alpha 勝率", "-"),
             }

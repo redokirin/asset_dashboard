@@ -279,6 +279,7 @@ def run_advanced_analysis(df_res):
                     asset_type=asset_type,
                     alpha_win_rate=alpha_win_str,
                     history_years=history_years,
+                    entry_zone_status=entry_zone_status,
                 )
 
                 results.append(
