@@ -138,7 +138,7 @@ def select_atv_model(asset: dict) -> MarketModel:
     ticker = str(asset.get(COL_TICKER) or asset.get("id") or "").upper()
 
     # US ETFs cross-listed on TSE must be caught before the .T check
-    if ticker.endswith(".T") and any(p in ticker for p in _US_ON_TSE):
+    if ticker.endswith(".T") and ticker.split(".")[0] in _US_ON_TSE:
         return "ATV_US"
 
     if "美股" in market:

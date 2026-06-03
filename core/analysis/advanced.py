@@ -164,6 +164,11 @@ def run_advanced_analysis(df_res):
                 rs_p10 = float(np.percentile(rs_series.values.flatten(), 10))
                 rs_p10_price = rs_p10 * comb["b"].iloc[-1]
 
+                # Self-benchmark 標的 (ticker == benchmark) RS ≡ 1.0，
+                # rs_p10_price 會卡在現價附近，反而讓 sniper 失去狙擊意義 — 此時不傳。
+                if current_benchmark == ticker:
+                    rs_p10_price = None
+
                 suggested_bid_str = "-"
                 daily_wave, tech_retest, sniper_pos = "-", "-", "-"
                 entries = None

@@ -38,32 +38,33 @@ def run_cli():
         existing_codes = df_res["代碼"].tolist()
         is_suggestion = not any(c in existing_codes for c in args.code)
         df_to_analyze = df_res[df_res["代碼"].isin(args.code)].copy()
-        for c in args.code:
-            if c not in existing_codes:
-                mock_record = {
-                    "市場": "自選",
-                    "類型": "ETF",
-                    "名稱": c,
-                    "代碼": c,
-                    "幣別": "TWD",
-                    "單位數": 0,
-                    "平均成本": 0.0,
-                    "股價": 0.0,
-                    "漲跌": None,
-                    # "建議掛單": 0.0,
-                    "成本": 0,
-                    "市值": 0,
-                    "損益": 0,
-                    "報酬率": 0.0,
-                    "佔比": 100.0,
-                    "_get_value": True,
-                }
-                mock_df = pd.DataFrame([mock_record]).reindex(
-                    columns=df_to_analyze.columns
-                )
-                df_to_analyze = pd.concat(
-                    [df_to_analyze, mock_df], ignore_index=True
-                )
+        missing_codes = [c for c in args.code if c not in existing_codes]
+        if missing_codes:
+            mock_defaults = {
+                "市場": "自選",
+                "類型": "ETF",
+                "幣別": "TWD",
+                "單位數": 0,
+                "平均成本": 0.0,
+                "漲跌": 0.0,
+                "股價": 0.0,
+                "更新時間": "",
+                "成本": 0,
+                "市值": 0,
+                "損益": 0,
+                "報酬率": 0.0,
+                "佔比": 100.0,
+                "_get_value": True,
+                "Settlement": "",
+            }
+            mock_rows = []
+            for c in missing_codes:
+                row = {col: mock_defaults.get(col, "") for col in df_to_analyze.columns}
+                row["代碼"] = c
+                row["名稱"] = c
+                mock_rows.append(row)
+            mock_df = pd.DataFrame(mock_rows, columns=df_to_analyze.columns)
+            df_to_analyze = pd.concat([df_to_analyze, mock_df], ignore_index=True)
         df_final = df_to_analyze
     else:
         is_suggestion = False
