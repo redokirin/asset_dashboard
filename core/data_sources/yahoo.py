@@ -96,6 +96,7 @@ def get_ticker_fundamental_info(ticker_symbol):
             "pe": info.get("trailingPE", 0) or 0,
             "dividendYield": final_dividend_yield,
             "pegRatio": info.get("trailingPegRatio", 0) or info.get("pegRatio", 0) or 0,
+            "priceToBook": info.get("priceToBook", 0) or 0,
             "volume": info.get("volume", 0) or 0,
             "avg_volume": info.get("averageVolume", 1) or 1,
         }
@@ -106,6 +107,7 @@ def get_ticker_fundamental_info(ticker_symbol):
             "pe": 0,
             "dividendYield": 0,
             "pegRatio": 0,
+            "priceToBook": 0,
             "volume": 0,
             "avg_volume": 1,
         }

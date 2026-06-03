@@ -18,6 +18,7 @@ def generate_advanced_diagnosis(
     pe_ratio=None,
     dividend_yield=None,
     peg_ratio=None,
+    pb_ratio=None,
     asset_type="個股",
     alpha_win_rate="0%",
     history_years=None,
@@ -104,27 +105,40 @@ def generate_advanced_diagnosis(
                     if pe_ratio <= 30
                     else "高成長溢價"
                 )
-                fund_advice += f" 基本面 EPS 正向，反映出{pe_desc}。"
+                fund_advice += f"基本面 EPS 正向，反映出{pe_desc}。"
 
         if peg_ratio is not None and not math.isnan(peg_ratio) and peg_ratio > 0:
             if peg_ratio < 1.0:
                 tags.append("💎估值極具吸引力 (PEG < 1)")
-                fund_advice += " 成長估值具備極高吸引力 (PEG < 1)。"
+                fund_advice += "成長估值具備極高吸引力 (PEG < 1)。"
             elif peg_ratio > 2.0:
                 tags.append("⚠️成長溢價過高 (PEG > 2)")
                 if lt_context == "BULLISH":
-                    fund_advice += " 需注意成長性已透支估值 (PEG > 2)。"
+                    fund_advice += "需注意成長性已透支估值 (PEG > 2)。"
+
+        if pb_ratio is not None and not math.isnan(pb_ratio) and pb_ratio > 0:
+            if pb_ratio < 1.0:
+                tags.append("💎股價低於淨值 (PB < 1)")
+                fund_advice += f"股價淨值比 {pb_ratio:.2f}，低於帳面價值，具備安全邊際。"
+            elif pb_ratio <= 3.0:
+                tags.append("📘合理淨值區間 (PB 1-3)")
+            elif pb_ratio <= 6.0:
+                tags.append("⚠️淨值溢價偏高 (PB > 3)")
+                fund_advice += f"股價淨值比 {pb_ratio:.2f}，估值溢價明顯，需關注成長性是否支撐。"
+            else:
+                tags.append("🔴淨值嚴重溢價 (PB > 6)")
+                fund_advice += f"股價淨值比 {pb_ratio:.2f}，淨值溢價極高，估值泡沫風險上升。"
     else:
         if sharpe > 1.2:
             tags.append("💎高效率資產")
-            fund_advice += f" 具備高夏普值 ({sharpe:.1f})，資產配置效率極佳。"
+            fund_advice += f"具備高夏普值 ({sharpe:.1f})，資產配置效率極佳。"
 
         try:
             alpha_num = float(str(alpha_win_rate).replace("%", ""))
             if alpha_num > 60:
                 tags.append("🛡️強勢管理")
                 fund_advice += (
-                    f" Alpha 勝率 ({alpha_num:.1f}%) 表現強勁，具備超額報酬能力。"
+                    f"Alpha 勝率 ({alpha_num:.1f}%) 表現強勁，具備超額報酬能力。"
                 )
         except Exception:
             pass
@@ -170,16 +184,15 @@ def generate_advanced_diagnosis(
         history_months = max(1, round(history_years * 12))
         tags.append("⚠️壓力測試不足")
         if history_years < 1:
-            stress_advice = f"\n⚠️ 本標的歷史僅 {history_months} 個月，從未經歷完整市場壓力測試，MDD 不具參考性，持有力評分偏高存在高估風險。"
+            stress_advice = f"⚠️ 本標的歷史僅 {history_months} 個月，從未經歷完整市場壓力測試，MDD 不具參考性，持有力評分偏高存在高估風險。"
         else:
-            stress_advice = f"\n⚠️ 本標的歷史不足 2 年（{history_months} 個月），壓力測試樣本有限，MDD 與舒適度參考性有限。"
+            stress_advice = f"⚠️ 本標的歷史不足 2 年（{history_months} 個月），壓力測試樣本有限，MDD 與舒適度參考性有限。"
 
     advice_base_display = f"\n{advice_base}" if advice_base else ""
     fund_display = f"\n{fund_advice}" if fund_advice else ""
     bias_advice_display = f"\n{bias_advice}" if bias_advice else ""
     vp_advice_display = f"\n{vp_advice}" if vp_advice else ""
+    stress_advice_display = f"\n{stress_advice}" if stress_advice else ""
 
-    full_advice = (
-        f"{advice_base_display}{fund_display}{bias_advice_display}{vp_advice_display}{stress_advice}"
-    )
+    full_advice = f"{advice_base_display}{fund_display}{bias_advice_display}{vp_advice_display}{stress_advice_display}"
     return full_advice, tags

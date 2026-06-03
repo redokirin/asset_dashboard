@@ -220,7 +220,7 @@ def show_manual_analysis_page():
                 [
                     {
                         "市場": "手動",
-                        "類型": "ETF",
+                        "類型": "個股",
                         "名稱": c,
                         "代碼": c,
                         "幣別": "TWD",

@@ -273,8 +273,8 @@ def calculate_assets_data(exchange_rates):
                 price = batch_prices.get(asset["id"])
                 update_time = batch_times.get(asset["id"], "")
                 # 無論是 ETF 還是個股，都讀取漲跌幅
-                if cat_key in ["etfs", "stocks"]:
-                    change_val = batch_changes.get(asset["id"])
+                # if cat_key in ["etfs", "stocks"]:
+                change_val = batch_changes.get(asset["id"])
 
             res = calculate_asset_row(
                 asset, cat_name, exchange_rates, price, change_val, update_time

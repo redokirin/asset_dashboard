@@ -251,6 +251,7 @@ def run_advanced_analysis(df_res):
                     pe_ratio=fundamentals.get("pe"),
                     dividend_yield=fundamentals.get("dividendYield"),
                     peg_ratio=fundamentals.get("pegRatio"),
+                    pb_ratio=fundamentals.get("priceToBook"),
                     asset_type=asset_type,
                     alpha_win_rate=alpha_win_str,
                     history_years=history_years,
