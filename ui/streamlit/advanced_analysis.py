@@ -107,7 +107,11 @@ def render_advanced_analysis_ui(res):
         _sniper_upper = res.get("sniperUpper")
 
         def _secondary_line(*parts):
-            return "<div style='font-size:0.78rem;color:#888;padding:2px 0 6px 4px;'>" + " ／ ".join(parts) + "</div>"
+            return (
+                "<div style='font-size:0.78rem;color:#888;padding:2px 0 6px 4px;'>"
+                + " ／ ".join(parts)
+                + "</div>"
+            )
 
         def _fmt_range(bid, upper):
             return f"{bid} ~ {upper:.2f}" if upper else str(bid)
@@ -135,7 +139,10 @@ def render_advanced_analysis_ui(res):
             elif "區間內" in _zone_status:
                 st.markdown(
                     render_analysis_metrics_row(
-                        {"股價": _price_now, "🟡 容忍帶": f"{_daily_bid} ~ {_daily_upper:.2f}"},
+                        {
+                            "股價": _price_now,
+                            "🟡 容忍帶": f"{_daily_bid} ~ {_daily_upper:.2f}",
+                        },
                         "🎯 建議掛單",
                     ),
                     unsafe_allow_html=True,
@@ -181,6 +188,13 @@ def render_advanced_analysis_ui(res):
             st.info(str(diag))
 
     with tab2:
+
+        def _vol_color(grade):
+            return {"低波動": "#00C853", "中波動": "#FF9800", "高波動": "#FF4B4B"}.get(
+                grade, ""
+            )
+
+        vol_str = f"{ann_vol:.1%}" if isinstance(ann_vol, float) else "-"
         hero_row = render_analysis_metrics_row(
             {
                 "🏆 持有力": (
@@ -189,14 +203,13 @@ def render_advanced_analysis_ui(res):
                     f"{_stars(hold_pct)}</span>",
                     _hold_color(hold_ability),
                 ),
-                "舒適度": (comfort, comfort_colors.get(comfort, "")),
+                "年化波動率": (vol_str, _vol_color(vol_grade)),
             }
         )
         st.markdown(hero_row, unsafe_allow_html=True)
-        vol_str = f"{ann_vol:.1%} ({vol_grade})" if isinstance(ann_vol, float) else "-"
         risk_row1 = render_analysis_metrics_row(
             {
-                "年化波動率": vol_str,
+                "舒適度": (comfort, comfort_colors.get(comfort, "")),
                 "MDD": (mdd_str, _dd_color(max_drawdown)),
                 "目前回撤": (curr_str, _dd_color(current_drawdown)),
             },
