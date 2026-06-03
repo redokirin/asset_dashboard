@@ -157,10 +157,15 @@ def export_for_ai(df_res, adv_res=None, guide_path=None):
             history_yrs = row.get("historyYears")
             bench_mdd = row.get("benchmarkMddPct")
             bench_name = row.get("benchmarkName", "-")
+            ann_vol = row.get("annualizedVol")
+            vol_grade = row.get("volGrade", "-")
             if pd.notnull(mdd):
                 pain_pct = f"{pain * 100:.0f}%" if pd.notnull(pain) else "-"
                 hold_str = (
                     f"{hold_ability * 100:.0f}%" if pd.notnull(hold_ability) else "-"
+                )
+                vol_str = (
+                    f"{ann_vol:.1%} ({vol_grade})" if ann_vol is not None and pd.notnull(ann_vol) else "-"
                 )
                 history_note = ""
                 if history_yrs is not None and pd.notnull(history_yrs) and float(history_yrs) < 2:
@@ -172,7 +177,8 @@ def export_for_ai(df_res, adv_res=None, guide_path=None):
                     else ""
                 )
                 risk_line = (
-                    f"- **風險指標**: MDD {mdd:.1f}%{history_note} | "
+                    f"- **風險指標**: 年化波動率 {vol_str} | "
+                    f"MDD {mdd:.1f}%{history_note} | "
                     f"目前回撤 {curr_dd:.1f}% | "
                     f"Pain Ratio {pain_pct} | "
                     f"舒適度 {comfort} | "
@@ -186,7 +192,12 @@ def export_for_ai(df_res, adv_res=None, guide_path=None):
                 f"- **基本面**: EPS {eps} | P/E {pe} | 殖利率 {yield_val} | PEG {peg}\n"
                 f"- **量化指標**: RS百分位 {row.get('RS 百分位', '-')} | 乖離率 {bias} | 量比 {vol_ratio} | RSI {row.get('RSI', 0):.1f} | 夏普值 {row.get('夏普值', '-')} | α勝率 {row.get('Alpha 勝率', '-')}\n"
                 + (f"{risk_line}\n" if risk_line else "")
-                + f"- **掛單策略**: 日常 [{row.get(COL_DAILY_LEVEL, '-')}] 回測 [{row.get(COL_PULLBACK_LEVEL, '-')}] 狙擊 [{row.get(COL_SNIPER_LEVEL, '-')}]\n"
+                + (
+                    f"- **掛單策略**: 日常 [{row.get(COL_DAILY_LEVEL, '-')}] 上限 [{row['dailyUpper']:.2f}] / 回測 [{row.get(COL_PULLBACK_LEVEL, '-')}] 上限 [{row['retestUpper']:.2f}] / 狙擊 [{row.get(COL_SNIPER_LEVEL, '-')}] 上限 [{row['sniperUpper']:.2f}] {row.get('entryZoneStatus', '')}"
+                    if row.get("dailyUpper") is not None
+                    else f"- **掛單策略**: 日常 [{row.get(COL_DAILY_LEVEL, '-')}] 回測 [{row.get(COL_PULLBACK_LEVEL, '-')}] 狙擊 [{row.get(COL_SNIPER_LEVEL, '-')}]"
+                )
+                + "\n"
                 f"- **診斷標籤**: {' '.join(row['tags']) if isinstance(row.get('tags'), list) else '-'}\n"
                 f"- **AI 診斷建議**: {diag}"
             )

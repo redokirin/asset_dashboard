@@ -119,15 +119,21 @@ def generate_advanced_diagnosis(
         if pb_ratio is not None and not math.isnan(pb_ratio) and pb_ratio > 0:
             if pb_ratio < 1.0:
                 tags.append("💎股價低於淨值 (PB < 1)")
-                fund_advice += f"股價淨值比 {pb_ratio:.2f}，低於帳面價值，具備安全邊際。"
+                fund_advice += (
+                    f"股價淨值比 {pb_ratio:.2f}，低於帳面價值，具備安全邊際。"
+                )
             elif pb_ratio <= 3.0:
                 tags.append("📘合理淨值區間 (PB 1-3)")
             elif pb_ratio <= 6.0:
                 tags.append("⚠️淨值溢價偏高 (PB > 3)")
-                fund_advice += f"股價淨值比 {pb_ratio:.2f}，估值溢價明顯，需關注成長性是否支撐。"
+                fund_advice += (
+                    f"股價淨值比 {pb_ratio:.2f}，估值溢價明顯，需關注成長性是否支撐。"
+                )
             else:
                 tags.append("🔴淨值嚴重溢價 (PB > 6)")
-                fund_advice += f"股價淨值比 {pb_ratio:.2f}，淨值溢價極高，估值泡沫風險上升。"
+                fund_advice += (
+                    f"股價淨值比 {pb_ratio:.2f}，淨值溢價極高，估值泡沫風險上升。"
+                )
     else:
         if sharpe > 1.2:
             tags.append("💎高效率資產")
@@ -179,20 +185,24 @@ def generate_advanced_diagnosis(
             tags.append("⚪量縮止跌")
             vp_advice = "量縮下跌，賣壓出現竭盡跡象，有利於短線止跌整理。"
 
-    stress_advice = ""
-    if history_years is not None and history_years < 2:
-        history_months = max(1, round(history_years * 12))
-        tags.append("⚠️壓力測試不足")
-        if history_years < 1:
-            stress_advice = f"⚠️ 本標的歷史僅 {history_months} 個月，從未經歷完整市場壓力測試，MDD 不具參考性，持有力評分偏高存在高估風險。"
-        else:
-            stress_advice = f"⚠️ 本標的歷史不足 2 年（{history_months} 個月），壓力測試樣本有限，MDD 與舒適度參考性有限。"
+    # stress_advice = ""
+    # if history_years is not None and history_years < 2:
+    #     history_months = max(1, round(history_years * 12))
+    #     tags.append("⚠️壓力測試不足")
+    #     if history_years < 1:
+    #         stress_advice = f"⚠️ 本標的歷史僅 {history_months} 個月，從未經歷完整市場壓力測試，MDD 不具參考性，持有力評分偏高存在高估風險。"
+    #     else:
+    #         stress_advice = f"⚠️ 本標的歷史不足 2 年（{history_months} 個月），壓力測試樣本有限，MDD 與舒適度參考性有限。"
 
     advice_base_display = f"\n{advice_base}" if advice_base else ""
     fund_display = f"\n{fund_advice}" if fund_advice else ""
     bias_advice_display = f"\n{bias_advice}" if bias_advice else ""
     vp_advice_display = f"\n{vp_advice}" if vp_advice else ""
-    stress_advice_display = f"\n{stress_advice}" if stress_advice else ""
+    # stress_advice_display = f"\n{stress_advice}" if stress_advice else ""
 
-    full_advice = f"{advice_base_display}{fund_display}{bias_advice_display}{vp_advice_display}{stress_advice_display}"
+    full_advice = (
+        f"{advice_base_display}{fund_display}{bias_advice_display}{vp_advice_display}"
+    )
+    # if stress_advice:
+    #     full_advice += f"{stress_advice_display}"
     return full_advice, tags

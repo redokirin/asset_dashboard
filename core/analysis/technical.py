@@ -131,10 +131,19 @@ def calculate_drawdown_metrics(t_df_clean, sharpe):
         ]
         drawdown_result = calculate_asset_drawdown(price_history)
 
-    comfort_map = {"High": 1.0, "Medium": 0.5, "Low": 0.0}
-    comfort_num = comfort_map.get(
-        drawdown_result.comfortScore if drawdown_result else None, 0.5
-    )
+    # 年化波動率（日常波動特性，不受系統性股災影響）
+    annualized_vol = 0.0
+    vol_grade = "數據不足"
+    if len(t_df_clean) >= 20:
+        daily_returns = t_df_clean["Close"].pct_change().dropna()
+        annualized_vol = float(daily_returns.std() * (252 ** 0.5))
+        if annualized_vol < 0.15:
+            vol_grade = "低波動"
+        elif annualized_vol <= 0.30:
+            vol_grade = "中波動"
+        else:
+            vol_grade = "高波動"
+
     sharpe_norm = min(1.0, max(0.0, sharpe / 2.0))
     pain_num = min(1.0, drawdown_result.painRatio if drawdown_result else 0.5)
 
@@ -152,20 +161,30 @@ def calculate_drawdown_metrics(t_df_clean, sharpe):
     else:
         maturity_score = 0.4
 
-    # 方案 A：短期樣本指標向中性值 0.5 收斂
-    # confidence = maturity_score，歷史越短，指標可信度越低
+    # 歷史越短，指標可信度越低，向中性值 0.5 收斂
     confidence = maturity_score
-    # 高於中性（comfort > 0.5）→ 向下收斂（打折）
-    # 低於中性（comfort < 0.5）→ 維持原值或加重懲罰，不向上收斂
-    comfort_adjusted = min(0.5 + (comfort_num - 0.5) * confidence, comfort_num)
+
+    # 波動度分數取代 MDD/comfort 在持有力中的角色：波動越低分數越高
+    # 合理波動範圍 0–40%，超過 40% 視為極高波動
+    vol_norm = min(1.0, annualized_vol / 0.40) if annualized_vol > 0 else 0.5
+    vol_score = 1.0 - vol_norm
+    vol_score_adjusted = 0.5 + (vol_score - 0.5) * confidence
+
     sharpe_adjusted = 0.5 + (sharpe_norm - 0.5) * confidence
     pain_adjusted = 0.5 + ((1.0 - pain_num) - 0.5) * confidence
 
     hold_ability_score = round(
-        0.35 * comfort_adjusted
+        0.35 * vol_score_adjusted
         + 0.25 * sharpe_adjusted
         + 0.20 * pain_adjusted
         + 0.20 * maturity_score,
         4,
     )
-    return drawdown_result, hold_ability_score, maturity_score, round(history_years, 1)
+    return (
+        drawdown_result,
+        hold_ability_score,
+        maturity_score,
+        round(history_years, 1),
+        annualized_vol,
+        vol_grade,
+    )

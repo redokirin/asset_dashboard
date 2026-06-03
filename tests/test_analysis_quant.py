@@ -70,7 +70,7 @@ def test_calculate_drawdown_metrics_returns_contract_values():
         index=pd.date_range("2026-01-01", periods=4, freq="D"),
     )
 
-    drawdown_result, hold_ability_score, maturity_score, history_years = (
+    drawdown_result, hold_ability_score, maturity_score, history_years, annualized_vol, vol_grade = (
         analysis_quant._calculate_drawdown_metrics(df, sharpe=1.0)
     )
 
@@ -79,6 +79,8 @@ def test_calculate_drawdown_metrics_returns_contract_values():
     assert 0.0 <= hold_ability_score <= 1.0
     assert maturity_score == 0.4
     assert history_years == 0.0
+    assert isinstance(annualized_vol, float)
+    assert vol_grade in ("低波動", "中波動", "高波動", "數據不足")
 
 
 def test_run_advanced_analysis_preserves_ui_output_contract(monkeypatch):

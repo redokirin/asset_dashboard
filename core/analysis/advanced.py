@@ -233,7 +233,31 @@ def run_advanced_analysis(df_res):
                     hold_ability_score,
                     maturity_score,
                     history_years,
+                    annualized_vol,
+                    vol_grade,
                 ) = calculate_drawdown_metrics(t_df_clean, sharpe)
+
+                # 動態容忍區間（波動小→帶寬較寬，波動大→帶寬較窄）
+                _REFERENCE_VOL = 0.25
+                _BASE_TOLERANCE = 0.05
+                daily_upper = None
+                retest_upper = None
+                sniper_upper = None
+                entry_zone_status = "-"
+                if entries and annualized_vol > 0:
+                    tolerance = (_REFERENCE_VOL / annualized_vol) * _BASE_TOLERANCE
+                    _daily_bid = entries[COL_DAILY_LEVEL]
+                    _retest_bid = entries[COL_PULLBACK_LEVEL]
+                    _sniper_bid = entries[COL_SNIPER_LEVEL]
+                    daily_upper = round(_daily_bid * (1 + tolerance), 2)
+                    retest_upper = round(_retest_bid * (1 + tolerance), 2)
+                    sniper_upper = round(_sniper_bid * (1 + tolerance), 2)
+                    if price_val <= _daily_bid:
+                        entry_zone_status = "✅ 日常加碼"
+                    elif price_val <= daily_upper:
+                        entry_zone_status = "🟡 區間內加碼（波動容忍帶）"
+                    else:
+                        entry_zone_status = "🔴 追價警戒，暫停"
 
                 full_diag_text, tags = generate_advanced_diagnosis(
                     bias=bias_numeric,
@@ -307,6 +331,12 @@ def run_advanced_analysis(df_res):
                         COL_HOLD_ABILITY_SCORE: hold_ability_score,
                         COL_MATURITY_SCORE: maturity_score,
                         COL_HISTORY_YEARS: round(history_years, 1),
+                        "annualizedVol": annualized_vol if annualized_vol > 0 else None,
+                        "volGrade": vol_grade,
+                        "dailyUpper": daily_upper,
+                        "retestUpper": retest_upper,
+                        "sniperUpper": sniper_upper,
+                        "entryZoneStatus": entry_zone_status,
                         "benchmarkMddPct": bench_mdd,
                         "benchmarkName": current_benchmark,
                     }
