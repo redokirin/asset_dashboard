@@ -117,94 +117,106 @@ def render_liquidity_component(df):
     if settlement_values.eq("").any():
         group_keys.append("")
 
+    keep_color = "#36494f"
+    bar_palettes = [
+        ("#2563eb", "#93c5fd"),
+        ("#059669", "#86efac"),
+        ("#7c3aed", "#c4b5fd"),
+        ("#0f766e", "#99f6e4"),
+    ]
+
+    bank_blocks = ""
+    legend_items = ""
+    any_keep = False
+
+    for idx, bank_key in enumerate(group_keys):
+        investment_color, cash_color = bar_palettes[idx % len(bar_palettes)]
+        bank_row = None
+        if bank_key:
+            bank_row = bank_rows.get(bank_key)
+            title = str(bank_row.get(COL_NAME, bank_key)) if bank_row is not None else bank_key
+            matched_investments = investment_df[settlement_values == bank_key]
+            matched_cash = cash_df[
+                cash_df[COL_TICKER].fillna("").astype(str).str.strip() == bank_key
+            ]
+        else:
+            title = "未指定交割銀行"
+            matched_investments = investment_df[settlement_values == ""]
+            matched_cash = cash_df.iloc[0:0]
+
+        investment_value = matched_investments[COL_MARKET_VALUE].sum()
+        cash_value = matched_cash[COL_MARKET_VALUE].sum()
+        if investment_value + cash_value == 0:
+            continue
+
+        keep_twd = int(bank_row.get("keepTwd", 0)) if bank_row is not None else 0
+        investable = cash_value - keep_twd
+        bank_total_full = investment_value + investable + keep_twd
+
+        investment_pct = investment_value / bank_total_full * 100 if bank_total_full else 0
+        cash_pct = investable / bank_total_full * 100 if bank_total_full else 0
+        keep_pct = keep_twd / bank_total_full * 100 if bank_total_full else 0
+
+        if keep_twd > 0:
+            any_keep = True
+            keep_val_html = (
+                f'<div style="text-align:right;" class="asset-value-label">'
+                f'<span class="asset-price-main">${keep_twd:,.0f}</span> ({keep_pct:.1f}%)'
+                f"</div>"
+            )
+            keep_bar_html = (
+                f'<div title="保留金 {keep_pct:.1f}%"'
+                f' style="width:{keep_pct:.4f}%; background:{keep_color};"></div>'
+            )
+        else:
+            keep_val_html = "<div></div>"
+            keep_bar_html = ""
+
+        bank_blocks += (
+            f'<div style="padding:0 0.5rem; margin-top:6px;">'
+            f'<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:4px;">'
+            f'<div class="asset-value-label"><span class="asset-price-main">${investment_value:,.0f}</span> ({investment_pct:.1f}%)</div>'
+            f'<div style="text-align:right;" class="asset-value-label"><span class="asset-price-main">${investable:,.0f}</span> ({cash_pct:.1f}%)</div>'
+            f"{keep_val_html}"
+            f"</div>"
+            f'<div style="display:flex; height:16px; width:100%; overflow:hidden; border-radius:6px; background:rgba(255,255,255,0.08);">'
+            f'<div title="投資 {investment_pct:.1f}%" style="width:{investment_pct:.4f}%; background:{investment_color};"></div>'
+            f'<div title="可投入 {cash_pct:.1f}%" style="width:{cash_pct:.4f}%; background:{cash_color};"></div>'
+            f"{keep_bar_html}"
+            f"</div>"
+            f"</div>"
+        )
+        legend_items += (
+            f'<div style="display:flex; align-items:center; gap:4px;">'
+            f'<div style="width:10px; height:10px; border-radius:2px; background:{investment_color};"></div>'
+            f'<span class="asset-price-main">{title}</span>'
+            f"</div>"
+        )
+
+    if not bank_blocks:
+        return
+
+    keep_header = (
+        '<div style="text-align:right;" class="asset-value-label">保留金</div>'
+        if any_keep
+        else "<div></div>"
+    )
+    header = (
+        f'<div style="padding:0 0.5rem; margin-top:6px;">'
+        f'<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">'
+        f'<div class="asset-value-label">投資</div>'
+        f'<div style="text-align:right;" class="asset-value-label">可投入</div>'
+        f"{keep_header}"
+        f"</div></div>"
+    )
+    legend = (
+        f'<div style="display:flex; justify-content:center; gap:16px;'
+        f' flex-wrap:wrap; margin-top:6px; padding:0 0.5rem;">'
+        f"{legend_items}</div>"
+    )
+
     with st.container(border=True):
-        # keep_amount_color = "#36494f"
-        keep_color = "#36494f"
-        bar_palettes = [
-            ("#2563eb", "#93c5fd"),
-            ("#059669", "#86efac"),
-            ("#7c3aed", "#c4b5fd"),
-            ("#0f766e", "#99f6e4"),
-        ]
-        for idx, bank_key in enumerate(group_keys):
-            investment_color, cash_color = bar_palettes[idx % len(bar_palettes)]
-            if bank_key:
-                bank_row = bank_rows.get(bank_key)
-                bank_name = (
-                    str(bank_row.get(COL_NAME, bank_key))
-                    if bank_row is not None
-                    else bank_key
-                )
-                title = f"{bank_name}"  # ({bank_key})"
-                matched_investments = investment_df[settlement_values == bank_key]
-                matched_cash = cash_df[
-                    cash_df[COL_TICKER].fillna("").astype(str).str.strip() == bank_key
-                ]
-            else:
-                title = "未指定交割銀行"
-                matched_investments = investment_df[settlement_values == ""]
-                matched_cash = cash_df.iloc[0:0]
-
-            investment_value = matched_investments[COL_MARKET_VALUE].sum()
-            cash_value = matched_cash[COL_MARKET_VALUE].sum()
-            bank_total = investment_value + cash_value
-            if bank_total == 0:
-                continue
-
-            keep_twd = int(bank_row.get("keepTwd", 0)) if bank_row is not None else 0
-            investable = cash_value - keep_twd
-            bank_total_full = investment_value + investable + keep_twd
-
-            investment_pct = (
-                investment_value / bank_total_full * 100 if bank_total_full else 0
-            )
-            cash_pct = investable / bank_total_full * 100 if bank_total_full else 0
-            keep_pct = keep_twd / bank_total_full * 100 if bank_total_full else 0
-
-            keep_html = (
-                f'<div style="text-align: right;">'
-                f'<div class="asset-value-label">保留'
-                f'<span class="asset-price-main">${keep_twd:,.0f}</span>({keep_pct:.1f}%)'
-                f"</div></div>"
-                if keep_twd > 0
-                else "<div></div>"
-            )
-            keep_bar = (
-                f'<div title="保留金 {keep_pct:.1f}%" style="width:{keep_pct:.4f}%; background:{keep_color};"></div>'
-                if keep_twd > 0
-                else ""
-            )
-            st.markdown(
-                f"""
-                <div style="padding-left: 0.5rem;padding-right: 0.5rem;">
-                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:6px;">
-                        <div>
-                            <div class="asset-value-label">投資
-                            <span class="asset-price-main">${investment_value:,.0f}</span>
-                            ({investment_pct:.1f}%)
-                            </div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div class="asset-value-label">可投入
-                            <span class="asset-price-main">${investable:,.0f}</span>
-                            ({cash_pct:.1f}%)
-                            </div>
-                        </div>
-                        {keep_html}
-                    </div>
-                    <div style="display:flex; height:16px; width:100%; overflow:hidden; border-radius:6px; background:rgba(255,255,255,0.08);">
-                        <div title="投資 {investment_pct:.1f}%" style="width:{investment_pct:.4f}%; background:{investment_color};"></div>
-                        <div title="可投入 {cash_pct:.1f}%" style="width:{cash_pct:.4f}%; background:{cash_color};"></div>
-                        {keep_bar}
-                    </div>
-                    <div style="display:flex; align-items:center; justify-content:center; gap:6px; margin-top:5px;">
-                        <div style="width:10px; height:10px; border-radius:2px; flex-shrink:0; background:{investment_color};"></div>
-                        <span class="asset-price-main">{title}</span>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+        st.markdown(header + bank_blocks + legend, unsafe_allow_html=True)
 
 
 def render_cash_component(df):
