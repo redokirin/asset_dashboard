@@ -38,7 +38,7 @@ def render_schedule_of_assets(df, investment_df):
         roi = (total_pl / total_cost * 100) if total_cost != 0 else 0
 
         st.markdown(
-            f"""<div class='inline-metric-label'>💰 投資資產</div>
+            f"""<div class='inline-metric-label'>💰 總資產</div>
                 <div class='total-pl-wrapper'>
                     <div class='inline-metric-row'>
                         <span class='inline-metric-value'>${df["市值"].sum():,}</span>
@@ -118,6 +118,8 @@ def render_liquidity_component(df):
         group_keys.append("")
 
     with st.container(border=True):
+        # keep_amount_color = "#36494f"
+        keep_color = "#36494f"
         bar_palettes = [
             ("#2563eb", "#93c5fd"),
             ("#059669", "#86efac"),
@@ -149,9 +151,29 @@ def render_liquidity_component(df):
             if bank_total == 0:
                 continue
 
-            investment_pct = investment_value / bank_total * 100
-            cash_pct = cash_value / bank_total * 100
+            keep_twd = int(bank_row.get("keepTwd", 0)) if bank_row is not None else 0
+            investable = cash_value - keep_twd
+            bank_total_full = investment_value + investable + keep_twd
 
+            investment_pct = (
+                investment_value / bank_total_full * 100 if bank_total_full else 0
+            )
+            cash_pct = investable / bank_total_full * 100 if bank_total_full else 0
+            keep_pct = keep_twd / bank_total_full * 100 if bank_total_full else 0
+
+            keep_html = (
+                f'<div style="text-align: right;">'
+                f'<div class="asset-value-label">保留'
+                f'<span class="asset-price-main">${keep_twd:,.0f}</span>({keep_pct:.1f}%)'
+                f"</div></div>"
+                if keep_twd > 0
+                else "<div></div>"
+            )
+            keep_bar = (
+                f'<div title="保留金 {keep_pct:.1f}%" style="width:{keep_pct:.4f}%; background:{keep_color};"></div>'
+                if keep_twd > 0
+                else ""
+            )
             st.markdown(
                 f"""
                 <div style="padding-left: 0.5rem;padding-right: 0.5rem;">
@@ -162,18 +184,20 @@ def render_liquidity_component(df):
                             ({investment_pct:.1f}%)
                             </div>
                         </div>
-                        <div class="asset-price-main" style="text-align: center;">{title}</div>
                         <div style="text-align: right;">
-                            <div class="asset-value-label">現金
-                            <span class="asset-price-main">${cash_value:,.0f}</span>
+                            <div class="asset-value-label">可投入
+                            <span class="asset-price-main">${investable:,.0f}</span>
                             ({cash_pct:.1f}%)
                             </div>
                         </div>
+                        {keep_html}
                     </div>
                     <div style="display:flex; height:16px; width:100%; overflow:hidden; border-radius:6px; background:rgba(255,255,255,0.08);">
                         <div title="投資 {investment_pct:.1f}%" style="width:{investment_pct:.4f}%; background:{investment_color};"></div>
-                        <div title="現金 {cash_pct:.1f}%" style="width:{cash_pct:.4f}%; background:{cash_color};"></div>
+                        <div title="可投入 {cash_pct:.1f}%" style="width:{cash_pct:.4f}%; background:{cash_color};"></div>
+                        {keep_bar}
                     </div>
+                    <div class="asset-price-main" style="text-align: center;">{title}</div>
                 </div>
                 """,
                 unsafe_allow_html=True,

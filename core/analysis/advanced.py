@@ -92,7 +92,9 @@ def run_advanced_analysis(df_res):
                     if pd.notnull(v) and float(v) > 0
                 ]
                 bench_drawdown = calculate_asset_drawdown(bench_price_history)
-                bench_mdd = bench_drawdown.maxDrawdownPercent if bench_drawdown else None
+                bench_mdd = (
+                    bench_drawdown.maxDrawdownPercent if bench_drawdown else None
+                )
 
                 t_df_clean = extract_ticker_frame(t_data_all_raw, ticker)
                 if t_df_clean is None:
@@ -255,9 +257,9 @@ def run_advanced_analysis(df_res):
                     if price_val <= _daily_bid:
                         entry_zone_status = "✅ 日常加碼"
                     elif price_val <= daily_upper:
-                        entry_zone_status = "🟡 區間內加碼（波動容忍帶）"
+                        entry_zone_status = "🟡 波動容忍"
                     else:
-                        entry_zone_status = "🔴 追價警戒，暫停"
+                        entry_zone_status = "🔴 追價警戒"
 
                 full_diag_text, tags = generate_advanced_diagnosis(
                     bias=bias_numeric,

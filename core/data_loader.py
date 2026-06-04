@@ -171,7 +171,7 @@ def get_config_from_gsheets():
             config["banks"] = _clean_asset_rows(
                 banks_data,
                 key_candidates=["Key", "key"],
-                numeric_cols=["balance"],
+                numeric_cols=["balance", "keep"],
                 bool_cols=["enabled"],
             )
         except Exception as e:

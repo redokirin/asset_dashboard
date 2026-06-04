@@ -110,14 +110,16 @@ def export_for_ai(df_res, adv_res=None, guide_path=None):
                 adv_idx = adv_res.set_index(COL_TICKER)
                 if COL_PRICE in adv_idx.columns:
                     work_df.loc[zero_price_mask, COL_PRICE] = pd.to_numeric(
-                        work_df.loc[zero_price_mask, COL_TICKER].map(adv_idx[COL_PRICE]),
+                        work_df.loc[zero_price_mask, COL_TICKER].map(
+                            adv_idx[COL_PRICE]
+                        ),
                         errors="coerce",
                     )
                 if COL_NAME in adv_idx.columns:
                     work_df[COL_NAME] = work_df[COL_NAME].astype(object)
-                    work_df.loc[zero_price_mask, COL_NAME] = (
-                        work_df.loc[zero_price_mask, COL_TICKER].map(adv_idx[COL_NAME])
-                    )
+                    work_df.loc[zero_price_mask, COL_NAME] = work_df.loc[
+                        zero_price_mask, COL_TICKER
+                    ].map(adv_idx[COL_NAME])
 
     for _, row in work_df.iterrows():
         ticker = row[COL_TICKER]
@@ -165,10 +167,16 @@ def export_for_ai(df_res, adv_res=None, guide_path=None):
                     f"{hold_ability * 100:.0f}%" if pd.notnull(hold_ability) else "-"
                 )
                 vol_str = (
-                    f"{ann_vol:.1%} ({vol_grade})" if ann_vol is not None and pd.notnull(ann_vol) else "-"
+                    f"{ann_vol:.1%} ({vol_grade})"
+                    if ann_vol is not None and pd.notnull(ann_vol)
+                    else "-"
                 )
                 history_note = ""
-                if history_yrs is not None and pd.notnull(history_yrs) and float(history_yrs) < 2:
+                if (
+                    history_yrs is not None
+                    and pd.notnull(history_yrs)
+                    and float(history_yrs) < 2
+                ):
                     history_months = max(1, round(float(history_yrs) * 12))
                     history_note = f"（⚠️歷史僅 {history_months} 個月）"
                 bench_note = (
@@ -193,9 +201,9 @@ def export_for_ai(df_res, adv_res=None, guide_path=None):
                 f"- **量化指標**: RS百分位 {row.get('RS 百分位', '-')} | 乖離率 {bias} | 量比 {vol_ratio} | RSI {row.get('RSI', 0):.1f} | 夏普值 {row.get('夏普值', '-')} | α勝率 {row.get('Alpha 勝率', '-')}\n"
                 + (f"{risk_line}\n" if risk_line else "")
                 + (
-                    f"- **掛單策略**: 日常 [{row.get(COL_DAILY_LEVEL, '-')}] 上限 [{row['dailyUpper']:.2f}] / 回測 [{row.get(COL_PULLBACK_LEVEL, '-')}] 上限 [{row['retestUpper']:.2f}] / 狙擊 [{row.get(COL_SNIPER_LEVEL, '-')}] 上限 [{row['sniperUpper']:.2f}] {row.get('entryZoneStatus', '')}"
+                    f"- **掛單策略**: 日常 {row.get(COL_DAILY_LEVEL, '-')} ~ {row['dailyUpper']:.2f} / 回測 {row.get(COL_PULLBACK_LEVEL, '-')} ~ {row['retestUpper']:.2f} / 狙擊 {row.get(COL_SNIPER_LEVEL, '-')} ~ {row['sniperUpper']:.2f} {row.get('entryZoneStatus', '')}"
                     if row.get("dailyUpper") is not None
-                    else f"- **掛單策略**: 日常 [{row.get(COL_DAILY_LEVEL, '-')}] 回測 [{row.get(COL_PULLBACK_LEVEL, '-')}] 狙擊 [{row.get(COL_SNIPER_LEVEL, '-')}]"
+                    else f"- **掛單策略**: 日常 {row.get(COL_DAILY_LEVEL, '-')} 回測 {row.get(COL_PULLBACK_LEVEL, '-')} 狙擊 {row.get(COL_SNIPER_LEVEL, '-')}"
                 )
                 + "\n"
                 f"- **診斷標籤**: {' '.join(row['tags']) if isinstance(row.get('tags'), list) else '-'}\n"

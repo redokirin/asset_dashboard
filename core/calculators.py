@@ -121,7 +121,9 @@ def calculate_bank_row(asset, exchange_rates):
     ccy = str(asset.get("ccy", "TWD")).upper()
     rate = exchange_rates.get(ccy, 1.0)
     balance = float(asset.get("balance", 0))
-    val_twd = balance * rate
+    keep = float(asset.get("keep", 0))
+    total = balance + keep
+    keep_twd = round(keep * rate)
 
     return {
         COL_MARKET: asset.get("market", "Bank"),
@@ -129,17 +131,18 @@ def calculate_bank_row(asset, exchange_rates):
         COL_NAME: asset.get("name", asset["id"]),
         COL_TICKER: asset["id"],
         COL_CURRENCY: ccy,
-        COL_UNITS: balance,
+        COL_UNITS: total,
         COL_AVG_COST: 0,
         COL_CHANGE: None,
         COL_PRICE: 1,
         COL_UPDATED_AT: "",
         COL_COST: 0,
-        COL_MARKET_VALUE: round(val_twd),
+        COL_MARKET_VALUE: round(total * rate),
         COL_PROFIT_LOSS: 0,
         COL_RETURN_PCT: 0,
         COL_GET_VALUE: False,
         COL_SETTLEMENT: "",
+        "keepTwd": keep_twd,
     }
 
 
