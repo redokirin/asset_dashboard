@@ -80,11 +80,20 @@ def export_for_ai(df_res, adv_res=None, guide_path=None):
     if not bank_df.empty:
         report.append("## 銀行現金")
         for _, row in bank_df.iterrows():
+            keep_twd = row.get("keepTwd", 0) or 0
+            total_twd = row.get(COL_MARKET_VALUE, 0) or 0
+            investable_twd = total_twd - keep_twd
+            keep_note = (
+                f" / 可投入 ${investable_twd:,.0f} + 保留金 ${keep_twd:,.0f}"
+                if keep_twd > 0
+                else ""
+            )
             report.append(
                 f"- [{row.get(COL_TICKER, '-')}] {row.get(COL_NAME, '-')}: "
-                f"${row.get(COL_MARKET_VALUE, 0):,.0f} TWD"
+                f"${total_twd:,.0f} TWD"
                 f" / {row.get(COL_UNITS, 0):,.2f} {row.get(COL_CURRENCY, '')}"
                 f" / 佔比 {row.get(COL_WEIGHT, 0):.1f}%"
+                f"{keep_note}"
             )
         report.append("-" * 30 + "\n")
 
