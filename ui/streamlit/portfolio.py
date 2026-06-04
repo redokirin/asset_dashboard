@@ -134,7 +134,11 @@ def render_liquidity_component(df):
         bank_row = None
         if bank_key:
             bank_row = bank_rows.get(bank_key)
-            title = str(bank_row.get(COL_NAME, bank_key)) if bank_row is not None else bank_key
+            title = (
+                str(bank_row.get(COL_NAME, bank_key))
+                if bank_row is not None
+                else bank_key
+            )
             matched_investments = investment_df[settlement_values == bank_key]
             matched_cash = cash_df[
                 cash_df[COL_TICKER].fillna("").astype(str).str.strip() == bank_key
@@ -153,7 +157,9 @@ def render_liquidity_component(df):
         investable = cash_value - keep_twd
         bank_total_full = investment_value + investable + keep_twd
 
-        investment_pct = investment_value / bank_total_full * 100 if bank_total_full else 0
+        investment_pct = (
+            investment_value / bank_total_full * 100 if bank_total_full else 0
+        )
         cash_pct = investable / bank_total_full * 100 if bank_total_full else 0
         keep_pct = keep_twd / bank_total_full * 100 if bank_total_full else 0
 
@@ -161,7 +167,7 @@ def render_liquidity_component(df):
             any_keep = True
             keep_val_html = (
                 f'<div style="text-align:right;" class="asset-value-label">'
-                f'<span class="asset-price-main">${keep_twd:,.0f}</span> ({keep_pct:.1f}%)'
+                f'<span class="asset-price-main">${keep_twd:,.0f}</span>'
                 f"</div>"
             )
             keep_bar_html = (
@@ -174,15 +180,15 @@ def render_liquidity_component(df):
 
         bank_blocks += (
             f'<div style="padding:0 0.5rem; margin-top:6px;">'
-            f'<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:4px;">'
-            f'<div class="asset-value-label"><span class="asset-price-main">${investment_value:,.0f}</span> ({investment_pct:.1f}%)</div>'
-            f'<div style="text-align:right;" class="asset-value-label"><span class="asset-price-main">${investable:,.0f}</span> ({cash_pct:.1f}%)</div>'
-            f"{keep_val_html}"
-            f"</div>"
             f'<div style="display:flex; height:16px; width:100%; overflow:hidden; border-radius:6px; background:rgba(255,255,255,0.08);">'
             f'<div title="投資 {investment_pct:.1f}%" style="width:{investment_pct:.4f}%; background:{investment_color};"></div>'
             f'<div title="可投入 {cash_pct:.1f}%" style="width:{cash_pct:.4f}%; background:{cash_color};"></div>'
             f"{keep_bar_html}"
+            f"</div>"
+            f'<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:4px;">'
+            f'<div class="asset-value-label"><span class="asset-price-main">${investment_value:,.0f}</span></div>'
+            f'<div style="text-align:right;" class="asset-value-label"><span class="asset-price-main">${investable:,.0f}</span></div>'
+            f"{keep_val_html}"
             f"</div>"
             f"</div>"
         )
