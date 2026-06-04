@@ -107,19 +107,6 @@ def render_advanced_analysis_ui(res):
         _brs = res.get("boundaryRetestSniper")
 
         if _daily_upper is not None and _bdr is not None and _brs is not None:
-            # if "🔴" in _zone_status:
-            #     row_data = {"股價": _price_now, "🔴 追價警戒": "暫停"}
-            # elif "🟡" in _zone_status:
-            #     row_data = {"股價": _price_now, "🟡 日常加碼": _daily_bid}
-            # elif "🟢" in _zone_status:
-            #     row_data = {"股價": _price_now, "🟢 回測加碼": _retest_bid}
-            # else:
-            #     row_data = {"股價": _price_now, "⭐ 狙擊加碼": _sniper_bid}
-            # st.markdown(
-            #     render_analysis_metrics_row(row_data, "🎯 建議掛單"),
-            #     unsafe_allow_html=True,
-            # )
-
             # Price zone bar — 4 equal 25% segments, price marker proportional within zone
             try:
                 _p = float(str(_price_now).replace(",", ""))

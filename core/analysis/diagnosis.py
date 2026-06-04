@@ -40,6 +40,9 @@ def generate_advanced_diagnosis(
     if price is not None and ma20 is not None and not math.isnan(ma20):
         st_momentum = "STRONG" if price > ma20 else "WEAK"
 
+    if entry_zone_status and entry_zone_status != "-":
+        tags.append(entry_zone_status)
+
     match (lt_context, st_momentum):
         case ("BULLISH", "STRONG"):
             tags.append("🔥極致強勢")
@@ -195,9 +198,6 @@ def generate_advanced_diagnosis(
     #         stress_advice = f"⚠️ 本標的歷史僅 {history_months} 個月，從未經歷完整市場壓力測試，MDD 不具參考性，持有力評分偏高存在高估風險。"
     #     else:
     #         stress_advice = f"⚠️ 本標的歷史不足 2 年（{history_months} 個月），壓力測試樣本有限，MDD 與舒適度參考性有限。"
-
-    if entry_zone_status and entry_zone_status != "-":
-        tags.append(entry_zone_status)
 
     advice_base_display = f"\n{advice_base}" if advice_base else ""
     fund_display = f"\n{fund_advice}" if fund_advice else ""
