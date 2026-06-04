@@ -107,25 +107,54 @@ def render_advanced_analysis_ui(res):
         _brs = res.get("boundaryRetestSniper")
 
         if _daily_upper is not None and _bdr is not None and _brs is not None:
-            if "🔴" in _zone_status:
-                row_data = {"股價": _price_now, "🔴 追價警戒": "暫停"}
-            elif "🟡" in _zone_status:
-                row_data = {"股價": _price_now, "🟡 日常加碼": _daily_bid}
-            elif "🟢" in _zone_status:
-                row_data = {"股價": _price_now, "🟢 回測加碼": _retest_bid}
-            else:
-                row_data = {"股價": _price_now, "⭐ 狙擊加碼": _sniper_bid}
+            # if "🔴" in _zone_status:
+            #     row_data = {"股價": _price_now, "🔴 追價警戒": "暫停"}
+            # elif "🟡" in _zone_status:
+            #     row_data = {"股價": _price_now, "🟡 日常加碼": _daily_bid}
+            # elif "🟢" in _zone_status:
+            #     row_data = {"股價": _price_now, "🟢 回測加碼": _retest_bid}
+            # else:
+            #     row_data = {"股價": _price_now, "⭐ 狙擊加碼": _sniper_bid}
+            # st.markdown(
+            #     render_analysis_metrics_row(row_data, "🎯 建議掛單"),
+            #     unsafe_allow_html=True,
+            # )
+
+            # Price zone bar — 4 equal 25% segments, price marker proportional within zone
+            try:
+                _p = float(str(_price_now).replace(",", ""))
+                _zd = _daily_upper - _bdr or 1.0
+                _zr = _bdr - _brs or 1.0
+                if _p >= _daily_upper:
+                    _price_pct = max(
+                        0.0, min(25.0, ((_daily_upper + _zd - _p) / _zd) * 25)
+                    )
+                elif _p >= _bdr:
+                    _price_pct = 50.0 - ((_p - _bdr) / _zd) * 25
+                elif _p >= _brs:
+                    _price_pct = 75.0 - ((_p - _brs) / _zr) * 25
+                else:
+                    _price_pct = min(100.0, 75.0 + ((_brs - _p) / _zr) * 25)
+            except ValueError, TypeError, ZeroDivisionError:
+                _price_pct = 12.5
+
             st.markdown(
-                render_analysis_metrics_row(row_data, "🎯 建議掛單"),
-                unsafe_allow_html=True,
-            )
-            st.markdown(
-                f"<div style='font-size:0.78rem;color:#888;padding:2px 0 6px 4px;'>"
-                f"追價警戒 > {_daily_upper:.2f} ／ "
-                f"日常 {_daily_upper:.2f}~{_bdr:.2f} ／ "
-                f"回測 {_bdr:.2f}~{_brs:.2f} ／ "
-                f"狙擊 &lt; {_brs:.2f}"
-                f"</div>",
+                f"""<div style="margin:4px 0 2px 0;">
+                  <div style="position:relative; height:18px; font-size:0.9rem; color:#aaa;">
+                    <span style="position:absolute;left:25%;transform:translateX(-50%);">{_daily_upper:.2f}</span>
+                    <span style="position:absolute;left:50%;transform:translateX(-50%);">{_bdr:.2f}</span>
+                    <span style="position:absolute;left:75%;transform:translateX(-50%);">{_brs:.2f}</span>
+                  </div>
+                  <div style="display:flex;height:14px;border-radius:6px;overflow:hidden;">
+                    <div style="width:25%;background:#ef4444;" title="追價警戒 > {_daily_upper:.2f}"></div>
+                    <div style="width:25%;background:#f97316;" title="日常 {_bdr:.2f}~{_daily_upper:.2f}"></div>
+                    <div style="width:25%;background:#22c55e;" title="回測 {_brs:.2f}~{_bdr:.2f}"></div>
+                    <div style="width:25%;background:#86efac;" title="狙擊 < {_brs:.2f}"></div>
+                  </div>
+                  <div style="position:relative;height:20px;margin-top:1px;">
+                    <span style="position:absolute;left:{_price_pct:.1f}%;transform:translateX(-50%);font-size:1rem;color:#fff;white-space:nowrap;">▲ {_price_now}</span>
+                  </div>
+                </div>""",
                 unsafe_allow_html=True,
             )
         else:
