@@ -3,6 +3,7 @@
 
 import streamlit as st
 
+from core import dashboard_logic
 from ui.streamlit.advanced_analysis import (
     render_advanced_analysis_ui,
     show_manual_analysis_page,
