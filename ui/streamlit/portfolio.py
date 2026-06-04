@@ -197,42 +197,14 @@ def render_liquidity_component(df):
                         <div title="可投入 {cash_pct:.1f}%" style="width:{cash_pct:.4f}%; background:{cash_color};"></div>
                         {keep_bar}
                     </div>
-                    <div class="asset-price-main" style="text-align: center;">{title}</div>
+                    <div style="display:flex; align-items:center; justify-content:center; gap:6px; margin-top:5px;">
+                        <div style="width:10px; height:10px; border-radius:2px; flex-shrink:0; background:{investment_color};"></div>
+                        <span class="asset-price-main">{title}</span>
+                    </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
-
-        # if not cash_df.empty:
-        #     with st.expander("銀行現金明細", expanded=False):
-        #         cash_df = cash_df.sort_values(COL_MARKET_VALUE, ascending=False)
-        #         cash_df["餘額"] = cash_df[COL_UNITS]
-        #         view_df = cash_df[
-        #             [
-        #                 COL_NAME,
-        #                 COL_TICKER,
-        #                 COL_CURRENCY,
-        #                 "餘額",
-        #                 COL_MARKET_VALUE,
-        #                 COL_WEIGHT,
-        #             ]
-        #         ]
-        #         st.dataframe(
-        #             view_df.style.format(
-        #                 {
-        #                     "餘額": "{:,.0f}",
-        #                     COL_MARKET_VALUE: "${:,.0f}",
-        #                     COL_WEIGHT: "{:.1f}%",
-        #                 },
-        #                 na_rep="0",
-        #             ),
-        #             width="stretch",
-        #             hide_index=True,
-        #         )
-
-
-# def render_liquidity_component(df):
-#     return _render_liquidity_by_bank(df)
 
 
 def render_cash_component(df):
