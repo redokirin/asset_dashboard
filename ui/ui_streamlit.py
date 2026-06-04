@@ -66,6 +66,23 @@ def show_streamlit(df, radar_data, exchange_rates):
             else:
                 st.info("無符合條件的資產可供分析")
 
+        with st.container(border=False):
+            if st.button("📋 產生 AI 分析報告", use_container_width=True):
+                with st.spinner("正在產生完整 AI 分析報告..."):
+                    from core import exporters
+                    adv_res = dashboard_logic.run_advanced_analysis(df)
+                    st.session_state["ai_report"] = exporters.export_for_ai(df, adv_res)
+
+            if "ai_report" in st.session_state:
+                from datetime import date
+                st.download_button(
+                    label="⬇️ 下載 AI 報告 (.md)",
+                    data=st.session_state["ai_report"],
+                    file_name=f"ai_report_{date.today().strftime('%Y%m%d')}.md",
+                    mime="text/markdown",
+                    use_container_width=True,
+                )
+
     with col_right:
         with st.container(border=False):
             render_shareholding_component(investment_df)
