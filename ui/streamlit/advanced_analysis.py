@@ -103,70 +103,31 @@ def render_advanced_analysis_ui(res):
         _daily_bid = res.get("日常波段", "-")
         _retest_bid = res.get("技術回測", "-")
         _sniper_bid = res.get("狙擊位", "-")
-        _retest_upper = res.get("retestUpper")
-        _sniper_upper = res.get("sniperUpper")
+        _bdr = res.get("boundaryDailyRetest")
+        _brs = res.get("boundaryRetestSniper")
 
-        def _secondary_line(*parts):
-            return (
-                "<div style='font-size:0.78rem;color:#888;padding:2px 0 6px 4px;'>"
-                + " ／ ".join(parts)
-                + "</div>"
-            )
-
-        def _fmt_range(bid, upper):
-            return f"{bid} ~ {upper:.2f}" if upper else str(bid)
-
-        if _daily_upper is not None:
-            _retest_range = _fmt_range(_retest_bid, _retest_upper)
-            _sniper_range = _fmt_range(_sniper_bid, _sniper_upper)
-
-            if "日常加碼" in _zone_status:
-                st.markdown(
-                    render_analysis_metrics_row(
-                        {"股價": _price_now, "✅ 日常加碼": _daily_bid},
-                        "🎯 建議掛單",
-                    ),
-                    unsafe_allow_html=True,
-                )
-                st.markdown(
-                    _secondary_line(
-                        f"容忍上限 {_daily_upper:.2f}",
-                        f"回測 {_retest_range}",
-                        f"狙擊 {_sniper_range}",
-                    ),
-                    unsafe_allow_html=True,
-                )
-            elif "區間內" in _zone_status:
-                st.markdown(
-                    render_analysis_metrics_row(
-                        {
-                            "股價": _price_now,
-                            "🟡 容忍帶": f"{_daily_bid} ~ {_daily_upper:.2f}",
-                        },
-                        "🎯 建議掛單",
-                    ),
-                    unsafe_allow_html=True,
-                )
-                st.markdown(
-                    _secondary_line(
-                        f"回測 {_retest_range}",
-                        f"狙擊 {_sniper_range}",
-                    ),
-                    unsafe_allow_html=True,
-                )
+        if _daily_upper is not None and _bdr is not None and _brs is not None:
+            if "🔴" in _zone_status:
+                row_data = {"股價": _price_now, "🔴 追價警戒": "暫停"}
+            elif "🟡" in _zone_status:
+                row_data = {"股價": _price_now, "🟡 日常加碼": _daily_bid}
+            elif "🟢" in _zone_status:
+                row_data = {"股價": _price_now, "🟢 回測加碼": _retest_bid}
             else:
-                st.markdown(
-                    "<div class='analysis-report-title'>🎯 建議掛單 &nbsp;—&nbsp; 🔴 追價警戒，暫停</div>",
-                    unsafe_allow_html=True,
-                )
-                st.markdown(
-                    _secondary_line(
-                        f"日常 {_fmt_range(_daily_bid, _daily_upper)}",
-                        f"回測 {_retest_range}",
-                        f"狙擊 {_sniper_range}",
-                    ),
-                    unsafe_allow_html=True,
-                )
+                row_data = {"股價": _price_now, "⭐ 狙擊加碼": _sniper_bid}
+            st.markdown(
+                render_analysis_metrics_row(row_data, "🎯 建議掛單"),
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f"<div style='font-size:0.78rem;color:#888;padding:2px 0 6px 4px;'>"
+                f"追價警戒 > {_daily_upper:.2f} ／ "
+                f"日常 {_daily_upper:.2f}~{_bdr:.2f} ／ "
+                f"回測 {_bdr:.2f}~{_brs:.2f} ／ "
+                f"狙擊 &lt; {_brs:.2f}"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
         else:
             st.markdown(
                 render_analysis_metrics_row(

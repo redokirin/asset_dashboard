@@ -167,8 +167,8 @@ def show_console_rich(
                 f"{_ann_vol:.1%} ({_vol_grade})" if isinstance(_ann_vol, float) else "-"
             )
             _daily_upper = row.get("dailyUpper")
-            _retest_upper = row.get("retestUpper")
-            _sniper_upper = row.get("sniperUpper")
+            _bdr = row.get("boundaryDailyRetest")
+            _brs = row.get("boundaryRetestSniper")
             _zone_status = row.get("entryZoneStatus") or "-"
 
             if is_list_mode:
@@ -178,15 +178,19 @@ def show_console_rich(
                     .replace("[green]", "")
                     .replace("[/]", "")
                 )
-                _daily_line = (
-                    f"{row.get('日常波段', '-')} (上限 {_daily_upper:.2f})"
-                    if _daily_upper
-                    else str(row.get("日常波段", "-"))
-                )
+                if _daily_upper and _bdr and _brs:
+                    _zone_line = (
+                        f"追價 >{_daily_upper:.2f} "
+                        f"日常 {_daily_upper:.2f}~{_bdr:.2f} "
+                        f"回測 {_bdr:.2f}~{_brs:.2f} "
+                        f"狙擊 <{_brs:.2f} → {_zone_status}"
+                    )
+                else:
+                    _zone_line = f"日常 {row.get('日常波段', '-')} 回測 {row.get('技術回測', '-')} 狙擊 {row.get('狙擊位', '-')} | {_zone_status}"
                 metrics = [
                     f"  > 股價: {row.get('股價', '-')} | RS%: {row.get('RS 百分位', '-')} | RSI: {row.get('RSI', 0):.1f}",
                     f"  > Alpha勝率: {row.get('Alpha 勝率', '-')} | 月度Alpha: {val_alpha} | 夏普值: {row.get('夏普值', '-')}",
-                    f"  > 建議位階: 日常 {_daily_line} / 回測 {row.get('技術回測', '-')} / 狙擊 {row.get('狙擊位', '-')} | 進場: {_zone_status}",
+                    f"  > 建議位階: {_zone_line}",
                     (
                         f"  > 風險: 波動率 {_vol_str} | "
                         f"MDD [{_dd_color(_mdd)}]{_mdd_str}[/] | "
@@ -201,15 +205,24 @@ def show_console_rich(
             else:
                 # ── 掛單位階小表 ───────────────────────────────────────────────
                 price_table = Table(box=box.SIMPLE, show_header=True)
-                for col in ["股價", "日常", "回測", "狙擊"]:
+                for col in ["股價", "日常", "回測", "狙擊", "進場"]:
                     price_table.add_column(col, justify="right")
-                _fmt = lambda bid, upper: f"{bid} ~ {upper:.2f}" if upper else str(bid)
-                price_table.add_row(
-                    str(row.get("股價", "-")),
-                    _fmt(row.get("日常波段", "-"), _daily_upper),
-                    _fmt(row.get("技術回測", "-"), _retest_upper),
-                    _fmt(row.get("狙擊位", "-"), _sniper_upper),
-                )
+                if _daily_upper and _bdr and _brs:
+                    price_table.add_row(
+                        str(row.get("股價", "-")),
+                        f"{_daily_upper:.2f}~{_bdr:.2f}",
+                        f"{_bdr:.2f}~{_brs:.2f}",
+                        f"<{_brs:.2f}",
+                        _zone_status,
+                    )
+                else:
+                    price_table.add_row(
+                        str(row.get("股價", "-")),
+                        str(row.get("日常波段", "-")),
+                        str(row.get("技術回測", "-")),
+                        str(row.get("狙擊位", "-")),
+                        _zone_status,
+                    )
                 console.print(price_table)
 
                 # ── 量化指標小表 ───────────────────────────────────────────────

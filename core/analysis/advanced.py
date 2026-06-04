@@ -241,10 +241,12 @@ def run_advanced_analysis(df_res):
 
                 # 動態容忍區間（波動小→帶寬較寬，波動大→帶寬較窄）
                 _REFERENCE_VOL = 0.25
-                _BASE_TOLERANCE = 0.05
+                _BASE_TOLERANCE = 0.04
                 daily_upper = None
                 retest_upper = None
                 sniper_upper = None
+                boundary_daily_retest = None
+                boundary_retest_sniper = None
                 entry_zone_status = "-"
                 if entries and annualized_vol > 0:
                     tolerance = (_REFERENCE_VOL / annualized_vol) * _BASE_TOLERANCE
@@ -254,12 +256,16 @@ def run_advanced_analysis(df_res):
                     daily_upper = round(_daily_bid * (1 + tolerance), 2)
                     retest_upper = round(_retest_bid * (1 + tolerance), 2)
                     sniper_upper = round(_sniper_bid * (1 + tolerance), 2)
-                    if price_val <= _daily_bid:
-                        entry_zone_status = "✅ 日常加碼"
-                    elif price_val <= daily_upper:
-                        entry_zone_status = "🟡 波動容忍"
+                    boundary_daily_retest = round((_daily_bid + retest_upper) / 2, 2)
+                    boundary_retest_sniper = round((_retest_bid + sniper_upper) / 2, 2)
+                    if price_val > daily_upper:
+                        entry_zone_status = "🔴 追價警戒，暫停"
+                    elif price_val > boundary_daily_retest:
+                        entry_zone_status = "🟡 日常加碼"
+                    elif price_val > boundary_retest_sniper:
+                        entry_zone_status = "🟢 回測加碼"
                     else:
-                        entry_zone_status = "🔴 追價警戒"
+                        entry_zone_status = "⭐ 狙擊加碼"
 
                 full_diag_text, tags = generate_advanced_diagnosis(
                     bias=bias_numeric,
@@ -339,6 +345,8 @@ def run_advanced_analysis(df_res):
                         "dailyUpper": daily_upper,
                         "retestUpper": retest_upper,
                         "sniperUpper": sniper_upper,
+                        "boundaryDailyRetest": boundary_daily_retest,
+                        "boundaryRetestSniper": boundary_retest_sniper,
                         "entryZoneStatus": entry_zone_status,
                         "benchmarkMddPct": bench_mdd,
                         "benchmarkName": current_benchmark,

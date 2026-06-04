@@ -201,8 +201,8 @@ def export_for_ai(df_res, adv_res=None, guide_path=None):
                 f"- **量化指標**: RS百分位 {row.get('RS 百分位', '-')} | 乖離率 {bias} | 量比 {vol_ratio} | RSI {row.get('RSI', 0):.1f} | 夏普值 {row.get('夏普值', '-')} | α勝率 {row.get('Alpha 勝率', '-')}\n"
                 + (f"{risk_line}\n" if risk_line else "")
                 + (
-                    f"- **掛單策略**: 日常 {row.get(COL_DAILY_LEVEL, '-')} ~ {row['dailyUpper']:.2f} / 回測 {row.get(COL_PULLBACK_LEVEL, '-')} ~ {row['retestUpper']:.2f} / 狙擊 {row.get(COL_SNIPER_LEVEL, '-')} ~ {row['sniperUpper']:.2f} {row.get('entryZoneStatus', '')}"
-                    if row.get("dailyUpper") is not None
+                    f"- **掛單策略**: 追價警戒 > {row['dailyUpper']:.2f} | 日常 {row['dailyUpper']:.2f}~{row['boundaryDailyRetest']:.2f} | 回測 {row['boundaryDailyRetest']:.2f}~{row['boundaryRetestSniper']:.2f} | 狙擊 < {row['boundaryRetestSniper']:.2f}  ·  現價 {row.get(COL_PRICE, '-')} → {row.get('entryZoneStatus', '-')}"
+                    if row.get("dailyUpper") is not None and row.get("boundaryDailyRetest") is not None
                     else f"- **掛單策略**: 日常 {row.get(COL_DAILY_LEVEL, '-')} 回測 {row.get(COL_PULLBACK_LEVEL, '-')} 狙擊 {row.get(COL_SNIPER_LEVEL, '-')}"
                 )
                 + "\n"
