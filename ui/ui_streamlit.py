@@ -48,15 +48,15 @@ def show_streamlit(df, radar_data, exchange_rates):
 
     col_mid, col_right = st.columns([0.7, 1.3])
     with col_mid:
-        with st.container(border=False):
-            render_report_component(df)
-
         summary_container = st.container(border=False)
         filter_container = st.container(border=False)
 
         with filter_container:
             filtered_df = render_asset_filter(df)
         investment_df, _ = _split_cash_and_investments(filtered_df)
+
+        with st.container(border=False):
+            render_report_component(df)
 
         with summary_container:
             render_schedule_of_assets(filtered_df, investment_df)
