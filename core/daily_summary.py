@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from datetime import datetime
+from datetime import date, datetime
 
 import pandas as pd
 
@@ -69,6 +69,23 @@ def _calc_region_gaps(df_res, region_targets):
     return sorted(gaps, key=lambda x: x["gap_pct"])
 
 
+def _build_prev_pain_map() -> dict[str, float]:
+    """從 SQLite 快照取得「非今日最新一筆」的 pain_ratio，回傳 {ticker: value}。"""
+    try:
+        from db.database import get_latest_two_snapshots
+        latest, previous = get_latest_two_snapshots()
+        today_str = str(date.today())
+        # 若最新快照就是今日，用 previous；否則最新快照即為昨日
+        ref = previous if latest.get("date") == today_str else latest
+        return {
+            row["ticker"]: row["pain_ratio"]
+            for row in ref.get("assets", [])
+            if row.get("pain_ratio") is not None
+        }
+    except Exception:
+        return {}
+
+
 def generate_daily_summary(
     df_res,
     adv_res=None,
@@ -87,9 +104,10 @@ def generate_daily_summary(
         drawdown_threshold: 回撤門檻（百分比單位，預設 -3.0 即 -3%）
 
     Returns:
-        dict: text, actionable, warnings, region_gaps, scheduled, timestamp
+        dict: text, actionable, warnings, region_gaps, timestamp
     """
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    prev_pain_map = _build_prev_pain_map()
 
     inv_mask = (
         ~df_res["市場"].fillna("").astype(str).str.strip().str.lower().isin(_CASH_MARKETS)
@@ -160,7 +178,13 @@ def generate_daily_summary(
         if has_warning:
             reasons = []
             if is_high_pain:
-                reasons.append(f"Pain Ratio {int(float(pain_ratio_val) * 100)}%")
+                today_pct = int(float(pain_ratio_val) * 100)
+                prev_pain = prev_pain_map.get(ticker)
+                if prev_pain is not None:
+                    prev_pct = int(float(prev_pain) * 100)
+                    reasons.append(f"Pain Ratio {today_pct}%（昨日 {prev_pct}%）")
+                else:
+                    reasons.append(f"Pain Ratio {today_pct}%")
             if is_volume_crash:
                 reasons.append("帶量下殺")
             if is_stress_fail:

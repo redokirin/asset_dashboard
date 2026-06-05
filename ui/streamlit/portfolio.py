@@ -93,6 +93,10 @@ def render_report_component(df):
             st.session_state["ai_report"] = exporters.export_for_ai(df, adv_res)
             st.session_state["_adv_res_cache"] = adv_res
 
+            from db.database import save_snapshot
+
+            save_snapshot(df, adv_res)
+
     if st.button("📊 行動摘要", use_container_width=True):
         with st.spinner("正在分析今日摘要..."):
             from core.daily_summary import generate_daily_summary
