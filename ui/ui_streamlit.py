@@ -26,7 +26,7 @@ from ui.streamlit.components import (
 from ui.streamlit.filters import render_asset_filter
 from ui.streamlit.portfolio import (
     render_dataframe_component,
-    render_cash_component,
+    render_report_component,
     render_liquidity_component,
     render_market_card,
     render_profit_and_loss_component,
@@ -48,6 +48,9 @@ def show_streamlit(df, radar_data, exchange_rates):
 
     col_mid, col_right = st.columns([0.7, 1.3])
     with col_mid:
+        with st.container(border=False):
+            render_report_component(df)
+
         summary_container = st.container(border=False)
         filter_container = st.container(border=False)
 
@@ -58,31 +61,14 @@ def show_streamlit(df, radar_data, exchange_rates):
         with summary_container:
             render_schedule_of_assets(filtered_df, investment_df)
 
-        render_liquidity_component(filtered_df)
-        render_market_card(investment_df, radar_data)
+        with st.container(border=True):
+            render_liquidity_component(filtered_df)
 
         with st.container(border=False, gap="xxsmall"):
-            if not investment_df.empty:
-                render_plotly_pie_charts(investment_df)
-            else:
-                st.info("無符合條件的資產可供分析")
+            render_plotly_pie_charts(investment_df)
 
-        with st.container(border=False):
-            if st.button("📋 產生 AI 分析報告", use_container_width=True):
-                with st.spinner("正在產生完整 AI 分析報告..."):
-                    from core import exporters
-                    adv_res = dashboard_logic.run_advanced_analysis(df)
-                    st.session_state["ai_report"] = exporters.export_for_ai(df, adv_res)
-
-            if "ai_report" in st.session_state:
-                from datetime import date
-                st.download_button(
-                    label="⬇️ 下載 AI 報告 (.md)",
-                    data=st.session_state["ai_report"],
-                    file_name=f"ai_report_{date.today().strftime('%Y%m%d')}.md",
-                    mime="text/markdown",
-                    use_container_width=True,
-                )
+        with st.container(border=True, gap="xxsmall"):
+            render_market_card(investment_df, radar_data)
 
     with col_right:
         with st.container(border=False):

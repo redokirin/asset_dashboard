@@ -259,7 +259,7 @@ def run_advanced_analysis(df_res):
                     boundary_daily_retest = round((_daily_bid + retest_upper) / 2, 2)
                     boundary_retest_sniper = round((_retest_bid + sniper_upper) / 2, 2)
                     if price_val > daily_upper:
-                        entry_zone_status = "🔴 追價警戒，暫停"
+                        entry_zone_status = "🔴 追價警戒"
                     elif price_val > boundary_daily_retest:
                         entry_zone_status = "🟡 日常加碼"
                     elif price_val > boundary_retest_sniper:

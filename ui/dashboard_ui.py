@@ -14,7 +14,6 @@ from ui.ui_streamlit import (
     show_manual_analysis_page,
     render_title_component,
     render_profit_and_loss_component,
-    render_cash_component,
     render_liquidity_component,
     render_vertical_component,
     render_horizontal_component,
@@ -22,7 +21,7 @@ from ui.ui_streamlit import (
     render_shareholding_component,
     render_plotly_pie_charts,
     render_inline_metric,
-    show_streamlit
+    show_streamlit,
 )
 
 # 匯入 Console (Rich) 特定組件

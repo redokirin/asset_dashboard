@@ -50,30 +50,47 @@ def render_schedule_of_assets(df, investment_df):
         )
 
 
+def render_report_component(df):
+    if st.button("📋 產生 AI 分析報告", use_container_width=True):
+        with st.spinner("正在產生完整 AI 分析報告..."):
+            from core import exporters
+
+            adv_res = dashboard_logic.run_advanced_analysis(df)
+            st.session_state["ai_report"] = exporters.export_for_ai(df, adv_res)
+
+    if "ai_report" in st.session_state:
+        from datetime import date
+
+        st.download_button(
+            label="⬇️ 下載 AI 報告 (.md)",
+            data=st.session_state["ai_report"],
+            file_name=f"ai_report_{date.today().strftime('%Y%m%d')}.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+
+
 def render_market_card(investment_df, radar_data):
-    with st.container(border=True, gap="xxsmall"):
-        market_stats = investment_df.groupby("市場").agg({"損益": "sum", "成本": "sum"})
-        market_stats = market_stats.sort_values("損益", ascending=False)
+    market_stats = investment_df.groupby("市場").agg({"損益": "sum", "成本": "sum"})
+    market_stats = market_stats.sort_values("損益", ascending=False)
 
-        market_items = []
-        for market, row in market_stats.iterrows():
-            market_pl = row["損益"]
-            market_roi = market_pl / row["成本"] * 100 if row["成本"] != 0 else 0
-            market_items.append(
-                {"名稱": market, "數值": market_pl, "漲跌幅": market_roi}
-            )
+    market_items = []
+    for market, row in market_stats.iterrows():
+        market_pl = row["損益"]
+        market_roi = market_pl / row["成本"] * 100 if row["成本"] != 0 else 0
+        market_items.append({"名稱": market, "數值": market_pl, "漲跌幅": market_roi})
 
-        for i in range(0, len(market_items), 4):
-            st.markdown(
-                render_tracking_metrics_row(market_items[i : i + 4]),
-                unsafe_allow_html=True,
-            )
-        indices = [item for item in radar_data]
-        for i in range(0, len(indices), 3):
-            st.markdown(
-                render_tracking_metrics_row(indices[i : i + 3]),
-                unsafe_allow_html=True,
-            )
+    for i in range(0, len(market_items), 4):
+        st.markdown(
+            render_tracking_metrics_row(market_items[i : i + 4]),
+            unsafe_allow_html=True,
+        )
+    indices = [item for item in radar_data]
+    for i in range(0, len(indices), 3):
+        st.markdown(
+            render_tracking_metrics_row(indices[i : i + 3]),
+            unsafe_allow_html=True,
+        )
 
 
 def render_profit_and_loss_component(df, radar_data):
@@ -221,12 +238,7 @@ def render_liquidity_component(df):
         f"{legend_items}</div>"
     )
 
-    with st.container(border=True):
-        st.markdown(header + bank_blocks + legend, unsafe_allow_html=True)
-
-
-def render_cash_component(df):
-    render_liquidity_component(df)
+    st.markdown(header + bank_blocks + legend, unsafe_allow_html=True)
 
 
 def render_dataframe_component(df):
