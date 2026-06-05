@@ -85,28 +85,24 @@ def _show_daily_summary_dialog(summary):
 
 
 def render_report_component(df):
-    btn_col1, btn_col2 = st.columns(2)
+    if st.button("📋 分析報告", use_container_width=True):
+        with st.spinner("正在產生完整 AI 分析報告..."):
+            from core import exporters
 
-    with btn_col1:
-        if st.button("📋 分析報告", use_container_width=True):
-            with st.spinner("正在產生完整 AI 分析報告..."):
-                from core import exporters
+            adv_res = dashboard_logic.run_advanced_analysis(df)
+            st.session_state["ai_report"] = exporters.export_for_ai(df, adv_res)
+            st.session_state["_adv_res_cache"] = adv_res
 
-                adv_res = dashboard_logic.run_advanced_analysis(df)
-                st.session_state["ai_report"] = exporters.export_for_ai(df, adv_res)
-                st.session_state["_adv_res_cache"] = adv_res
+    if st.button("📊 行動摘要", use_container_width=True):
+        with st.spinner("正在分析今日摘要..."):
+            from core.daily_summary import generate_daily_summary
 
-    with btn_col2:
-        if st.button("📊 行動摘要", use_container_width=True):
-            with st.spinner("正在分析今日摘要..."):
-                from core.daily_summary import generate_daily_summary
-
-                adv_res = st.session_state.get(
-                    "_adv_res_cache"
-                ) or dashboard_logic.run_advanced_analysis(df)
-                st.session_state["_adv_res_cache"] = adv_res
-                summary = generate_daily_summary(df, adv_res)
-            _show_daily_summary_dialog(summary)
+            adv_res = st.session_state.get(
+                "_adv_res_cache"
+            ) or dashboard_logic.run_advanced_analysis(df)
+            st.session_state["_adv_res_cache"] = adv_res
+            summary = generate_daily_summary(df, adv_res)
+        _show_daily_summary_dialog(summary)
 
     if "ai_report" in st.session_state:
         from datetime import date
