@@ -50,13 +50,63 @@ def render_schedule_of_assets(df, investment_df):
         )
 
 
-def render_report_component(df):
-    if st.button("📋 產生 AI 分析報告", use_container_width=True):
-        with st.spinner("正在產生完整 AI 分析報告..."):
-            from core import exporters
+@st.dialog("📋 今日行動摘要", width="large")
+def _show_daily_summary_dialog(summary):
+    st.caption(summary["timestamp"])
 
-            adv_res = dashboard_logic.run_advanced_analysis(df)
-            st.session_state["ai_report"] = exporters.export_for_ai(df, adv_res)
+    if summary["actionable"]:
+        st.markdown("##### 【可執行】")
+        for item in summary["actionable"]:
+            st.success(
+                f"{item['emoji']} **{item['ticker']}** ｜ {item['signal']} ｜ {item['note']}"
+            )
+
+    if summary["warnings"]:
+        st.markdown("##### 【須注意】")
+        for item in summary["warnings"]:
+            reason_str = "、".join(item["reasons"])
+            st.warning(f"⚠️ **{item['ticker']}** ｜ {reason_str} ｜ {item['advice']}")
+
+    if summary["region_gaps"]:
+        st.markdown("##### 【配置缺口】")
+        for g in summary["region_gaps"]:
+            emoji = "🔴" if g["gap_pct"] < 0 else "🟠"
+            st.error(
+                f"{emoji} **{g['region']}** {g['current_pct'] * 100:.1f}%"
+                f" ｜ 目標 {g['target_pct'] * 100:.0f}%"
+                f" ｜ 缺口 {g['gap_pct'] * 100:+.1f}%"
+            )
+
+    if not any([summary["actionable"], summary["warnings"], summary["region_gaps"]]):
+        st.success("✅ 今日無須特別行動，所有標的均正常")
+
+    with st.expander("📄 純文字版本"):
+        st.code(summary["text"], language=None)
+
+
+def render_report_component(df):
+    btn_col1, btn_col2 = st.columns(2)
+
+    with btn_col1:
+        if st.button("📋 分析報告", use_container_width=True):
+            with st.spinner("正在產生完整 AI 分析報告..."):
+                from core import exporters
+
+                adv_res = dashboard_logic.run_advanced_analysis(df)
+                st.session_state["ai_report"] = exporters.export_for_ai(df, adv_res)
+                st.session_state["_adv_res_cache"] = adv_res
+
+    with btn_col2:
+        if st.button("📊 行動摘要", use_container_width=True):
+            with st.spinner("正在分析今日摘要..."):
+                from core.daily_summary import generate_daily_summary
+
+                adv_res = st.session_state.get(
+                    "_adv_res_cache"
+                ) or dashboard_logic.run_advanced_analysis(df)
+                st.session_state["_adv_res_cache"] = adv_res
+                summary = generate_daily_summary(df, adv_res)
+            _show_daily_summary_dialog(summary)
 
     if "ai_report" in st.session_state:
         from datetime import date
