@@ -2,6 +2,47 @@
 import math
 
 
+def _extract_current_zone(entry_zone_status):
+    if not entry_zone_status or entry_zone_status == "-":
+        return None
+    s = str(entry_zone_status)
+    if "日常" in s:
+        return "daily"
+    if "回測" in s:
+        return "pullback"
+    if "狙擊" in s:
+        return "sniper"
+    if "追價" in s:
+        return "chase"
+    return None
+
+
+def generate_zone_consistent_advice(current_zone, tags):
+    has_heavy_sell = any("帶量下殺" in str(t) for t in tags)
+
+    if current_zone == "daily":
+        if has_heavy_sell:
+            return (
+                "帶量下殺，短線賣壓增加；但現價仍位於日常區，"
+                "若符合既定日常掛單，可小量承接。"
+                "若跌破日常下緣，再升級為回測觀察。"
+            )
+        return "現價位於日常區，符合日常掛單條件，可依計劃執行。"
+
+    if current_zone == "pullback":
+        if has_heavy_sell:
+            return "回測區帶量下殺，建議拆單承接，並保留狙擊預案。"
+        return "現價位於回測區，可視資金配置分批承接。"
+
+    if current_zone == "sniper":
+        return "已進入狙擊區，僅在基本面未變且符合資金配置時啟動狙擊單。"
+
+    if current_zone == "chase":
+        return "現價高於追價警戒線，暫停加碼，等待回落。"
+
+    return ""
+
+
 def generate_advanced_diagnosis(
     bias,
     sharpe,
@@ -184,7 +225,7 @@ def generate_advanced_diagnosis(
             )
         elif vol_ratio > 1.5:
             tags.append("🔻帶量下殺")
-            vp_advice = "😱 帶量下殺，反映恐慌性賣壓持續湧現，建議優先觀察狙擊位。"
+            vp_advice = "😱 帶量下殺，反映恐慌性賣壓持續湧現。"
         elif vol_ratio < 0.8:
             tags.append("⚪量縮止跌")
             vp_advice = "量縮下跌，賣壓出現竭盡跡象，有利於短線止跌整理。"
@@ -203,11 +244,12 @@ def generate_advanced_diagnosis(
     fund_display = f"\n{fund_advice}" if fund_advice else ""
     bias_advice_display = f"\n{bias_advice}" if bias_advice else ""
     vp_advice_display = f"\n{vp_advice}" if vp_advice else ""
-    # stress_advice_display = f"\n{stress_advice}" if stress_advice else ""
+
+    current_zone = _extract_current_zone(entry_zone_status)
+    zone_advice = generate_zone_consistent_advice(current_zone, tags) if current_zone else ""
+    zone_advice_display = f"\n{zone_advice}" if zone_advice else ""
 
     full_advice = (
-        f"{advice_base_display}{fund_display}{bias_advice_display}{vp_advice_display}"
+        f"{advice_base_display}{fund_display}{bias_advice_display}{vp_advice_display}{zone_advice_display}"
     )
-    # if stress_advice:
-    #     full_advice += f"{stress_advice_display}"
     return full_advice, tags

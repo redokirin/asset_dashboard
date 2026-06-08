@@ -30,6 +30,46 @@ _GUIDE_PATH = Path(__file__).parent / "ai_analysis_guide.md"
 _SUGGESTION_PATH = Path(__file__).parent / "ai_analysis_suggestion.md"
 
 
+def check_data_freshness(ticker, last_update_time):
+    """
+    檢查資料新鮮度，超過 5 分鐘標記延遲警告。
+    last_update_time 接受 datetime 物件或 "HH:MM" 字串。
+    特別處理台股開盤緩衝期（09:00–09:25）。
+    """
+    import datetime
+    now = datetime.datetime.now()
+
+    if isinstance(last_update_time, str) and last_update_time.strip():
+        try:
+            t = datetime.datetime.strptime(last_update_time.strip(), "%H:%M")
+            last_update_time = now.replace(
+                hour=t.hour, minute=t.minute, second=0, microsecond=0
+            )
+        except (ValueError, TypeError):
+            return None
+
+    if not isinstance(last_update_time, datetime.datetime):
+        return None
+
+    delay_minutes = (now - last_update_time).total_seconds() / 60
+
+    if delay_minutes > 5:
+        return (
+            "⚠️ 即時資料可能延遲，"
+            "開盤前 20 分鐘訊號僅供參考，"
+            "請以既定掛單規則優先。"
+        )
+
+    ticker_str = str(ticker)
+    if ticker_str.endswith(".TW") or ticker_str.endswith(".TWO"):
+        open_time = now.replace(hour=9, minute=0, second=0, microsecond=0)
+        buffer_end = now.replace(hour=9, minute=25, second=0, microsecond=0)
+        if open_time <= now <= buffer_end:
+            return "⚠️ 台股開盤緩衝期，前 20 分鐘資料僅供參考。"
+
+    return None
+
+
 def _bank_mask(df):
     if df.empty:
         return pd.Series(False, index=df.index)
@@ -47,13 +87,18 @@ def _bank_mask(df):
     return asset_type.eq("bank") | market.isin({"bank", "cash", "現金"})
 
 
-def export_for_ai(df_res, adv_res=None, guide_path=None):
+def export_for_ai(df_res, adv_res=None, guide_path=None, mode="execution"):
     """
     導出結構化的 AI 分析文本。
-    整合資產現況 (df_res) 與進階量化指標 (adv_res)。
+    mode="execution"  → 盤中模式，重點：zone 判斷、掛單建議、追價警戒
+    mode="diagnosis"  → 盤後模式，重點：OHLC zone、Pain Ratio 變化、市場事件
     """
-    report = ["# 🚀 個人財務資產 AI 診斷數據摘要\n"]
-    report.append(f"> 🕒 製表時間: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}\n")
+    now_str = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')
+    if mode == "diagnosis":
+        report = [f"# 診斷模式報告｜{now_str} 收盤後\n"]
+    else:
+        report = [f"# 執行模式報告｜{now_str}\n"]
+    report.append(f"> 🕒 製表時間: {now_str}\n")
 
     # --- 1. 整體組合摘要 ---
     bank_mask = _bank_mask(df_res)
@@ -205,25 +250,124 @@ def export_for_ai(df_res, adv_res=None, guide_path=None):
             else:
                 risk_line = None
 
+            # 掛單策略 — 僅執行模式顯示
+            order_strategy_line = ""
+            if mode == "execution":
+                freshness_warning = check_data_freshness(ticker, row.get("更新時間"))
+                fw_line = f"\n> {freshness_warning}" if freshness_warning else ""
+                if row.get("dailyUpper") is not None and row.get("boundaryDailyRetest") is not None:
+                    order_strategy_line = (
+                        f"{fw_line}\n"
+                        f"- **掛單策略**: 追價警戒 > {row['dailyUpper']:.2f} | "
+                        f"日常 {row['dailyUpper']:.2f}~{row['boundaryDailyRetest']:.2f} | "
+                        f"回測 {row['boundaryDailyRetest']:.2f}~{row['boundaryRetestSniper']:.2f} | "
+                        f"狙擊 < {row['boundaryRetestSniper']:.2f}  ·  "
+                        f"現價 {float(row.get(COL_PRICE, 0) or 0):.2f} → {row.get('entryZoneStatus', '-')}"
+                    )
+                else:
+                    order_strategy_line = (
+                        f"{fw_line}\n"
+                        f"- **掛單策略**: 日常 {row.get(COL_DAILY_LEVEL, '-')} "
+                        f"回測 {row.get(COL_PULLBACK_LEVEL, '-')} "
+                        f"狙擊 {row.get(COL_SNIPER_LEVEL, '-')}"
+                    )
+
             quant_info = (
                 f"- **基本面**: EPS {eps} | P/E {pe} | 殖利率 {yield_val} | PEG {peg}\n"
                 f"- **量化指標**: RS百分位 {row.get('RS 百分位', '-')} | 乖離率 {bias} | 量比 {vol_ratio} | RSI {row.get('RSI', 0):.1f} | 夏普值 {row.get('夏普值', '-')} | α勝率 {row.get('Alpha 勝率', '-')}\n"
                 + (f"{risk_line}\n" if risk_line else "")
-                + (
-                    f"- **掛單策略**: 追價警戒 > {row['dailyUpper']:.2f} | 日常 {row['dailyUpper']:.2f}~{row['boundaryDailyRetest']:.2f} | 回測 {row['boundaryDailyRetest']:.2f}~{row['boundaryRetestSniper']:.2f} | 狙擊 < {row['boundaryRetestSniper']:.2f}  ·  現價 {float(row.get(COL_PRICE, 0) or 0):.2f} → {row.get('entryZoneStatus', '-')}"
-                    if row.get("dailyUpper") is not None and row.get("boundaryDailyRetest") is not None
-                    else f"- **掛單策略**: 日常 {row.get(COL_DAILY_LEVEL, '-')} 回測 {row.get(COL_PULLBACK_LEVEL, '-')} 狙擊 {row.get(COL_SNIPER_LEVEL, '-')}"
-                )
-                + "\n"
-                f"- **診斷標籤**: {' '.join(row['tags']) if isinstance(row.get('tags'), list) else '-'}\n"
-                f"- **AI 診斷建議**: {diag}"
+                + (f"{order_strategy_line}\n" if order_strategy_line else "")
+                + f"- **診斷標籤**: {' '.join(row['tags']) if isinstance(row.get('tags'), list) else '-'}\n"
+                + f"- **AI 診斷建議**: {diag}"
             )
             report.append(quant_info)
 
         report.append("")  # 換行
+
+    # ── 診斷模式專屬：OHLC zone / 市場事件 / Pain Ratio 變化 ────────────────
+    if mode == "diagnosis":
+        _append_diagnosis_sections(report)
 
     report.append("\n" + "=" * 50)
     resolved_guide = Path(guide_path) if guide_path else _GUIDE_PATH
     report.append(resolved_guide.read_text(encoding="utf-8"))
 
     return "\n".join(report)
+
+
+def _append_diagnosis_sections(report: list) -> None:
+    """在診斷模式報告末尾附加 OHLC zone、市場事件與 Pain Ratio 變化。"""
+    from datetime import date
+    today_str = str(date.today())
+    try:
+        from db.database import _get_connection, init_db
+        init_db()
+        with _get_connection() as conn:
+            ohlc_rows = conn.execute(
+                """SELECT ticker,
+                          open_zone, open_position, high_zone, high_position,
+                          low_zone, low_position, close_zone, close_position,
+                          execution_status
+                   FROM order_bands WHERE report_date = ? ORDER BY ticker""",
+                (today_str,),
+            ).fetchall()
+            event_rows = conn.execute(
+                """SELECT event_tag, event_name, event_note, is_pressure_test
+                   FROM market_events WHERE event_date = ?""",
+                (today_str,),
+            ).fetchall()
+
+        if ohlc_rows:
+            def _zp(zone, pos):
+                if zone is None:
+                    return "-"
+                return f"{zone}({pos:.2f})" if pos is not None else zone
+
+            report.append("\n## OHLC Zone 落點\n")
+            report.append("| 標的 | 開盤 | 最高 | 最低 | 收盤 | 執行狀態 |")
+            report.append("|------|------|------|------|------|----------|")
+            for r in ohlc_rows:
+                report.append(
+                    f"| {r['ticker']} "
+                    f"| {_zp(r['open_zone'], r['open_position'])} "
+                    f"| {_zp(r['high_zone'], r['high_position'])} "
+                    f"| {_zp(r['low_zone'], r['low_position'])} "
+                    f"| {_zp(r['close_zone'], r['close_position'])} "
+                    f"| {r['execution_status'] or '-'} |"
+                )
+
+        if event_rows:
+            report.append("\n## 市場事件\n")
+            for e in event_rows:
+                pt = " [壓力測試]" if e["is_pressure_test"] else ""
+                report.append(f"- **{e['event_tag']}**{pt}: {e['event_name'] or ''}")
+                if e["event_note"]:
+                    first_line = e["event_note"].strip().splitlines()[0]
+                    report.append(f"  > {first_line}")
+
+    except Exception as exc:
+        report.append(f"\n> (診斷資料載入失敗: {exc})")
+
+    try:
+        from db.database import get_latest_two_snapshots
+        latest, previous = get_latest_two_snapshots()
+        if latest.get("assets") and previous.get("assets"):
+            prev_map = {
+                a["ticker"]: a["pain_ratio"]
+                for a in previous["assets"]
+                if a.get("pain_ratio") is not None
+            }
+            pain_lines = []
+            for a in latest["assets"]:
+                if a.get("pain_ratio") is not None and a["ticker"] in prev_map:
+                    delta = a["pain_ratio"] - prev_map[a["ticker"]]
+                    arrow = "⬆️" if delta > 0.01 else ("⬇️" if delta < -0.01 else "→")
+                    pain_lines.append(
+                        f"- **{a['ticker']}**: {a['pain_ratio']:.2f} "
+                        f"{arrow} (前: {prev_map[a['ticker']]:.2f})"
+                    )
+            if pain_lines:
+                report.append("\n## Pain Ratio 變化\n")
+                report.extend(pain_lines)
+    except Exception:
+        pass

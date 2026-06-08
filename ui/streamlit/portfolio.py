@@ -99,12 +99,20 @@ def render_report_component(df):
             summary = generate_daily_summary(df, adv_res)
         _show_daily_summary_dialog(summary)
 
+    report_mode = st.radio(
+        "報告模式",
+        options=["execution", "diagnosis"],
+        format_func=lambda m: "盤中執行" if m == "execution" else "盤後診斷",
+        horizontal=True,
+        key="report_mode",
+    )
+
     if st.button("📋 分析報告", use_container_width=True):
         with st.spinner("正在產生完整 AI 分析報告..."):
             from core import exporters
 
             adv_res = dashboard_logic.run_advanced_analysis(df)
-            st.session_state["ai_report"] = exporters.export_for_ai(df, adv_res)
+            st.session_state["ai_report"] = exporters.export_for_ai(df, adv_res, mode=report_mode)
             st.session_state["_adv_res_cache"] = adv_res
 
 

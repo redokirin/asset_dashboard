@@ -13,9 +13,23 @@ _CASH_MARKETS = {"bank", "cash", "現金"}
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS report_runs (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    report_date DATE    NOT NULL UNIQUE,
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    report_date       DATE    NOT NULL UNIQUE,
+    parameter_version TEXT,
+    market_event_tag  TEXT,
+    market_event_note TEXT,
+    is_pressure_test  INTEGER DEFAULT 0,
+    created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS market_events (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_date       TEXT NOT NULL,
+    event_tag        TEXT NOT NULL,
+    event_name       TEXT,
+    event_note       TEXT,
+    is_pressure_test INTEGER DEFAULT 0,
+    created_at       TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS order_bands (
@@ -102,9 +116,33 @@ def _get_connection():
     return conn
 
 
+def _migrate(conn):
+    """Idempotent schema migrations — safe to run multiple times."""
+    existing = {r[1] for r in conn.execute("PRAGMA table_info(report_runs)").fetchall()}
+    for col, col_def in [
+        ("parameter_version", "TEXT"),
+        ("market_event_tag",  "TEXT"),
+        ("market_event_note", "TEXT"),
+        ("is_pressure_test",  "INTEGER DEFAULT 0"),
+    ]:
+        if col not in existing:
+            conn.execute(f"ALTER TABLE report_runs ADD COLUMN {col} {col_def}")
+
+    ob_cols = {r[1] for r in conn.execute("PRAGMA table_info(order_bands)").fetchall()}
+    for col, col_def in [
+        ("planned_order_price", "REAL"),
+        ("actual_filled",       "INTEGER DEFAULT 0"),
+        ("execution_status",    "TEXT"),
+        ("execution_note",      "TEXT"),
+    ]:
+        if col not in ob_cols:
+            conn.execute(f"ALTER TABLE order_bands ADD COLUMN {col} {col_def}")
+
+
 def init_db():
     with _get_connection() as conn:
         conn.executescript(_DDL)
+        _migrate(conn)
 
 
 def _safe_float(val):
@@ -347,8 +385,11 @@ def get_latest_two_snapshots() -> tuple[dict, dict]:
 def get_zone_and_position(price, daily_upper, boundary_daily_retest, boundary_retest_sniper):
     """
     返回 (zone, position)。
-    zone: "chase" | "daily" | "pullback" | "snipe"
-    position: 0.0 = 區間下緣, 1.0 = 區間上緣，chase/snipe 無上下限故為 None。
+    zone: "chase" | "daily" | "pullback" | "sniper"
+    position:
+      daily/pullback → 0.0 (區間下緣) ~ 1.0 (區間上緣)
+      chase          → None（無上限，位置無意義）
+      sniper         → 0（統一記為 0，表示已低於狙擊線）
     """
     if price is None or daily_upper is None or boundary_daily_retest is None or boundary_retest_sniper is None:
         return None, None
@@ -362,7 +403,7 @@ def get_zone_and_position(price, daily_upper, boundary_daily_retest, boundary_re
         denom = boundary_daily_retest - boundary_retest_sniper
         pos = (price - boundary_retest_sniper) / denom if denom else None
         return "pullback", round(pos, 4) if pos is not None else None
-    return "snipe", None
+    return "sniper", 0
 
 
 def create_report_run(report_date: date = None) -> int:
@@ -398,6 +439,9 @@ def save_order_bands(report_run_id: int, adv_res, snapshot_date: date = None) ->
             ticker = str(row.get("代碼", ""))
             if not ticker:
                 continue
+            if ticker.upper().startswith("0P"):
+                logging.debug(f"[db] save_order_bands: 跳過基金標的 {ticker}（yfinance 無 OHLC）")
+                continue
             du = row.get("dailyUpper")
             bdr = row.get("boundaryDailyRetest")
             brs = row.get("boundaryRetestSniper")
@@ -427,7 +471,11 @@ def save_order_bands(report_run_id: int, adv_res, snapshot_date: date = None) ->
                 """,
                 rows,
             )
-        logging.info(f"[db] order_bands 已寫入：run_id={report_run_id}, {len(rows)} 筆")
+        logging.info(
+            f"[db] order_bands 已寫入：run_id={report_run_id}, {len(rows)} 筆。"
+            "OHLC data unavailable at analysis time, only close zone recorded."
+            " Run update_ohlc_zones() after market close to fill open/high/low."
+        )
         return len(rows)
     except Exception as exc:
         logging.warning(f"[db] order_bands 寫入失敗：{exc}")
@@ -447,7 +495,8 @@ def update_ohlc_zones(report_date: str) -> list[dict]:
             band_rows = conn.execute(
                 """
                 SELECT ob.id, ob.ticker,
-                       ob.daily_upper, ob.boundary_daily_retest, ob.boundary_retest_sniper
+                       ob.daily_upper, ob.boundary_daily_retest, ob.boundary_retest_sniper,
+                       ob.planned_order_price, ob.actual_filled
                 FROM order_bands ob
                 WHERE ob.report_date = ?
                 """,
@@ -460,6 +509,8 @@ def update_ohlc_zones(report_date: str) -> list[dict]:
 
         with _get_connection() as conn:
             for row in band_rows:
+                if row["ticker"].upper().startswith("0P"):
+                    continue
                 ohlc = fetch_ohlc(row["ticker"], report_date)
                 if not ohlc:
                     logging.warning(f"[db] update_ohlc_zones: {row['ticker']} OHLC 取得失敗，跳過")
@@ -485,6 +536,19 @@ def update_ohlc_zones(report_date: str) -> list[dict]:
                         row["id"],
                     ),
                 )
+                if row["planned_order_price"] is not None:
+                    missed = detect_missed_execution(
+                        ticker=row["ticker"],
+                        low_price=ohlc["low"],
+                        planned_order_price=row["planned_order_price"],
+                        actual_filled=bool(row["actual_filled"]),
+                        close_price=ohlc["close"],
+                    )
+                    if missed:
+                        conn.execute(
+                            "UPDATE order_bands SET execution_status=?, execution_note=? WHERE id=?",
+                            (missed["status"], missed["note"], row["id"]),
+                        )
 
         with _get_connection() as conn:
             final = conn.execute(
@@ -502,3 +566,128 @@ def update_ohlc_zones(report_date: str) -> list[dict]:
     except Exception as exc:
         logging.warning(f"[db] update_ohlc_zones 失敗：{exc}")
         return []
+
+
+# ── Execution Status ──────────────────────────────────────────────────────────
+
+
+def detect_missed_execution(ticker, low_price, planned_order_price, actual_filled, close_price):
+    """
+    三條件同時成立時標記 manual_override_missed_fill：
+    1. low_price <= planned_order_price （價格曾到達掛單位置）
+    2. actual_filled == False
+    3. close_price > planned_order_price （收盤已反彈超過掛單價）
+    """
+    if (low_price is not None and
+            low_price <= planned_order_price and
+            not actual_filled and
+            close_price is not None and
+            close_price > planned_order_price):
+        return {
+            "status": "manual_override_missed_fill",
+            "note": (
+                f"系統價位曾觸發（最低 {low_price}，掛單 {planned_order_price}），"
+                "但因人工觀望或資料延遲未成交，"
+                "收盤已反彈。"
+                "屬執行層問題，不代表掛單參數錯誤。"
+            ),
+        }
+    return None
+
+
+def update_execution_status(
+    report_date: str,
+    ticker: str,
+    planned_order_price: float,
+    actual_filled: bool = False,
+) -> dict:
+    """手動補錄或更新執行狀態。需在 update_ohlc_zones() 之後呼叫（low_price 需已填入）。"""
+    init_db()
+    with _get_connection() as conn:
+        row = conn.execute(
+            "SELECT id, low_price, close_price FROM order_bands WHERE report_date=? AND ticker=?",
+            (report_date, ticker),
+        ).fetchone()
+        if not row:
+            logging.warning(f"[db] update_execution_status: {ticker} {report_date} 無記錄")
+            return {}
+
+        result = detect_missed_execution(
+            ticker=ticker,
+            low_price=row["low_price"],
+            planned_order_price=planned_order_price,
+            actual_filled=actual_filled,
+            close_price=row["close_price"],
+        )
+        status = result["status"] if result else "no_trigger"
+        note = result["note"] if result else None
+
+        conn.execute(
+            """UPDATE order_bands SET
+                planned_order_price = ?,
+                actual_filled = ?,
+                execution_status = ?,
+                execution_note = ?
+               WHERE id = ?""",
+            (planned_order_price, int(actual_filled), status, note, row["id"]),
+        )
+    return {"ticker": ticker, "status": status, "note": note}
+
+
+# ── Market Events ─────────────────────────────────────────────────────────────
+
+
+def add_market_event(
+    event_date: str,
+    event_tag: str,
+    event_name: str = None,
+    event_note: str = None,
+    is_pressure_test: int = 0,
+) -> int:
+    """新增一筆 market_events 記錄，回傳 id。"""
+    from datetime import datetime
+    init_db()
+    with _get_connection() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO market_events
+                (event_date, event_tag, event_name, event_note, is_pressure_test, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (event_date, event_tag, event_name, event_note, is_pressure_test,
+             datetime.now().isoformat()),
+        )
+        return cur.lastrowid
+
+
+def update_report_run_event(
+    report_date: str,
+    market_event_tag: str = None,
+    market_event_note: str = None,
+    is_pressure_test: int = None,
+    parameter_version: str = None,
+) -> bool:
+    """更新指定日期最新 report_run 的事件欄位。"""
+    init_db()
+    updates, values = [], []
+    if market_event_tag is not None:
+        updates.append("market_event_tag = ?");  values.append(market_event_tag)
+    if market_event_note is not None:
+        updates.append("market_event_note = ?"); values.append(market_event_note)
+    if is_pressure_test is not None:
+        updates.append("is_pressure_test = ?");  values.append(is_pressure_test)
+    if parameter_version is not None:
+        updates.append("parameter_version = ?"); values.append(parameter_version)
+    if not updates:
+        return False
+    with _get_connection() as conn:
+        run = conn.execute(
+            "SELECT id FROM report_runs WHERE report_date = ? ORDER BY id DESC LIMIT 1",
+            (report_date,),
+        ).fetchone()
+        if not run:
+            logging.warning(f"[db] update_report_run_event: {report_date} 無 report_run")
+            return False
+        values.append(run["id"])
+        conn.execute(f"UPDATE report_runs SET {', '.join(updates)} WHERE id = ?", values)
+    return True
