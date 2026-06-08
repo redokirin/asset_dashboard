@@ -57,7 +57,11 @@ def _show_daily_summary_dialog(summary):
     if summary["actionable"]:
         st.markdown("##### 【可執行】")
         for item in summary["actionable"]:
-            price_str = f"現價 **{item['current_price']:.2f}**" if item.get("current_price") else ""
+            price_str = (
+                f"現價 **{item['current_price']:.2f}**"
+                if item.get("current_price")
+                else ""
+            )
             zone_str = f"區間 `{item['zone_range']}`" if item.get("zone_range") else ""
             parts = [p for p in [item["signal"], zone_str, price_str] if p]
             st.success(f"{item['emoji']} **{item['ticker']}** ｜ {'｜'.join(parts)}")
@@ -92,29 +96,35 @@ def render_report_component(df):
 
             _cached = st.session_state.get("_adv_res_cache")
             adv_res = (
-                _cached if _cached is not None and not _cached.empty
+                _cached
+                if _cached is not None and not _cached.empty
                 else dashboard_logic.run_advanced_analysis(df)
             )
             st.session_state["_adv_res_cache"] = adv_res
             summary = generate_daily_summary(df, adv_res)
         _show_daily_summary_dialog(summary)
 
-    report_mode = st.radio(
-        "報告模式",
-        options=["execution", "diagnosis"],
-        format_func=lambda m: "盤中執行" if m == "execution" else "盤後診斷",
-        horizontal=True,
-        key="report_mode",
-    )
+    col_exec, col_diag = st.columns(2)
+    with col_exec:
+        if st.button("📋 盤中執行", use_container_width=True):
+            with st.spinner("正在產生執行模式報告..."):
+                from core import exporters
 
-    if st.button("📋 分析報告", use_container_width=True):
-        with st.spinner("正在產生完整 AI 分析報告..."):
-            from core import exporters
+                adv_res = dashboard_logic.run_advanced_analysis(df)
+                st.session_state["ai_report"] = exporters.export_for_ai(
+                    df, adv_res, mode="execution"
+                )
+                st.session_state["_adv_res_cache"] = adv_res
+    with col_diag:
+        if st.button("📋 盤後診斷", use_container_width=True):
+            with st.spinner("正在產生診斷模式報告..."):
+                from core import exporters
 
-            adv_res = dashboard_logic.run_advanced_analysis(df)
-            st.session_state["ai_report"] = exporters.export_for_ai(df, adv_res, mode=report_mode)
-            st.session_state["_adv_res_cache"] = adv_res
-
+                adv_res = dashboard_logic.run_advanced_analysis(df)
+                st.session_state["ai_report"] = exporters.export_for_ai(
+                    df, adv_res, mode="diagnosis"
+                )
+                st.session_state["_adv_res_cache"] = adv_res
 
     if "ai_report" in st.session_state:
         from datetime import date
