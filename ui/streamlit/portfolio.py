@@ -57,9 +57,10 @@ def _show_daily_summary_dialog(summary):
     if summary["actionable"]:
         st.markdown("##### 【可執行】")
         for item in summary["actionable"]:
-            st.success(
-                f"{item['emoji']} **{item['ticker']}** ｜ {item['signal']} ｜ {item['note']}"
-            )
+            price_str = f"現價 **{item['current_price']:.2f}**" if item.get("current_price") else ""
+            zone_str = f"區間 `{item['zone_range']}`" if item.get("zone_range") else ""
+            parts = [p for p in [item["signal"], zone_str, price_str] if p]
+            st.success(f"{item['emoji']} **{item['ticker']}** ｜ {'｜'.join(parts)}")
 
     if summary["warnings"]:
         st.markdown("##### 【須注意】")
@@ -89,9 +90,11 @@ def render_report_component(df):
         with st.spinner("正在分析今日摘要..."):
             from core.daily_summary import generate_daily_summary
 
-            adv_res = st.session_state.get(
-                "_adv_res_cache"
-            ) or dashboard_logic.run_advanced_analysis(df)
+            _cached = st.session_state.get("_adv_res_cache")
+            adv_res = (
+                _cached if _cached is not None and not _cached.empty
+                else dashboard_logic.run_advanced_analysis(df)
+            )
             st.session_state["_adv_res_cache"] = adv_res
             summary = generate_daily_summary(df, adv_res)
         _show_daily_summary_dialog(summary)
@@ -104,9 +107,6 @@ def render_report_component(df):
             st.session_state["ai_report"] = exporters.export_for_ai(df, adv_res)
             st.session_state["_adv_res_cache"] = adv_res
 
-            from db.database import save_snapshot
-
-            save_snapshot(df, adv_res)
 
     if "ai_report" in st.session_state:
         from datetime import date

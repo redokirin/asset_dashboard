@@ -12,6 +12,36 @@ _DB_PATH = Path(__file__).parent / "portfolio.db"
 _CASH_MARKETS = {"bank", "cash", "現金"}
 
 _DDL = """
+CREATE TABLE IF NOT EXISTS report_runs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    report_date DATE    NOT NULL UNIQUE,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS order_bands (
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    report_run_id          INTEGER NOT NULL,
+    report_date            DATE    NOT NULL,
+    ticker                 TEXT    NOT NULL,
+    daily_upper            REAL,
+    boundary_daily_retest  REAL,
+    boundary_retest_sniper REAL,
+    close_price            REAL,
+    close_zone             TEXT,
+    close_position         REAL,
+    open_price             REAL,
+    high_price             REAL,
+    low_price              REAL,
+    open_zone              TEXT,
+    high_zone              TEXT,
+    low_zone               TEXT,
+    open_position          REAL,
+    high_position          REAL,
+    low_position           REAL,
+    created_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(report_run_id, ticker)
+);
+
 CREATE TABLE IF NOT EXISTS portfolio_snapshot (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     snapshot_date   DATE    NOT NULL UNIQUE,
@@ -309,3 +339,166 @@ def get_latest_two_snapshots() -> tuple[dict, dict]:
     except Exception as exc:
         logging.warning(f"[db] 讀取最新快照失敗：{exc}")
         return {}, {}
+
+
+# ── Order Bands ──────────────────────────────────────────────────────────────
+
+
+def get_zone_and_position(price, daily_upper, boundary_daily_retest, boundary_retest_sniper):
+    """
+    返回 (zone, position)。
+    zone: "chase" | "daily" | "pullback" | "snipe"
+    position: 0.0 = 區間下緣, 1.0 = 區間上緣，chase/snipe 無上下限故為 None。
+    """
+    if price is None or daily_upper is None or boundary_daily_retest is None or boundary_retest_sniper is None:
+        return None, None
+    if price > daily_upper:
+        return "chase", None
+    if price > boundary_daily_retest:
+        denom = daily_upper - boundary_daily_retest
+        pos = (price - boundary_daily_retest) / denom if denom else None
+        return "daily", round(pos, 4) if pos is not None else None
+    if price > boundary_retest_sniper:
+        denom = boundary_daily_retest - boundary_retest_sniper
+        pos = (price - boundary_retest_sniper) / denom if denom else None
+        return "pullback", round(pos, 4) if pos is not None else None
+    return "snipe", None
+
+
+def create_report_run(report_date: date = None) -> int:
+    """同一天只保留一筆 report_run。當天已有記錄直接回傳其 id，否則新增。"""
+    init_db()
+    today = report_date or date.today()
+    with _get_connection() as conn:
+        existing = conn.execute(
+            "SELECT id FROM report_runs WHERE report_date = ? ORDER BY id DESC LIMIT 1",
+            (str(today),),
+        ).fetchone()
+        if existing:
+            return existing["id"]
+        cur = conn.execute(
+            "INSERT INTO report_runs (report_date) VALUES (?)", (str(today),)
+        )
+        return cur.lastrowid
+
+
+def save_order_bands(report_run_id: int, adv_res, snapshot_date: date = None) -> int:
+    """
+    盤中執行：寫入各標的 close_price/close_zone/close_position。
+    open/high/low 欄位留 NULL，待收盤後由 update_ohlc_zones() 補齊。
+    """
+    try:
+        init_db()
+        if adv_res is None or adv_res.empty:
+            return 0
+        today = snapshot_date or date.today()
+
+        rows = []
+        for _, row in adv_res.iterrows():
+            ticker = str(row.get("代碼", ""))
+            if not ticker:
+                continue
+            du = row.get("dailyUpper")
+            bdr = row.get("boundaryDailyRetest")
+            brs = row.get("boundaryRetestSniper")
+            close_price = _safe_float(row.get("股價"))
+            close_zone, close_pos = get_zone_and_position(close_price, du, bdr, brs)
+            rows.append((
+                report_run_id, str(today), ticker,
+                du, bdr, brs,
+                close_price, close_zone, close_pos,
+            ))
+
+        with _get_connection() as conn:
+            conn.executemany(
+                """
+                INSERT INTO order_bands
+                    (report_run_id, report_date, ticker,
+                     daily_upper, boundary_daily_retest, boundary_retest_sniper,
+                     close_price, close_zone, close_position)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(report_run_id, ticker) DO UPDATE SET
+                    daily_upper            = excluded.daily_upper,
+                    boundary_daily_retest  = excluded.boundary_daily_retest,
+                    boundary_retest_sniper = excluded.boundary_retest_sniper,
+                    close_price            = excluded.close_price,
+                    close_zone             = excluded.close_zone,
+                    close_position         = excluded.close_position
+                """,
+                rows,
+            )
+        logging.info(f"[db] order_bands 已寫入：run_id={report_run_id}, {len(rows)} 筆")
+        return len(rows)
+    except Exception as exc:
+        logging.warning(f"[db] order_bands 寫入失敗：{exc}")
+        return 0
+
+
+def update_ohlc_zones(report_date: str) -> list[dict]:
+    """
+    收盤後補齊當日所有標的的 open/high/low 區間位置。
+    回傳當日完整的區間落點表（含 close）。
+    """
+    from core.data_sources.yahoo import fetch_ohlc
+
+    try:
+        init_db()
+        with _get_connection() as conn:
+            band_rows = conn.execute(
+                """
+                SELECT ob.id, ob.ticker,
+                       ob.daily_upper, ob.boundary_daily_retest, ob.boundary_retest_sniper
+                FROM order_bands ob
+                WHERE ob.report_date = ?
+                """,
+                (report_date,),
+            ).fetchall()
+
+        if not band_rows:
+            logging.info(f"[db] update_ohlc_zones: {report_date} 無 order_bands 資料")
+            return []
+
+        with _get_connection() as conn:
+            for row in band_rows:
+                ohlc = fetch_ohlc(row["ticker"], report_date)
+                if not ohlc:
+                    logging.warning(f"[db] update_ohlc_zones: {row['ticker']} OHLC 取得失敗，跳過")
+                    continue
+                du = row["daily_upper"]
+                bdr = row["boundary_daily_retest"]
+                brs = row["boundary_retest_sniper"]
+                open_zone, open_pos = get_zone_and_position(ohlc["open"], du, bdr, brs)
+                high_zone, high_pos = get_zone_and_position(ohlc["high"], du, bdr, brs)
+                low_zone, low_pos = get_zone_and_position(ohlc["low"], du, bdr, brs)
+                conn.execute(
+                    """
+                    UPDATE order_bands SET
+                        open_price = ?, open_zone = ?, open_position = ?,
+                        high_price = ?, high_zone = ?, high_position = ?,
+                        low_price  = ?, low_zone  = ?, low_position  = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        ohlc["open"], open_zone, open_pos,
+                        ohlc["high"], high_zone, high_pos,
+                        ohlc["low"], low_zone, low_pos,
+                        row["id"],
+                    ),
+                )
+
+        with _get_connection() as conn:
+            final = conn.execute(
+                """
+                SELECT ticker, open_zone, low_zone, close_zone,
+                       open_position, low_position, close_position
+                FROM order_bands
+                WHERE report_date = ?
+                ORDER BY ticker
+                """,
+                (report_date,),
+            ).fetchall()
+
+        return [dict(r) for r in final]
+    except Exception as exc:
+        logging.warning(f"[db] update_ohlc_zones 失敗：{exc}")
+        return []

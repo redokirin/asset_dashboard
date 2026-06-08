@@ -138,6 +138,34 @@ def fetch_historical_data(tickers, period="2y", group_by="ticker", fetchers=None
     return squeeze_single_ticker_frame(df_all)
 
 
+def fetch_ohlc(ticker: str, date: str) -> dict | None:
+    """
+    取得指定日期的單日 OHLC。date 格式：'2026-06-08'。
+    回傳 {"open", "high", "low", "close"} 或 None。
+    """
+    try:
+        from datetime import datetime, timedelta
+        next_day = (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+        df = yf.download(ticker, start=date, end=next_day,
+                         interval="1d", auto_adjust=True, progress=False)
+        if df is None or df.empty:
+            return None
+        df = normalize_yfinance_columns(df)
+        df = squeeze_single_ticker_frame(df)
+        if df.empty:
+            return None
+        row = df.iloc[0]
+        return {
+            "open":  float(row["Open"]),
+            "high":  float(row["High"]),
+            "low":   float(row["Low"]),
+            "close": float(row["Close"]),
+        }
+    except Exception as exc:
+        logging.warning(f"[yahoo] fetch_ohlc {ticker} {date} 失敗: {exc}")
+        return None
+
+
 def fetch_common_data(tickers, period="2y", fetchers=None):
     """抓取基準指數或匯率等共用數據"""
     normalized_tickers = normalize_tickers(tickers)

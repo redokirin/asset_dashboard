@@ -22,9 +22,22 @@ from core.fetchers import (
 
 def run_advanced_analysis(df_res):
     """Run advanced analysis while preserving monkeypatch compatibility."""
+    import logging
     _advanced.fetch_common_data = fetch_common_data
     _advanced.fetch_historical_data = fetch_historical_data
     _advanced.get_ticker_fundamental_info = get_ticker_fundamental_info
     _advanced.get_smart_benchmark = get_smart_benchmark
     _advanced.generate_advanced_diagnosis = generate_advanced_diagnosis
-    return _advanced.run_advanced_analysis(df_res)
+    adv_res = _advanced.run_advanced_analysis(df_res)
+
+    # 全組合分析（多標的）才寫入 DB；單標的分析跳過
+    if len(df_res) > 1 and not adv_res.empty:
+        try:
+            from db.database import create_report_run, save_order_bands, save_snapshot
+            save_snapshot(df_res, adv_res)
+            run_id = create_report_run()
+            save_order_bands(run_id, adv_res)
+        except Exception as exc:
+            logging.warning(f"[analysis] DB 寫入失敗：{exc}")
+
+    return adv_res

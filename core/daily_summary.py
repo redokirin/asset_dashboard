@@ -115,7 +115,10 @@ def generate_daily_summary(
     work_df = df_res[inv_mask].copy()
 
     if adv_res is not None and not adv_res.empty and "代碼" in adv_res.columns:
-        adv_cols = [c for c in ["代碼", "entryZoneStatus", "painRatio", "currentDrawdownPct", "tags"] if c in adv_res.columns]
+        adv_cols = [c for c in [
+            "代碼", "entryZoneStatus", "painRatio", "currentDrawdownPct", "tags",
+            "股價", "dailyUpper", "boundaryDailyRetest", "boundaryRetestSniper",
+        ] if c in adv_res.columns]
         work_df = work_df.merge(adv_res[adv_cols], on="代碼", how="left")
 
     region_gaps = _calc_region_gaps(df_res, region_targets)
@@ -132,8 +135,6 @@ def generate_daily_summary(
 
         if asset_type == "基金":
             continue
-
-        account = _account_label(row)
 
         entry_zone = row.get("entryZoneStatus", "")
         pain_ratio_val = row.get("painRatio", None)
@@ -157,20 +158,33 @@ def generate_daily_summary(
         has_warning = is_high_pain or is_volume_crash or is_stress_fail
 
         if signal:
-            gap_note = ""
-            if market in region_gap_map:
-                g = region_gap_map[market]
-                gap_note = f"{market}缺口 {g['gap_pct'] * 100:+.1f}%"
-            note_parts = [account]
-            if gap_note:
-                note_parts.append(gap_note)
+            du  = row.get("dailyUpper")
+            bdr = row.get("boundaryDailyRetest")
+            brs = row.get("boundaryRetestSniper")
+            adv_price = row.get("股價")
+            current_price = None
+            try:
+                current_price = float(adv_price) if adv_price is not None else None
+            except (ValueError, TypeError):
+                pass
+
+            if signal == "日常加碼" and du is not None and bdr is not None:
+                zone_range = f"{bdr:.2f}~{du:.2f}"
+            elif signal == "回測加碼" and bdr is not None and brs is not None:
+                zone_range = f"{brs:.2f}~{bdr:.2f}"
+            elif signal == "狙擊加碼" and brs is not None:
+                zone_range = f"< {brs:.2f}"
+            else:
+                zone_range = None
+
             actionable.append(
                 {
                     "ticker": ticker,
                     "name": name,
                     "signal": signal,
                     "emoji": _SIGNAL_EMOJI.get(signal, "🟡"),
-                    "note": "｜".join(note_parts),
+                    "zone_range": zone_range,
+                    "current_price": current_price,
                     "asset_type": asset_type,
                 }
             )
@@ -204,9 +218,10 @@ def generate_daily_summary(
     if actionable:
         lines.append("【可執行】")
         for item in actionable:
-            lines.append(
-                f"{item['emoji']} {item['ticker']}｜{item['signal']}｜{item['note']}"
-            )
+            price_str = f"現價 {item['current_price']:.2f}" if item["current_price"] else ""
+            zone_str = f"區間 {item['zone_range']}" if item["zone_range"] else ""
+            parts = [p for p in [item["signal"], zone_str, price_str] if p]
+            lines.append(f"{item['emoji']} {item['ticker']}｜{'｜'.join(parts)}")
         lines.append("")
 
     if warnings:
