@@ -114,6 +114,7 @@ def render_report_component(df):
                 st.session_state["ai_report"] = exporters.export_for_ai(
                     df, adv_res, mode="execution"
                 )
+                st.session_state["ai_report_mode"] = "execution"
                 st.session_state["_adv_res_cache"] = adv_res
     with col_diag:
         if st.button("📋 盤後診斷", use_container_width=True):
@@ -124,15 +125,17 @@ def render_report_component(df):
                 st.session_state["ai_report"] = exporters.export_for_ai(
                     df, adv_res, mode="diagnosis"
                 )
+                st.session_state["ai_report_mode"] = "diagnosis"
                 st.session_state["_adv_res_cache"] = adv_res
 
     if "ai_report" in st.session_state:
         from datetime import date
 
+        mode_suffix = "diagnosis" if st.session_state.get("ai_report_mode") == "diagnosis" else "execution"
         st.download_button(
             label="⬇️ 下載 AI 報告 (.md)",
             data=st.session_state["ai_report"],
-            file_name=f"ai_report_{date.today().strftime('%Y%m%d')}.md",
+            file_name=f"ai_report_{mode_suffix}_{date.today().strftime('%Y%m%d')}.md",
             mime="text/markdown",
             use_container_width=True,
         )
