@@ -17,7 +17,16 @@ def _extract_current_zone(entry_zone_status):
     return None
 
 
+_ZONE_NAMES = {
+    "daily": "日常區",
+    "pullback": "回測區",
+    "sniper": "狙擊區",
+    "chase": "追價警戒區",
+}
+
+
 def generate_zone_consistent_advice(current_zone, tags):
+    """純 zone 一致性建議，不含警告優先級判斷（供診斷模式或外部使用）。"""
     has_heavy_sell = any("帶量下殺" in str(t) for t in tags)
 
     if current_zone == "daily":
@@ -41,6 +50,41 @@ def generate_zone_consistent_advice(current_zone, tags):
         return "現價高於追價警戒線，暫停加碼，等待回落。"
 
     return ""
+
+
+def generate_execution_advice(current_zone, tags):
+    """
+    帶警告優先級的執行建議：
+      異常爆量（最高）> 帶量下殺（次優）> zone 一致性
+    高優先警告出現時，覆蓋可能矛盾的 zone 建議。
+    """
+    zone_name = _ZONE_NAMES.get(current_zone, "")
+    has_abnormal_vol = any("異常爆量" in str(t) for t in tags)
+    has_heavy_sell = any("帶量下殺" in str(t) for t in tags)
+
+    if has_abnormal_vol:
+        prefix = f"現價位於{zone_name}，" if zone_name else ""
+        return (
+            f"{prefix}"
+            "但偵測到異常爆量（2.0x+），技術支撐可能失效，"
+            "建議暫緩執行掛單，等待量能回穩後再評估。"
+        )
+
+    if has_heavy_sell:
+        if current_zone == "daily":
+            return (
+                "帶量下殺，短線賣壓增加；但現價仍位於日常區，"
+                "若符合既定日常掛單，可小量承接。"
+                "若跌破日常下緣，再升級為回測觀察。"
+            )
+        if current_zone == "pullback":
+            return "回測區帶量下殺，建議拆單承接，並保留狙擊預案。"
+        if current_zone == "sniper":
+            return "已進入狙擊區且帶量下殺，僅在基本面未變且資金充足時小量狙擊。"
+        if current_zone == "chase":
+            return "帶量下殺且位於追價警戒區，勿追，等待回落至合理區間。"
+
+    return generate_zone_consistent_advice(current_zone, tags)
 
 
 def generate_advanced_diagnosis(
@@ -246,7 +290,7 @@ def generate_advanced_diagnosis(
     vp_advice_display = f"\n{vp_advice}" if vp_advice else ""
 
     current_zone = _extract_current_zone(entry_zone_status)
-    zone_advice = generate_zone_consistent_advice(current_zone, tags) if current_zone else ""
+    zone_advice = generate_execution_advice(current_zone, tags) if current_zone else ""
     zone_advice_display = f"\n{zone_advice}" if zone_advice else ""
 
     full_advice = (
