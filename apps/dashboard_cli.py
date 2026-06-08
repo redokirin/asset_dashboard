@@ -22,6 +22,13 @@ def run_cli():
     parser.add_argument("--report", action="store_true", help="顯示資產明細報表")
     parser.add_argument("--detail", action="store_true", help="顯示詳細報表資訊")
     parser.add_argument(
+        "--mode",
+        type=str,
+        choices=["e", "d"],
+        default="e",
+        help="報告模式：e=盤中執行 / d=盤後診斷 (預設: e)",
+    )
+    parser.add_argument(
         "--code", type=str, nargs="+", help="指定一個或多個代碼進行分析"
     )
     args, _ = parser.parse_known_args()
@@ -70,6 +77,8 @@ def run_cli():
         is_suggestion = False
         df_final = df_res
 
+    report_mode = "execution" if args.mode == "e" else "diagnosis"
+
     # 判斷是否需要執行進階分析
     advanced_results = (
         dashboard_logic.run_advanced_analysis(df_final) if args.analyze else None
@@ -79,16 +88,16 @@ def run_cli():
 
     # 當同時指定 --ai 與 --analyze 時，寫入整合後的 AI 報告檔案
     if args.ai and args.analyze:
-        ai_text = dashboard_logic.export_for_ai(df_final, adv_res=advanced_results, guide_path=guide_path)
+        ai_text = dashboard_logic.export_for_ai(df_final, adv_res=advanced_results, guide_path=guide_path, mode=report_mode)
         analyze_dir = os.path.join(os.path.dirname(__file__), "..", "analyze")
         os.makedirs(analyze_dir, exist_ok=True)
         ts = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-        report_path = os.path.join(analyze_dir, f"report_{ts}.md")
+        report_path = os.path.join(analyze_dir, f"report_{report_mode}_{ts}.md")
         with open(report_path, "w", encoding="utf-8") as f:
             f.write(ai_text)
         print(f"\n✅ AI 摘要與量化分析結果已合併寫入檔案: {report_path}")
     elif args.ai:
-        print(dashboard_logic.export_for_ai(df_final, adv_res=advanced_results, guide_path=guide_path))
+        print(dashboard_logic.export_for_ai(df_final, adv_res=advanced_results, guide_path=guide_path, mode=report_mode))
     else:
         show_console_rich(
             df_final,
