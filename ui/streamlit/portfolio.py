@@ -66,7 +66,9 @@ def _show_daily_summary_dialog(summary):
             if item.get("fib_price") is not None:
                 fib_str = f"最近支撐 **{item['fib_price']:.2f}**"
             elif zone_str:
-                fib_str = "接近區間下緣"
+                price_val = item.get("current_price")
+                price_display = f"{price_val:.2f}" if price_val is not None else "—"
+                fib_str = f"現價({price_display})近下緣，位置偏佳"
             else:
                 fib_str = ""
             parts = [p for p in [item["signal"], zone_str, fib_str] if p]
@@ -79,7 +81,9 @@ def _show_daily_summary_dialog(summary):
         for item in summary["warnings"]:
             if item["ticker"] not in rendered:
                 reason_str = "、".join(item["reasons"])
-                st.warning(f"⚠️ **{item['ticker']}** ｜ {reason_str} ｜ {item['advice']}")
+                st.warning(
+                    f"⚠️ **{item['ticker']}** ｜ {reason_str} ｜ {item['advice']}"
+                )
 
     if summary["region_gaps"]:
         st.markdown("##### 【配置缺口】")

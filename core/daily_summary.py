@@ -142,7 +142,6 @@ def generate_daily_summary(
                 "painRatio",
                 "currentDrawdownPct",
                 "tags",
-                "股價",
                 "dailyUpper",
                 "boundaryDailyRetest",
                 "boundaryRetestSniper",
@@ -191,11 +190,11 @@ def generate_daily_summary(
             du = row.get("dailyUpper")
             bdr = row.get("boundaryDailyRetest")
             brs = row.get("boundaryRetestSniper")
-            adv_price = row.get("股價")
+            raw_price = row.get("股價")
             current_price = None
             try:
-                current_price = float(adv_price) if adv_price is not None else None
-            except ValueError, TypeError:
+                current_price = float(raw_price) if raw_price is not None else None
+            except (ValueError, TypeError):
                 pass
 
             if signal == "日常加碼" and du is not None and bdr is not None:
@@ -226,6 +225,7 @@ def generate_daily_summary(
                     "zone_lower": zone_lower,
                     "fib_label": fib_label,
                     "fib_price": fib_price,
+                    "adv_price": raw_price,
                     "current_price": current_price,
                     "asset_type": asset_type,
                 }
@@ -269,7 +269,9 @@ def generate_daily_summary(
             if item.get("fib_price") is not None:
                 fib_str = f"最近支撐 {item['fib_price']:.2f}"
             elif zone_str:
-                fib_str = "接近區間下緣"
+                cp = item.get("current_price")
+                cp_display = f"{cp:.2f}" if cp is not None else "—"
+                fib_str = f"現價({cp_display})近下緣，位置偏佳"
             else:
                 fib_str = ""
             parts = [p for p in [item["signal"], zone_str, fib_str] if p]
