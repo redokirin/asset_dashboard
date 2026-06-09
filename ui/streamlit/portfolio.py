@@ -54,23 +54,32 @@ def render_schedule_of_assets(df, investment_df):
 def _show_daily_summary_dialog(summary):
     st.caption(summary["timestamp"])
 
-    if summary["actionable"]:
-        st.markdown("##### 【可執行】")
-        for item in summary["actionable"]:
-            price_str = (
-                f"現價 **{item['current_price']:.2f}**"
-                if item.get("current_price")
-                else ""
-            )
-            zone_str = f"區間 `{item['zone_range']}`" if item.get("zone_range") else ""
-            parts = [p for p in [item["signal"], zone_str, price_str] if p]
-            st.success(f"{item['emoji']} **{item['ticker']}** ｜ {'｜'.join(parts)}")
+    if summary["actionable"] or summary["warnings"]:
+        st.markdown("##### 【標的摘要】")
+        warn_map = {w["ticker"]: w for w in summary["warnings"]}
+        rendered = set()
 
-    if summary["warnings"]:
-        st.markdown("##### 【須注意】")
+        for item in summary["actionable"]:
+            ticker = item["ticker"]
+            rendered.add(ticker)
+            zone_str = f"區間 `{item['zone_range']}`" if item.get("zone_range") else ""
+            if item.get("fib_price") is not None:
+                fib_str = f"最近支撐 **{item['fib_price']:.2f}**"
+            elif zone_str:
+                fib_str = "接近區間下緣"
+            else:
+                fib_str = ""
+            parts = [p for p in [item["signal"], zone_str, fib_str] if p]
+            w = warn_map.get(ticker)
+            card_fn = st.warning if w else st.success
+            card_fn(f"● **{ticker}** ｜ {'｜'.join(parts)}")
+            if w:
+                st.caption(f"　{'、'.join(w['reasons'])} ｜ {w['advice']}")
+
         for item in summary["warnings"]:
-            reason_str = "、".join(item["reasons"])
-            st.warning(f"⚠️ **{item['ticker']}** ｜ {reason_str} ｜ {item['advice']}")
+            if item["ticker"] not in rendered:
+                reason_str = "、".join(item["reasons"])
+                st.warning(f"⚠️ **{item['ticker']}** ｜ {reason_str} ｜ {item['advice']}")
 
     if summary["region_gaps"]:
         st.markdown("##### 【配置缺口】")
@@ -104,38 +113,21 @@ def render_report_component(df):
             summary = generate_daily_summary(df, adv_res)
         _show_daily_summary_dialog(summary)
 
-    col_exec, col_diag = st.columns(2)
-    with col_exec:
-        if st.button("📋 盤中執行", use_container_width=True):
-            with st.spinner("正在產生執行模式報告..."):
-                from core import exporters
+    if st.button("📋 盤後診斷", use_container_width=True):
+        with st.spinner("正在產生診斷報告..."):
+            from core import exporters
 
-                adv_res = dashboard_logic.run_advanced_analysis(df)
-                st.session_state["ai_report"] = exporters.export_for_ai(
-                    df, adv_res, mode="execution"
-                )
-                st.session_state["ai_report_mode"] = "execution"
-                st.session_state["_adv_res_cache"] = adv_res
-    with col_diag:
-        if st.button("📋 盤後診斷", use_container_width=True):
-            with st.spinner("正在產生診斷模式報告..."):
-                from core import exporters
-
-                adv_res = dashboard_logic.run_advanced_analysis(df)
-                st.session_state["ai_report"] = exporters.export_for_ai(
-                    df, adv_res, mode="diagnosis"
-                )
-                st.session_state["ai_report_mode"] = "diagnosis"
-                st.session_state["_adv_res_cache"] = adv_res
+            adv_res = dashboard_logic.run_advanced_analysis(df)
+            st.session_state["ai_report"] = exporters.export_for_ai(df, adv_res)
+            st.session_state["_adv_res_cache"] = adv_res
 
     if "ai_report" in st.session_state:
         from datetime import date
 
-        mode_suffix = "diagnosis" if st.session_state.get("ai_report_mode") == "diagnosis" else "execution"
         st.download_button(
-            label="⬇️ 下載 AI 報告 (.md)",
+            label="⬇️ 下載診斷報告 (.md)",
             data=st.session_state["ai_report"],
-            file_name=f"ai_report_{mode_suffix}_{date.today().strftime('%Y%m%d')}.md",
+            file_name=f"ai_report_diagnosis_{date.today().strftime('%Y%m%d')}.md",
             mime="text/markdown",
             use_container_width=True,
         )

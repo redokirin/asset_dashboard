@@ -14,6 +14,24 @@ _SIGNAL_EMOJI = {
 ACTIONABLE_SIGNALS = {"日常加碼", "回測加碼", "狙擊加碼"}
 
 
+def _get_nearest_fib_support(zone_upper, zone_lower, current_price):
+    if zone_upper is None or zone_lower is None or current_price is None:
+        return None, None
+    dist = zone_upper - zone_lower
+    fib_levels = {
+        "23.6%": zone_upper - dist * 0.236,
+        "38.2%": zone_upper - dist * 0.382,
+        "50.0%": zone_upper - dist * 0.500,
+        "61.8%": zone_upper - dist * 0.618,
+        "78.6%": zone_upper - dist * 0.786,
+    }
+    supports_below = {k: v for k, v in fib_levels.items() if v < current_price}
+    if not supports_below:
+        return None, None
+    nearest_label = max(supports_below, key=lambda k: supports_below[k])
+    return nearest_label, round(supports_below[nearest_label], 2)
+
+
 def _extract_signal(entry_zone_status):
     if not isinstance(entry_zone_status, str):
         return None
@@ -44,8 +62,8 @@ def _account_label(row):
 def _calc_region_gaps(df_res, region_targets):
     if not region_targets:
         return []
-    inv_mask = (
-        ~df_res["市場"].fillna("").astype(str).str.strip().str.lower().isin(_CASH_MARKETS)
+    inv_mask = ~df_res["市場"].fillna("").astype(str).str.strip().str.lower().isin(
+        _CASH_MARKETS
     )
     inv_df = df_res[inv_mask]
     total_val = float(inv_df["市值"].sum())
@@ -73,6 +91,7 @@ def _build_prev_pain_map() -> dict[str, float]:
     """從 SQLite 快照取得「非今日最新一筆」的 pain_ratio，回傳 {ticker: value}。"""
     try:
         from db.database import get_latest_two_snapshots
+
         latest, previous = get_latest_two_snapshots()
         today_str = str(date.today())
         # 若最新快照就是今日，用 previous；否則最新快照即為昨日
@@ -109,16 +128,27 @@ def generate_daily_summary(
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     prev_pain_map = _build_prev_pain_map()
 
-    inv_mask = (
-        ~df_res["市場"].fillna("").astype(str).str.strip().str.lower().isin(_CASH_MARKETS)
+    inv_mask = ~df_res["市場"].fillna("").astype(str).str.strip().str.lower().isin(
+        _CASH_MARKETS
     )
     work_df = df_res[inv_mask].copy()
 
     if adv_res is not None and not adv_res.empty and "代碼" in adv_res.columns:
-        adv_cols = [c for c in [
-            "代碼", "entryZoneStatus", "painRatio", "currentDrawdownPct", "tags",
-            "股價", "dailyUpper", "boundaryDailyRetest", "boundaryRetestSniper",
-        ] if c in adv_res.columns]
+        adv_cols = [
+            c
+            for c in [
+                "代碼",
+                "entryZoneStatus",
+                "painRatio",
+                "currentDrawdownPct",
+                "tags",
+                "股價",
+                "dailyUpper",
+                "boundaryDailyRetest",
+                "boundaryRetestSniper",
+            ]
+            if c in adv_res.columns
+        ]
         work_df = work_df.merge(adv_res[adv_cols], on="代碼", how="left")
 
     region_gaps = _calc_region_gaps(df_res, region_targets)
@@ -158,24 +188,32 @@ def generate_daily_summary(
         has_warning = is_high_pain or is_volume_crash or is_stress_fail
 
         if signal:
-            du  = row.get("dailyUpper")
+            du = row.get("dailyUpper")
             bdr = row.get("boundaryDailyRetest")
             brs = row.get("boundaryRetestSniper")
             adv_price = row.get("股價")
             current_price = None
             try:
                 current_price = float(adv_price) if adv_price is not None else None
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 pass
 
             if signal == "日常加碼" and du is not None and bdr is not None:
                 zone_range = f"{bdr:.2f}~{du:.2f}"
+                zone_lower, zone_upper = float(bdr), float(du)
             elif signal == "回測加碼" and bdr is not None and brs is not None:
                 zone_range = f"{brs:.2f}~{bdr:.2f}"
+                zone_lower, zone_upper = float(brs), float(bdr)
             elif signal == "狙擊加碼" and brs is not None:
                 zone_range = f"< {brs:.2f}"
+                zone_lower, zone_upper = None, None
             else:
                 zone_range = None
+                zone_lower, zone_upper = None, None
+
+            fib_label, fib_price = _get_nearest_fib_support(
+                zone_upper, zone_lower, current_price
+            )
 
             actionable.append(
                 {
@@ -184,6 +222,10 @@ def generate_daily_summary(
                     "signal": signal,
                     "emoji": _SIGNAL_EMOJI.get(signal, "🟡"),
                     "zone_range": zone_range,
+                    "zone_upper": zone_upper,
+                    "zone_lower": zone_lower,
+                    "fib_label": fib_label,
+                    "fib_price": fib_price,
                     "current_price": current_price,
                     "asset_type": asset_type,
                 }
@@ -213,20 +255,34 @@ def generate_daily_summary(
                 }
             )
 
+    warn_map = {w["ticker"]: w for w in warnings}
+    rendered: set[str] = set()
+
     lines = [f"📋 今日行動摘要｜{now_str}", ""]
 
     if actionable:
         lines.append("【可執行】")
         for item in actionable:
-            price_str = f"現價 {item['current_price']:.2f}" if item["current_price"] else ""
+            ticker = item["ticker"]
+            rendered.add(ticker)
             zone_str = f"區間 {item['zone_range']}" if item["zone_range"] else ""
-            parts = [p for p in [item["signal"], zone_str, price_str] if p]
-            lines.append(f"{item['emoji']} {item['ticker']}｜{'｜'.join(parts)}")
+            if item.get("fib_price") is not None:
+                fib_str = f"最近支撐 {item['fib_price']:.2f}"
+            elif zone_str:
+                fib_str = "接近區間下緣"
+            else:
+                fib_str = ""
+            parts = [p for p in [item["signal"], zone_str, fib_str] if p]
+            lines.append(f"● {ticker}｜{'｜'.join(parts)}")
+            if ticker in warn_map:
+                w = warn_map[ticker]
+                lines.append(f"  {'、'.join(w['reasons'])} ｜ {w['advice']}")
         lines.append("")
 
-    if warnings:
+    warn_only = [w for w in warnings if w["ticker"] not in rendered]
+    if warn_only:
         lines.append("【須注意】")
-        for item in warnings:
+        for item in warn_only:
             reason_str = "、".join(item["reasons"])
             lines.append(f"⚠️ {item['ticker']}｜{reason_str}｜{item['advice']}")
         lines.append("")
