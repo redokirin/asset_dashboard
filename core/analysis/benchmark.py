@@ -12,6 +12,9 @@ def get_smart_benchmark(ticker):
     if ticker_upper.endswith(".T"):
         return "1306.T"
 
+    if ticker_upper == "0050.TW":
+        return "^TWII"
+
     if ticker_upper.endswith(".TW") or ticker_upper.endswith(".TWO"):
         return "0050.TW"
 

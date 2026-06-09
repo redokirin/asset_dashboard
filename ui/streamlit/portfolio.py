@@ -103,7 +103,11 @@ def _show_daily_summary_dialog(summary):
 
 
 def render_report_component(df):
-    if st.button("📊 行動摘要", use_container_width=True):
+    if st.button("📊 配置分析", width='stretch'):
+        st.session_state["show_allocation"] = True
+        st.rerun()
+
+    if st.button("📊 行動摘要", width='stretch'):
         with st.spinner("正在分析今日摘要..."):
             from core.daily_summary import generate_daily_summary
 
@@ -117,7 +121,7 @@ def render_report_component(df):
             summary = generate_daily_summary(df, adv_res)
         _show_daily_summary_dialog(summary)
 
-    if st.button("📋 盤後診斷", use_container_width=True):
+    if st.button("📋 盤後診斷", width='stretch'):
         with st.spinner("正在產生診斷報告..."):
             from core import exporters
 
@@ -133,7 +137,7 @@ def render_report_component(df):
             data=st.session_state["ai_report"],
             file_name=f"ai_report_diagnosis_{date.today().strftime('%Y%m%d')}.md",
             mime="text/markdown",
-            use_container_width=True,
+            width='stretch',
         )
 
 

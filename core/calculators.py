@@ -114,6 +114,7 @@ def calculate_asset_row(
         COL_RETURN_PCT: (pl_val / cost_twd * 100) if cost_twd != 0 else 0,
         COL_GET_VALUE: asset.get("get_value", True),
         COL_SETTLEMENT: str(asset.get("settlement", "")).strip(),
+        "region": str(asset.get("region", "")).strip(),
     }
 
 

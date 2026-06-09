@@ -3,6 +3,7 @@ import pandas as pd
 import streamlit as st
 
 from core import dashboard_logic
+from core.exporters import export_single_target_for_ai
 from ui.streamlit.charts import render_price_chart
 from ui.streamlit.components import render_analysis_metrics_row
 
@@ -301,3 +302,12 @@ def show_manual_analysis_page():
                             f"📈 {res['名稱']} ({res['代碼']}) 報告", expanded=True
                         ):
                             render_advanced_analysis_ui(res)
+                            ticker = res["代碼"]
+                            date_str = pd.Timestamp.now().strftime("%Y%m%d")
+                            st.download_button(
+                                label="📥 導出 AI 報告",
+                                data=export_single_target_for_ai(res).encode("utf-8"),
+                                file_name=f"ai_report_{ticker}_{date_str}.md",
+                                mime="text/markdown",
+                                key=f"dl_{ticker}",
+                            )

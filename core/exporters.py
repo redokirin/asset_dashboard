@@ -251,6 +251,185 @@ def export_for_ai(df_res, adv_res=None):
         report.append("")  # 換行
 
     _append_diagnosis_sections(report)
+    _append_risk_balance_section(report, investment_df, adv_res, bank_df)
+
+    return "\n".join(report)
+
+
+def _append_risk_balance_section(
+    report: list,
+    investment_df: pd.DataFrame,
+    adv_res,
+    bank_df: pd.DataFrame | None = None,
+) -> None:
+    """在報告末尾附加風險加權配置分析區塊（含資金加權欄位，若有銀行資料）。"""
+    try:
+        from core.analysis.risk_balance import build_comparison_df, build_region_df
+
+        work = investment_df.copy()
+        if adv_res is not None and not adv_res.empty and COL_TICKER in adv_res.columns:
+            cols = adv_res.columns.difference(
+                work.columns.difference([COL_TICKER])
+            )
+            work = pd.merge(work, adv_res[cols], on=COL_TICKER, how="left")
+
+        if "annualizedVol" in work.columns:
+            valid = work[work["annualizedVol"].notna()]
+        else:
+            valid = pd.DataFrame()
+
+        if valid.empty:
+            return
+
+        has_bank = bank_df is not None and not bank_df.empty
+        comp_df = build_comparison_df(valid, bank_df=bank_df if has_bank else None)
+        reg_df = build_region_df(
+            valid,
+            region_targets={"台股": 0.35, "日股": 0.30, "美股": 0.35},
+            bank_df=bank_df if has_bank else None,
+        )
+        has_acct_col = "理論(資金加權)" in comp_df.columns
+
+        report.append("\n## 風險加權配置分析\n")
+        if has_acct_col:
+            report.append("| 標的 | 波動率 | 理論(波動率) | 理論(資金加權) | 實際配置 | 差異(資金加權) |")
+            report.append("|------|--------|-------------|--------------|---------|--------------|")
+        else:
+            report.append("| 標的 | 波動率 | 理論(波動率) | 理論(綜合) | 實際配置 | 差異(波動率) |")
+            report.append("|------|--------|-------------|-----------|---------|-------------|")
+
+        for _, r in comp_df.iterrows():
+            if has_acct_col:
+                acct = r.get("理論(資金加權)", 0) or 0
+                diff = r.get("差異(資金加權)") or 0
+                arrow = "↑" if diff > 0.03 else ("↓" if diff < -0.03 else "≈")
+                report.append(
+                    f"| {r['標的']} | {r['波動率']} "
+                    f"| {r['理論(波動率)']:.1%} | {acct:.1%} "
+                    f"| {r['實際配置']:.1%} | {diff:+.1%} {arrow} |"
+                )
+            else:
+                diff = r["差異(波動率)"]
+                arrow = "↑" if diff > 0.03 else ("↓" if diff < -0.03 else "≈")
+                report.append(
+                    f"| {r['標的']} | {r['波動率']} "
+                    f"| {r['理論(波動率)']:.1%} | {r['理論(綜合)']:.1%} "
+                    f"| {r['實際配置']:.1%} | {diff:+.1%} {arrow} |"
+                )
+
+        has_acct_reg = "理論(資金加權)" in reg_df.columns
+        report.append("\n### 區域配置對比\n")
+        if has_acct_reg:
+            report.append("| 區域 | 理論(波動率) | 理論(資金加權) | 實際 | 現有目標 |")
+            report.append("|------|-------------|--------------|------|---------|")
+        else:
+            report.append("| 區域 | 理論(波動率) | 理論(綜合) | 實際 | 現有目標 |")
+            report.append("|------|-------------|-----------|------|---------|")
+
+        for _, r in reg_df.iterrows():
+            target_str = f"{r['現有目標']:.1%}" if pd.notnull(r["現有目標"]) else "—"
+            if has_acct_reg:
+                acct_r = r.get("理論(資金加權)", 0) or 0
+                report.append(
+                    f"| {r['區域']} | {r['理論(波動率)']:.1%} | {acct_r:.1%} "
+                    f"| {r['實際配置']:.1%} | {target_str} |"
+                )
+            else:
+                report.append(
+                    f"| {r['區域']} | {r['理論(波動率)']:.1%} | {r['理論(綜合)']:.1%} "
+                    f"| {r['實際配置']:.1%} | {target_str} |"
+                )
+    except Exception as exc:
+        report.append(f"\n> (風險加權配置分析載入失敗: {exc})")
+
+
+def export_single_target_for_ai(row) -> str:
+    """導出單一標的的量化分析報告（供手動分析頁下載用）。"""
+    now_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
+    ticker = row.get(COL_TICKER, "-")
+    name = row.get(COL_NAME, ticker)
+    asset_type = row.get(COL_ASSET_TYPE, "個股")
+
+    report = [
+        f"# AI 診斷報告｜{ticker}｜{now_str}\n",
+        f"> 🕒 製表時間: {now_str}\n",
+        f"## 📈 {name} ({ticker})\n",
+    ]
+
+    change_val = row.get(COL_CHANGE, 0)
+    try:
+        change_str = f"{float(change_val):+.2f}" if pd.notnull(change_val) else "0.00"
+    except (TypeError, ValueError):
+        change_str = "0.00"
+    try:
+        price = float(row.get(COL_PRICE, 0) or 0)
+        price_str = f"{price:,.2f}"
+    except (TypeError, ValueError):
+        price_str = str(row.get(COL_PRICE, "-"))
+    report.append(
+        f"- **資產現況**: 類型 {asset_type}, 股價 [{price_str}] ({change_str})"
+    )
+
+    if COL_TECH_DIAGNOSIS in row and pd.notnull(row[COL_TECH_DIAGNOSIS]):
+        eps = row.get("EPS", "-")
+        pe = row.get("PE", "-")
+        yield_val = row.get("殖利率", "-")
+        peg = row.get("PEG", "-")
+        bias = row.get("乖離率 (Bias)", "-")
+        vol_ratio = row.get("量比", "-")
+        diag = str(row.get(COL_TECH_DIAGNOSIS, "-")).replace("\n", " ")
+
+        mdd = row.get("maxDrawdownPct")
+        curr_dd = row.get("currentDrawdownPct")
+        pain = row.get("painRatio")
+        comfort = row.get(COL_COMFORT_SCORE, "-")
+        hold_ability = row.get(COL_HOLD_ABILITY_SCORE)
+        history_yrs = row.get("historyYears")
+        bench_mdd = row.get("benchmarkMddPct")
+        bench_name = row.get("benchmarkName", "-")
+        ann_vol = row.get("annualizedVol")
+        vol_grade = row.get("volGrade", "-")
+
+        risk_line = None
+        if pd.notnull(mdd):
+            pain_pct = f"{pain * 100:.0f}%" if pd.notnull(pain) else "-"
+            hold_str = f"{hold_ability * 100:.0f}%" if pd.notnull(hold_ability) else "-"
+            vol_str = (
+                f"{ann_vol:.1%} ({vol_grade})"
+                if ann_vol is not None and pd.notnull(ann_vol)
+                else "-"
+            )
+            history_note = ""
+            if (
+                history_yrs is not None
+                and pd.notnull(history_yrs)
+                and float(history_yrs) < 2
+            ):
+                history_months = max(1, round(float(history_yrs) * 12))
+                history_note = f"（⚠️歷史僅 {history_months} 個月）"
+            bench_note = (
+                f" | 基準({bench_name}) MDD {bench_mdd:.1f}%"
+                if bench_mdd is not None and pd.notnull(bench_mdd)
+                else ""
+            )
+            risk_line = (
+                f"- **風險指標**: 年化波動率 {vol_str} | "
+                f"MDD {mdd:.1f}%{history_note} | "
+                f"目前回撤 {curr_dd:.1f}% | "
+                f"Pain Ratio {pain_pct} | "
+                f"舒適度 {comfort} | "
+                f"持有力 {hold_str}"
+                f"{bench_note}"
+            )
+
+        quant_info = (
+            f"- **基本面**: EPS {eps} | P/E {pe} | 殖利率 {yield_val} | PEG {peg}\n"
+            f"- **量化指標**: RS百分位 {row.get('RS 百分位', '-')} | 乖離率 {bias} | 量比 {vol_ratio} | RSI {row.get('RSI', 0):.1f} | 夏普值 {row.get('夏普值', '-')} | α勝率 {row.get('Alpha 勝率', '-')}\n"
+            + (f"{risk_line}\n" if risk_line else "")
+            + f"- **診斷標籤**: {' '.join(row['tags']) if isinstance(row.get('tags'), list) else '-'}\n"
+            + f"- **AI 診斷建議**: {diag}"
+        )
+        report.append(quant_info)
 
     return "\n".join(report)
 
