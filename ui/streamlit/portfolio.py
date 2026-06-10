@@ -142,6 +142,11 @@ def render_report_component(df):
                 st.session_state["_adv_res_cache"] = adv_res
                 st.session_state["ai_report"] = exporters.export_for_ai(df, adv_res)
 
+    if st.session_state.get("_adv_res_cache") is not None:
+        if st.button("🔄 清除分析快取", width="stretch"):
+            st.session_state.pop("_adv_res_cache", None)
+            st.rerun()
+
     if has_report:
         from datetime import date
 
@@ -409,10 +414,14 @@ def render_dataframe_component(df):
                     render_advanced_analysis_ui(adv_results.iloc[0])
 
 
-def render_shareholding_component(df):
+def render_shareholding_component(df, summary=None):
     investment_df = df[~_cash_mask(df)]
 
+    actionable_map = {item["ticker"]: item for item in (summary or {}).get("actionable", [])}
+    warning_map = {w["ticker"]: w for w in (summary or {}).get("warnings", [])}
+
     for idx, row in investment_df.iterrows():
+        ticker = row["代碼"]
         with st.container(border=True):
             with st.container():
                 c1, c2, c3, c4 = st.columns([0.65, 2.2, 1, 1])
@@ -423,10 +432,10 @@ def render_shareholding_component(df):
                     )
                     if st.button(
                         "🔍",
-                        key=f"btn_{row['代碼']}_{idx}",
+                        key=f"btn_{ticker}_{idx}",
                         help="點擊執行進階量化分析",
                     ):
-                        state_key = f"analyze_{row['代碼']}"
+                        state_key = f"analyze_{ticker}"
                         st.session_state[state_key] = not st.session_state.get(
                             state_key, False
                         )
@@ -438,10 +447,16 @@ def render_shareholding_component(df):
                         if row.get("更新時間")
                         else ""
                     )
+                    if ticker in warning_map:
+                        indicator = '<span style="margin-left:5px;">🟠</span>'
+                    elif ticker in actionable_map:
+                        indicator = '<span style="margin-left:5px;">🟢</span>'
+                    else:
+                        indicator = ""
                     st.markdown(
                         f"""<div class='asset-info-container'>
-                        <div class='asset-info-meta'>{update_time_str}{row["市場"]} | {row["代碼"]} ({row["佔比"]:.1f}%) </div>
-                        <div class='asset-info-name'>{row["名稱"]} </div>
+                        <div class='asset-info-meta'>{update_time_str}{row["市場"]} | {ticker} ({row["佔比"]:.1f}%) </div>
+                        <div class='asset-info-name'>{row["名稱"]}{indicator}</div>
                         </div>""",
                         unsafe_allow_html=True,
                     )
@@ -469,9 +484,7 @@ def render_shareholding_component(df):
                         unsafe_allow_html=True,
                     )
 
-            if st.session_state.get(f"analyze_{row['代碼']}", False):
-                ticker = row["代碼"]
-
+            if st.session_state.get(f"analyze_{ticker}", False):
                 render_cost_component(row)
 
                 with st.spinner("正在進行深度數據穿透..."):
@@ -487,4 +500,8 @@ def render_shareholding_component(df):
                         st.session_state["_adv_res_cache"] = adv_results
                     if not adv_results.empty:
                         with st.container():
-                            render_advanced_analysis_ui(adv_results.iloc[0])
+                            render_advanced_analysis_ui(
+                                adv_results.iloc[0],
+                                warning=warning_map.get(ticker),
+                                actionable=actionable_map.get(ticker),
+                            )

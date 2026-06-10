@@ -8,7 +8,13 @@ from ui.streamlit.charts import render_price_chart
 from ui.streamlit.components import render_analysis_metrics_row
 
 
-def render_advanced_analysis_ui(res):
+def _fmt_reason(r: str) -> str:
+    import re
+    m = re.match(r"Pain Ratio (\d+)%（昨日 (\d+)%）", r)
+    return f"Pain Ratio {m.group(2)}% > {m.group(1)}%" if m else r
+
+
+def render_advanced_analysis_ui(res, warning=None, actionable=None):
     """
     四層 Tab 決策 UI  ·  Decision → Risk → Quant → Fundamental
     Hero 區塊使用 st.metric() 大字顯示，其餘格子使用 render_analysis_metrics_row()。
@@ -154,6 +160,15 @@ def render_advanced_analysis_ui(res):
                 unsafe_allow_html=True,
             )
 
+        if actionable:
+            _parts = []
+            if actionable.get("zone_range"):
+                _parts.append(f"目標區間 {actionable['zone_range']}")
+            if actionable.get("fib_price") is not None:
+                _parts.append(f"最近支撐 {actionable['fib_price']:.2f}")
+            if _parts:
+                st.caption("｜".join(_parts))
+
         tags = res.get("tags")
         if tags:
             tag_html = "".join([f'<span class="light_tags">{t}</span>' for t in tags])
@@ -164,6 +179,9 @@ def render_advanced_analysis_ui(res):
         diag = res.get("技術診斷")
         if diag:
             st.info(str(diag))
+        if warning:
+            reasons = "｜".join(_fmt_reason(r) for r in warning["reasons"])
+            st.warning(f"{warning['advice']}\n\n{reasons}")
 
     with tab2:
 

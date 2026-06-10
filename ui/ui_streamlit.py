@@ -67,9 +67,19 @@ def show_streamlit(df, radar_data, exchange_rates):
         with st.container(border=True, gap="xxsmall"):
             render_market_card(investment_df, radar_data)
 
+    _adv_cache = st.session_state.get("_adv_res_cache")
+    if _adv_cache is None or _adv_cache.empty:
+        _adv_cache = dashboard_logic.run_advanced_analysis(investment_df)
+        st.session_state["_adv_res_cache"] = _adv_cache
+
+    _summary = None
+    if not _adv_cache.empty:
+        from core.daily_summary import generate_daily_summary
+        _summary = generate_daily_summary(filtered_df, _adv_cache)
+
     with col_right:
         # with st.container(border=False):
         with st.expander("🔍 Report", expanded=False):
             render_report_component(df)
         with st.container(border=False):
-            render_shareholding_component(investment_df)
+            render_shareholding_component(investment_df, summary=_summary)
