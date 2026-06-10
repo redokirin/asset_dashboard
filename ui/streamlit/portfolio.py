@@ -112,16 +112,11 @@ def render_report_component(df):
             st.rerun()
 
     with cols[1]:
-        if st.button("📊 行動摘要", width="stretch"):
+        if st.button("🎯 行動摘要", width="stretch"):
             with st.spinner("正在分析今日摘要..."):
                 from core.daily_summary import generate_daily_summary
 
-                _cached = st.session_state.get("_adv_res_cache")
-                adv_res = (
-                    _cached
-                    if _cached is not None and not _cached.empty
-                    else dashboard_logic.run_advanced_analysis(df)
-                )
+                adv_res = dashboard_logic.run_advanced_analysis(df)
                 st.session_state["_adv_res_cache"] = adv_res
                 summary = generate_daily_summary(df, adv_res)
             _show_daily_summary_dialog(summary)
@@ -132,15 +127,15 @@ def render_report_component(df):
                 from core import exporters
 
                 adv_res = dashboard_logic.run_advanced_analysis(df)
-                st.session_state["ai_report"] = exporters.export_for_ai(df, adv_res)
                 st.session_state["_adv_res_cache"] = adv_res
+                st.session_state["ai_report"] = exporters.export_for_ai(df, adv_res)
 
     if has_report:
         from datetime import date
 
         with cols[3]:
             st.download_button(
-                label="⬇️ 下載診斷報告 (.md)",
+                label="⬇️ 下載報告 (.md)",
                 data=st.session_state["ai_report"],
                 file_name=f"ai_report_diagnosis_{date.today().strftime('%Y%m%d')}.md",
                 mime="text/markdown",
@@ -467,13 +462,17 @@ def render_shareholding_component(df):
 
                 render_cost_component(row)
 
-                if hasattr(dashboard_logic, "clear_ticker_cache"):
-                    dashboard_logic.clear_ticker_cache(ticker)
-
                 with st.spinner("正在進行深度數據穿透..."):
-                    adv_results = dashboard_logic.run_advanced_analysis(
-                        pd.DataFrame([row])
-                    )
+                    _cached = st.session_state.get("_adv_res_cache")
+                    if _cached is not None and not _cached.empty:
+                        adv_results = _cached[_cached[COL_TICKER] == ticker]
+                    else:
+                        if hasattr(dashboard_logic, "clear_ticker_cache"):
+                            dashboard_logic.clear_ticker_cache(ticker)
+                        adv_results = dashboard_logic.run_advanced_analysis(
+                            pd.DataFrame([row])
+                        )
+                        st.session_state["_adv_res_cache"] = adv_results
                     if not adv_results.empty:
                         with st.container():
                             render_advanced_analysis_ui(adv_results.iloc[0])
