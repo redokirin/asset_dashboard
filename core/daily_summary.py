@@ -151,15 +151,12 @@ def generate_daily_summary(
         work_df = work_df.merge(adv_res[adv_cols], on="代碼", how="left")
 
     region_gaps = _calc_region_gaps(df_res, region_targets)
-    region_gap_map = {g["region"]: g for g in region_gaps}
-
     actionable = []
     warnings = []
 
     for _, row in work_df.iterrows():
         ticker = str(row.get("代碼", ""))
         name = str(row.get("名稱", ticker))
-        market = str(row.get("市場", ""))
         asset_type = str(row.get("類型", ""))
 
         if asset_type == "基金":
@@ -194,7 +191,7 @@ def generate_daily_summary(
             current_price = None
             try:
                 current_price = float(raw_price) if raw_price is not None else None
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 pass
 
             if signal == "日常加碼" and du is not None and bdr is not None:

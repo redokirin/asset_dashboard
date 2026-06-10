@@ -11,30 +11,32 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from db.database import add_market_event, init_db, update_report_run_event
 
-EVENT_DATE = "2026-06-08"
-EVENT_TAG = "orderly_pullback"
-EVENT_NAME = "週五美股重挫後的週一亞洲市場回測"
+EVENT_DATE = "2026-06-10"
+EVENT_TAG = "stress_pullback"
+EVENT_NAME = "六月連續三次美股下跌後的台日市場回測"
 EVENT_NOTE = """\
-週五美股重挫後，週一亞洲市場未出現預期中的全面崩跌。
-1655.T 落在 daily 中段，日常加碼有效。
-1306.T 落在 pullback 上緣，回測加碼有效。
-0052.TW 58.7 掛單未成交，台股科技開盤雖低但隨即反彈，
-0052.TW 今日最低 57.9，低於掛單 58.7，
-但因開盤觀望未成交，09:15 即 V 型反彈。
-系統訊號正確，執行未跟上。
-屬於人為判斷覆蓋系統的案例。
+六月以來美股第三次下跌（6/05、6/09週五、6/10），
+本次與 6/08 的 orderly_pullback 性質不同：
+台股今日持續性下跌，無 V 型反彈，
+指數收盤 -2.32%，跌勢形態偏弱。
 
-台日走勢出現明顯分歧：
-台股開低走高，從開盤約 42,700 一路反彈至收盤 43,502（-3.48%），
-收盤接近日內高點，買盤強勁，形態偏強。
-日股尾盤急拉，1306.T 收 408.8（買入 407，+0.44%），
-1655.T 收 855.9（買入 856，持平）。
-兩檔均收在日內相對高點，日股走勢較早盤預期樂觀。
-台日今日均屬 orderly_pullback，非 crash 事件。
+標的落點：
+- 1306.T 跌入回測區（pullback 0.60），收盤未修復（pullback 0.83），
+  為本週首次跌入回測區並收盤於回測區。
+- 1655.T 收在 daily(0.22)，日常區低位。
+- 0052.TW 收在 daily(0.59)，日常區底部。
+- 00985A / 00981A Pain Ratio 再度跳升至 76% / 71%。
+- 00988A Pain Ratio 達 88%，帶量下殺，跌深反彈區。
 
-本日應歸類為 orderly_pullback，而非 crash 或 sniper event。
-台股的強勢收盤顯示今日賣壓已被充分吸收。
-日股後續走勢需持續觀察 3~5 個交易日。"""
+執行記錄：
+- 0052.TW 58.8 × 1,000 股成交（日常區底部）
+- 1306.T 409 × 300 單位成交（回測區加碼）
+- 兩筆均為系統訊號觸發，非人工主動追價。
+
+市場分類：
+本日升級為 stress_pullback。
+六月已連續四次下跌，台股韌性弱化，
+日股跌入回測區，需持續觀察 3~5 個交易日確認是否修復。"""
 IS_PRESSURE = 1
 
 import sqlite3
@@ -63,7 +65,8 @@ if _already_seeded():
            WHERE event_date=? AND event_tag=?""",
         (EVENT_NAME, EVENT_NOTE, IS_PRESSURE, EVENT_DATE, EVENT_TAG),
     )
-    conn.commit(); conn.close()
+    conn.commit()
+    conn.close()
     print(f"market_events 已更新 {EVENT_DATE}/{EVENT_TAG}")
 else:
     eid = add_market_event(

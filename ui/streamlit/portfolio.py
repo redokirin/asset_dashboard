@@ -50,6 +50,15 @@ def render_schedule_of_assets(df, investment_df):
         )
 
 
+def _fmt_reason(r: str) -> str:
+    import re
+
+    m = re.match(r"Pain Ratio (\d+)%（昨日 (\d+)%）", r)
+    if m:
+        return f"Pain Ratio {m.group(2)}% > {m.group(1)}%"
+    return r
+
+
 @st.dialog("📋 今日行動摘要", width="large")
 def _show_daily_summary_dialog(summary):
     st.caption(summary["timestamp"])
@@ -62,28 +71,31 @@ def _show_daily_summary_dialog(summary):
         for item in summary["actionable"]:
             ticker = item["ticker"]
             rendered.add(ticker)
-            zone_str = f"區間 `{item['zone_range']}`" if item.get("zone_range") else ""
+            zone_str = f"區間 {item['zone_range']}" if item.get("zone_range") else ""
             if item.get("fib_price") is not None:
-                fib_str = f"最近支撐 **{item['fib_price']:.2f}**"
+                fib_str = f"最近支撐 {item['fib_price']:.2f}"
             elif zone_str:
                 price_val = item.get("current_price")
                 price_display = f"{price_val:.2f}" if price_val is not None else "—"
                 fib_str = f"現價({price_display})近下緣，位置偏佳"
             else:
                 fib_str = ""
-            parts = [p for p in [item["signal"], zone_str, fib_str] if p]
+            detail = "｜".join(p for p in [zone_str, fib_str] if p)
+
             w = warn_map.get(ticker)
-            card_fn = st.warning if w else st.success
-            card_fn(f"● **{ticker}** ｜ {'｜'.join(parts)}")
             if w:
-                st.caption(f"　{'、'.join(w['reasons'])} ｜ {w['advice']}")
+                header = f"● **{ticker}** ｜ {w['advice']}"
+                reasons = "｜".join(_fmt_reason(r) for r in w["reasons"])
+                lines = [header] + [p for p in [detail, reasons] if p]
+                st.warning("\n\n".join(lines))
+            else:
+                header = f"● **{ticker}** ｜ {item['signal']}"
+                st.success(f"{header}\n\n{detail}" if detail else header)
 
         for item in summary["warnings"]:
             if item["ticker"] not in rendered:
-                reason_str = "、".join(item["reasons"])
-                st.warning(
-                    f"⚠️ **{item['ticker']}** ｜ {reason_str} ｜ {item['advice']}"
-                )
+                reasons = "｜".join(_fmt_reason(r) for r in item["reasons"])
+                st.warning(f"⚠️ **{item['ticker']}** ｜ {item['advice']}\n\n{reasons}")
 
     if summary["region_gaps"]:
         st.markdown("##### 【配置缺口】")
@@ -285,7 +297,7 @@ def render_liquidity_component(df):
         legend_items += (
             f'<div style="display:flex; align-items:center; gap:4px;">'
             f'<div style="width:10px; height:10px; border-radius:2px; background:{investment_color};"></div>'
-            f'<span class="asset-price-main">{title}</span>'
+            f'<span class="asset-price-main">{title} ${bank_total_full:,.0f}</span>'
             f"</div>"
         )
 
