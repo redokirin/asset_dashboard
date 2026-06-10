@@ -103,42 +103,49 @@ def _show_daily_summary_dialog(summary):
 
 
 def render_report_component(df):
-    if st.button("📊 配置分析", width='stretch'):
-        st.session_state["show_allocation"] = True
-        st.rerun()
+    has_report = "ai_report" in st.session_state
+    cols = st.columns(4 if has_report else 3)
 
-    if st.button("📊 行動摘要", width='stretch'):
-        with st.spinner("正在分析今日摘要..."):
-            from core.daily_summary import generate_daily_summary
+    with cols[0]:
+        if st.button("📊 配置分析", width="stretch"):
+            st.session_state["show_allocation"] = True
+            st.rerun()
 
-            _cached = st.session_state.get("_adv_res_cache")
-            adv_res = (
-                _cached
-                if _cached is not None and not _cached.empty
-                else dashboard_logic.run_advanced_analysis(df)
-            )
-            st.session_state["_adv_res_cache"] = adv_res
-            summary = generate_daily_summary(df, adv_res)
-        _show_daily_summary_dialog(summary)
+    with cols[1]:
+        if st.button("📊 行動摘要", width="stretch"):
+            with st.spinner("正在分析今日摘要..."):
+                from core.daily_summary import generate_daily_summary
 
-    if st.button("📋 盤後診斷", width='stretch'):
-        with st.spinner("正在產生診斷報告..."):
-            from core import exporters
+                _cached = st.session_state.get("_adv_res_cache")
+                adv_res = (
+                    _cached
+                    if _cached is not None and not _cached.empty
+                    else dashboard_logic.run_advanced_analysis(df)
+                )
+                st.session_state["_adv_res_cache"] = adv_res
+                summary = generate_daily_summary(df, adv_res)
+            _show_daily_summary_dialog(summary)
 
-            adv_res = dashboard_logic.run_advanced_analysis(df)
-            st.session_state["ai_report"] = exporters.export_for_ai(df, adv_res)
-            st.session_state["_adv_res_cache"] = adv_res
+    with cols[2]:
+        if st.button("📋 盤後診斷", width="stretch"):
+            with st.spinner("正在產生診斷報告..."):
+                from core import exporters
 
-    if "ai_report" in st.session_state:
+                adv_res = dashboard_logic.run_advanced_analysis(df)
+                st.session_state["ai_report"] = exporters.export_for_ai(df, adv_res)
+                st.session_state["_adv_res_cache"] = adv_res
+
+    if has_report:
         from datetime import date
 
-        st.download_button(
-            label="⬇️ 下載診斷報告 (.md)",
-            data=st.session_state["ai_report"],
-            file_name=f"ai_report_diagnosis_{date.today().strftime('%Y%m%d')}.md",
-            mime="text/markdown",
-            width='stretch',
-        )
+        with cols[3]:
+            st.download_button(
+                label="⬇️ 下載診斷報告 (.md)",
+                data=st.session_state["ai_report"],
+                file_name=f"ai_report_diagnosis_{date.today().strftime('%Y%m%d')}.md",
+                mime="text/markdown",
+                width="stretch",
+            )
 
 
 def render_market_card(investment_df, radar_data):

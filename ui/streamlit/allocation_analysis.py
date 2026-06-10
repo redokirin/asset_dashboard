@@ -7,7 +7,7 @@ from core import dashboard_logic
 from core.analysis.risk_balance import (
     build_comparison_df,
     build_region_df,
-    evaluate_new_asset,
+    calculate_risk_weighted_allocation,
     get_asset_region,
 )
 from core.columns import COL_MARKET, COL_MARKET_VALUE, COL_TICKER
@@ -120,6 +120,7 @@ def show_allocation_analysis(df_res: pd.DataFrame) -> None:
         return
 
     has_acct = not bank_df.empty
+    total_mv = valid[COL_MARKET_VALUE].sum()
 
     # ── 個別標的比較 ──────────────────────────────────────────────────────────
     comp_df = build_comparison_df(valid, bank_df=bank_df if has_acct else None)
@@ -127,27 +128,33 @@ def show_allocation_analysis(df_res: pd.DataFrame) -> None:
 
     st.markdown("### 【個別標的理論配置】")
 
-    display = comp_df.copy()
-    for col in ["理論(波動率)", "理論(綜合)", "實際配置"]:
-        display[col] = comp_df[col].map(lambda x: f"{x:.1%}")
-    display["差異(波動率)"] = comp_df["差異(波動率)"].map(
-        lambda x: f"{x:+.1%} {_diff_label(x)}"
-    )
-    display["差異(綜合)"] = comp_df["差異(綜合)"].map(
-        lambda x: f"{x:+.1%} {_diff_label(x)}"
-    )
+    display = comp_df[["標的", "波動率"]].copy()
+    display["理論(波動率)"] = comp_df["理論(波動率)"].map(lambda x: f"{x:.1%}")
     if has_acct_col:
         display["理論(資金加權)"] = comp_df["理論(資金加權)"].map(
             lambda x: f"{x:.1%}" if pd.notnull(x) else "-"
         )
+    display["實際配置"] = comp_df["實際配置"].map(lambda x: f"{x:.1%}")
+    display["差異(波動率)"] = comp_df["差異(波動率)"].map(
+        lambda x: f"{x:+.1%} {_diff_label(x)}"
+    )
+    if has_acct_col:
         display["差異(資金加權)"] = comp_df["差異(資金加權)"].map(
             lambda x: f"{x:+.1%} {_diff_label(x)}" if pd.notnull(x) else "-"
         )
+
+    gap_diff = (
+        comp_df["差異(資金加權)"].fillna(comp_df["差異(波動率)"])
+        if has_acct_col
+        else comp_df["差異(波動率)"]
+    )
+    display["缺口"] = gap_diff.map(
+        lambda x: f"{x * total_mv:+,.0f}" if pd.notnull(x) else "-"
+    )
     st.dataframe(display, width='stretch', hide_index=True)
 
     ind_series = {
         "理論(波動率)": comp_df["理論(波動率)"].tolist(),
-        "理論(綜合)": comp_df["理論(綜合)"].tolist(),
         "實際配置": comp_df["實際配置"].tolist(),
     }
     if has_acct_col:
@@ -170,86 +177,129 @@ def show_allocation_analysis(df_res: pd.DataFrame) -> None:
 
     st.markdown("### 【區域配置對比】")
 
-    reg_display = reg_df.copy()
-    for col in ["理論(波動率)", "理論(綜合)", "實際配置"]:
-        reg_display[col] = reg_df[col].map(lambda x: f"{x:.1%}")
-    reg_display["現有目標"] = reg_df["現有目標"].map(
-        lambda x: f"{x:.1%}" if pd.notnull(x) else "—"
-    )
+    reg_display = reg_df[["區域"]].copy()
+    reg_display["理論(波動率)"] = reg_df["理論(波動率)"].map(lambda x: f"{x:.1%}")
     if has_acct_reg:
         reg_display["理論(資金加權)"] = reg_df["理論(資金加權)"].map(
             lambda x: f"{x:.1%}" if pd.notnull(x) else "-"
         )
+    reg_display["實際配置"] = reg_df["實際配置"].map(lambda x: f"{x:.1%}")
+
+    if has_acct_reg:
+        reg_diff_raw = (reg_df["理論(資金加權)"] - reg_df["實際配置"]).fillna(
+            reg_df["理論(波動率)"] - reg_df["實際配置"]
+        )
+        reg_display["差異(資金加權)"] = reg_diff_raw.map(
+            lambda x: f"{x:+.1%} {_diff_label(x)}" if pd.notnull(x) else "-"
+        )
+    else:
+        reg_diff_raw = reg_df["理論(波動率)"] - reg_df["實際配置"]
+        reg_display["差異(波動率)"] = reg_diff_raw.map(
+            lambda x: f"{x:+.1%} {_diff_label(x)}"
+        )
+
+    reg_display["缺口"] = reg_diff_raw.map(
+        lambda x: f"{x * total_mv:+,.0f}" if pd.notnull(x) else "-"
+    )
     st.dataframe(reg_display, width='stretch', hide_index=True)
 
     reg_series = {
         "理論(波動率)": reg_df["理論(波動率)"].tolist(),
-        "理論(綜合)": reg_df["理論(綜合)"].tolist(),
         "實際配置": reg_df["實際配置"].tolist(),
     }
     if has_acct_reg:
         reg_series["理論(資金加權)"] = reg_df["理論(資金加權)"].fillna(0).tolist()
-    if reg_df["現有目標"].notna().any():
-        reg_series["現有目標"] = reg_df["現有目標"].fillna(0).tolist()
 
     reg_chart = _bar_chart(
         labels=reg_df["區域"].tolist(),
         series=reg_series,
-        title="區域配置：理論 vs 實際 vs 目標",
+        title="區域配置：理論 vs 實際",
     )
     st.plotly_chart(reg_chart, width='stretch')
 
     # ── 新標的模擬 ─────────────────────────────────────────────────────────────
     st.markdown("---")
     st.markdown("### 【新標的加入模擬】")
-    sim_ticker = st.text_input(
-        "輸入新標的代碼（模擬加入後的配置變化）",
-        placeholder="例如: 0050.TW",
+    sim_input = st.text_input(
+        "輸入新標的代碼（多個標的用逗號分隔）",
+        placeholder="例如: 0050.TW, AAPL, 7203.T",
         key="alloc_sim_ticker",
     )
-    if sim_ticker:
-        sim_ticker = sim_ticker.strip().upper()
-        with st.spinner(f"分析 {sim_ticker} 中…"):
-            sim_df = pd.DataFrame(
-                [
-                    {
-                        COL_TICKER: sim_ticker,
-                        "市場": "手動",
-                        "類型": "個股",
-                        "名稱": sim_ticker,
-                        "幣別": "TWD",
-                        "單位數": 0,
-                        "平均成本": 0.0,
-                        "股價": 0.0,
-                        "成本": 0,
-                        "市值": 0.0,
-                        "損益": 0,
-                        "報酬率": 0.0,
-                        "佔比": 0.0,
-                        "_get_value": True,
-                    }
-                ]
-            )
-            sim_adv = dashboard_logic.run_advanced_analysis(sim_df)
+    if sim_input:
+        tickers = [t.strip().upper() for t in sim_input.split(",") if t.strip()]
+        with st.spinner(f"分析 {', '.join(tickers)} 中…"):
+            sim_rows = [
+                {
+                    COL_TICKER: t,
+                    "市場": "手動",
+                    "類型": "個股",
+                    "名稱": t,
+                    "幣別": "TWD",
+                    "單位數": 0,
+                    "平均成本": 0.0,
+                    "股價": 0.0,
+                    "成本": 0,
+                    "市值": 0.0,
+                    "損益": 0,
+                    "報酬率": 0.0,
+                    "佔比": 0.0,
+                    "_get_value": True,
+                }
+                for t in tickers
+            ]
+            sim_adv = dashboard_logic.run_advanced_analysis(pd.DataFrame(sim_rows))
 
         if sim_adv.empty or "annualizedVol" not in sim_adv.columns:
-            st.warning(f"無法取得 {sim_ticker} 的波動率數據。")
+            st.warning("無法取得波動率數據。")
         else:
-            sim_row_adv = sim_adv.iloc[0]
-            new_row = {
-                COL_TICKER: sim_ticker,
-                COL_MARKET: get_asset_region(sim_ticker),
-                COL_MARKET_VALUE: float(sim_row_adv.get("股價", 0) or 0),
-                "annualizedVol": sim_row_adv.get("annualizedVol"),
-                "maxDrawdownPct": sim_row_adv.get("maxDrawdownPct"),
-                "painRatio": sim_row_adv.get("painRatio"),
-            }
-            result = evaluate_new_asset(new_row, valid)
-            st.markdown(f"**{sim_ticker} 加入後的理論配置: {result['theoretical_weight']:.1%}**")
-            st.markdown("**區域配置變化：**")
-            for region, chg in result["region_changes"].items():
-                delta = chg["after"] - chg["before"]
-                arrow = "⬆️" if delta > 0.005 else ("⬇️" if delta < -0.005 else "→")
-                st.markdown(
-                    f"- **{region}**: {chg['before']:.1%} → {chg['after']:.1%} ({delta:+.1%}) {arrow}"
-                )
+            new_rows, failed = [], []
+            for t in tickers:
+                match = sim_adv[sim_adv[COL_TICKER] == t]
+                if match.empty or pd.isna(match.iloc[0].get("annualizedVol")):
+                    failed.append(t)
+                    continue
+                r = match.iloc[0]
+                new_rows.append({
+                    COL_TICKER: t,
+                    COL_MARKET: get_asset_region(t),
+                    COL_MARKET_VALUE: float(r.get("股價", 0) or 0),
+                    "annualizedVol": r.get("annualizedVol"),
+                    "maxDrawdownPct": r.get("maxDrawdownPct"),
+                    "painRatio": r.get("painRatio"),
+                })
+
+            if failed:
+                st.warning(f"以下標的無法取得波動率：{', '.join(failed)}")
+
+            if new_rows:
+                new_rows_df = pd.DataFrame(new_rows)
+                combined_df = pd.concat([valid, new_rows_df], ignore_index=True)
+                old_ind, old_reg = calculate_risk_weighted_allocation(valid)
+                new_ind, new_reg = calculate_risk_weighted_allocation(combined_df)
+
+                sim_table = [
+                    {
+                        "標的": r[COL_TICKER],
+                        "區域": r[COL_MARKET],
+                        "年化波動率": f"{r['annualizedVol']:.1%}",
+                        "理論配置(加入後)": f"{new_ind.get(r[COL_TICKER], 0):.1%}",
+                    }
+                    for r in new_rows
+                ]
+                st.dataframe(pd.DataFrame(sim_table), hide_index=True, width="stretch")
+
+                all_regions = sorted(set(list(old_reg) + list(new_reg)))
+                reg_table = [
+                    {
+                        "區域": region,
+                        "加入前": f"{old_reg.get(region, 0):.1%}",
+                        "加入後": f"{new_reg.get(region, 0):.1%}",
+                        "變化": (
+                            lambda d: f"{d:+.1%} "
+                            + ("⬆️" if d > 0.005 else ("⬇️" if d < -0.005 else "→"))
+                        )(new_reg.get(region, 0) - old_reg.get(region, 0)),
+                    }
+                    for region in all_regions
+                ]
+                st.markdown("**區域配置變化：**")
+                st.dataframe(pd.DataFrame(reg_table), hide_index=True, width="stretch")

@@ -125,6 +125,10 @@ div[data-testid="stMetricDelta"] > div {
 	width: auto !important;
 }
 
+[data-testid="stExpanderDetails"] {
+	padding: 0 !important;
+}
+
 /* ---- 行動裝置 (小於 768px) 強制兩樓層佈局 ---- */
 @media (max-width: 768px) {
 	/* 解除不換行限制，改採純粹的 Grid 佈局，精準控制每行元素 */
