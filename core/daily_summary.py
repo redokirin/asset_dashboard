@@ -111,6 +111,7 @@ def generate_daily_summary(
     region_targets=None,
     pain_threshold=0.30,
     drawdown_threshold=-3.0,
+    risk_data=None,
 ):
     """
     從投資組合數據萃取每日行動摘要。
@@ -191,7 +192,7 @@ def generate_daily_summary(
             current_price = None
             try:
                 current_price = float(raw_price) if raw_price is not None else None
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 pass
 
             if signal == "日常加碼" and du is not None and bdr is not None:
@@ -297,7 +298,25 @@ def generate_daily_summary(
             )
         lines.append("")
 
-    if not actionable and not warnings and not region_gaps:
+    risk_alerts = []
+    if risk_data:
+        try:
+            from core.analysis.overall_risk import get_risk_alerts, get_risk_level
+            from db.database import get_prev_risk_score
+            prev_score = get_prev_risk_score()
+            risk_alerts = get_risk_alerts(risk_data, prev_score)
+            if risk_alerts:
+                risk_score = risk_data["risk_score"]
+                level_label, _ = get_risk_level(risk_score)
+                lines.append("【整體風險】")
+                lines.append(f"風險係數 {risk_score} / 100　{level_label}")
+                for alert in risk_alerts:
+                    lines.append(alert)
+                lines.append("")
+        except Exception:
+            pass
+
+    if not actionable and not warnings and not region_gaps and not risk_alerts:
         lines.append("✅ 今日無須特別行動，所有標的均正常")
 
     return {
@@ -305,5 +324,7 @@ def generate_daily_summary(
         "actionable": actionable,
         "warnings": warnings,
         "region_gaps": region_gaps,
+        "risk_data": risk_data,
+        "risk_alerts": risk_alerts,
         "timestamp": now_str,
     }

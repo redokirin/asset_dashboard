@@ -111,6 +111,20 @@ def export_for_ai(df_res, adv_res=None):
     report.extend(cash_summary_lines)
     report.append("-" * 30 + "\n")
 
+    if adv_res is not None and not adv_res.empty:
+        try:
+            from core.analysis.overall_risk import (
+                build_risk_report_section,
+                calculate_overall_risk_score,
+            )
+            risk_data = calculate_overall_risk_score(adv_res, df_res)
+            risk_section = build_risk_report_section(risk_data)
+            if risk_section:
+                report.append(risk_section)
+                report.append("-" * 30 + "\n")
+        except Exception:
+            pass
+
     if not bank_df.empty:
         report.append("## 銀行現金")
         for _, row in bank_df.iterrows():

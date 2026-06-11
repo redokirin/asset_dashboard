@@ -138,6 +138,16 @@ def _migrate(conn):
         if col not in ob_cols:
             conn.execute(f"ALTER TABLE order_bands ADD COLUMN {col} {col_def}")
 
+    ps_cols = {r[1] for r in conn.execute("PRAGMA table_info(portfolio_snapshot)").fetchall()}
+    for col, col_def in [
+        ("overall_risk_score", "REAL"),
+        ("portfolio_risk",     "REAL"),
+        ("invested_ratio",     "REAL"),
+        ("cash_buffer_ratio",  "REAL"),
+    ]:
+        if col not in ps_cols:
+            conn.execute(f"ALTER TABLE portfolio_snapshot ADD COLUMN {col} {col_def}")
+
 
 def init_db():
     with _get_connection() as conn:
@@ -200,25 +210,44 @@ def save_snapshot(df_res, adv_res=None, snapshot_date: date = None):
         total_gain_pct = (total_gain / invested_capital * 100) if invested_capital else 0.0
         us_r, jp_r, tw_r = _market_ratios(inv_df)
 
+        risk_data = {}
+        if adv_res is not None and not adv_res.empty:
+            try:
+                from core.analysis.overall_risk import calculate_overall_risk_score
+                risk_data = calculate_overall_risk_score(adv_res, df_res) or {}
+            except Exception as exc:
+                logging.warning(f"[db] 整體風險係數計算失敗：{exc}")
+
         with _get_connection() as conn:
             conn.execute(
                 """
                 INSERT INTO portfolio_snapshot
                     (snapshot_date, total_value, total_gain, total_gain_pct,
-                     invest_value, cash_total, us_ratio, jp_ratio, tw_ratio)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     invest_value, cash_total, us_ratio, jp_ratio, tw_ratio,
+                     overall_risk_score, portfolio_risk, invested_ratio, cash_buffer_ratio)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(snapshot_date) DO UPDATE SET
-                    total_value    = excluded.total_value,
-                    total_gain     = excluded.total_gain,
-                    total_gain_pct = excluded.total_gain_pct,
-                    invest_value   = excluded.invest_value,
-                    cash_total     = excluded.cash_total,
-                    us_ratio       = excluded.us_ratio,
-                    jp_ratio       = excluded.jp_ratio,
-                    tw_ratio       = excluded.tw_ratio
+                    total_value        = excluded.total_value,
+                    total_gain         = excluded.total_gain,
+                    total_gain_pct     = excluded.total_gain_pct,
+                    invest_value       = excluded.invest_value,
+                    cash_total         = excluded.cash_total,
+                    us_ratio           = excluded.us_ratio,
+                    jp_ratio           = excluded.jp_ratio,
+                    tw_ratio           = excluded.tw_ratio,
+                    overall_risk_score = excluded.overall_risk_score,
+                    portfolio_risk     = excluded.portfolio_risk,
+                    invested_ratio     = excluded.invested_ratio,
+                    cash_buffer_ratio  = excluded.cash_buffer_ratio
                 """,
-                (str(today), total_val, total_gain, total_gain_pct,
-                 invest_val, cash_total, us_r, jp_r, tw_r),
+                (
+                    str(today), total_val, total_gain, total_gain_pct,
+                    invest_val, cash_total, us_r, jp_r, tw_r,
+                    risk_data.get("risk_score"),
+                    risk_data.get("portfolio_risk"),
+                    risk_data.get("invested_ratio"),
+                    risk_data.get("cash_buffer_ratio"),
+                ),
             )
 
             # ── asset_snapshot ───────────────────────────────────────────────
@@ -356,6 +385,49 @@ def get_snapshot(target_date: date) -> dict:
     except Exception as exc:
         logging.warning(f"[db] 快照讀取失敗：{exc}")
         return {}
+
+
+def get_risk_score_history(days: int = 30) -> list[dict]:
+    """回傳最近 N 天的風險係數時間序列，供趨勢圖使用。"""
+    try:
+        init_db()
+        with _get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT snapshot_date, overall_risk_score, portfolio_risk,
+                       invested_ratio, cash_buffer_ratio
+                FROM portfolio_snapshot
+                WHERE overall_risk_score IS NOT NULL
+                ORDER BY snapshot_date DESC
+                LIMIT ?
+                """,
+                (days,),
+            ).fetchall()
+        return [dict(r) for r in reversed(rows)]
+    except Exception as exc:
+        logging.warning(f"[db] 風險係數歷史讀取失敗：{exc}")
+        return []
+
+
+def get_prev_risk_score() -> float | None:
+    """取得前一次已儲存的整體風險係數（排除今日）。"""
+    try:
+        from datetime import date as _date
+        init_db()
+        today_str = str(_date.today())
+        with _get_connection() as conn:
+            row = conn.execute(
+                """
+                SELECT overall_risk_score FROM portfolio_snapshot
+                WHERE snapshot_date != ? AND overall_risk_score IS NOT NULL
+                ORDER BY snapshot_date DESC LIMIT 1
+                """,
+                (today_str,),
+            ).fetchone()
+        return float(row["overall_risk_score"]) if row else None
+    except Exception as exc:
+        logging.warning(f"[db] 前日風險係數讀取失敗：{exc}")
+        return None
 
 
 def get_latest_two_snapshots() -> tuple[dict, dict]:

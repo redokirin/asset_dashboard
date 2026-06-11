@@ -72,10 +72,18 @@ def show_streamlit(df, radar_data, exchange_rates):
         _adv_cache = dashboard_logic.run_advanced_analysis(investment_df)
         st.session_state["_adv_res_cache"] = _adv_cache
 
+    _risk_data = None
+    if not _adv_cache.empty:
+        try:
+            from core.analysis.overall_risk import calculate_overall_risk_score
+            _risk_data = calculate_overall_risk_score(_adv_cache, filtered_df)
+        except Exception:
+            pass
+
     _summary = None
     if not _adv_cache.empty:
         from core.daily_summary import generate_daily_summary
-        _summary = generate_daily_summary(filtered_df, _adv_cache)
+        _summary = generate_daily_summary(filtered_df, _adv_cache, risk_data=_risk_data)
 
     with col_right:
         # with st.container(border=False):

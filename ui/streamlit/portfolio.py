@@ -59,9 +59,80 @@ def _fmt_reason(r: str) -> str:
     return r
 
 
+@st.dialog("⚡ 風險儀表板", width="large")
+def _show_risk_dashboard_dialog(risk_data):
+    from core.analysis.overall_risk import get_risk_level
+    from db.database import get_prev_risk_score, get_risk_score_history
+
+    from ui.streamlit.components import render_analysis_metrics_row
+
+    score = risk_data["risk_score"]
+    level_label, level_advice = get_risk_level(score)
+    prev_score = get_prev_risk_score()
+
+    _risk_colors = {"保守": "#00c853", "中低": "#a8d08d", "中等": "#ffc107", "中高": "#ff9800", "高風險": "#ff4b4b"}
+    score_color = next((v for k, v in _risk_colors.items() if k in level_label), None)
+
+    score_display = f"{score} / 100"
+    if prev_score is not None:
+        delta = score - prev_score
+        delta_color = "#ff4b4b" if delta > 0 else "#00c853"
+        score_display = (score_display, score_color)
+        delta_display = (f"{delta:+.1f}", delta_color)
+    else:
+        score_display = (score_display, score_color)
+        delta_display = "—"
+
+    metrics = {
+        "整體風險係數": score_display,
+        "日變動": delta_display,
+        "風險等級": level_label,
+        "投資比例": f"{risk_data['invested_ratio']:.1%}",
+        "現金緩衝": f"{risk_data['cash_buffer_ratio']:.1%}",
+    }
+    st.markdown(render_analysis_metrics_row(metrics, title=f"建議：{level_advice}"), unsafe_allow_html=True)
+
+    history = get_risk_score_history(30)
+    if len(history) >= 2:
+        hist_df = pd.DataFrame(history)[["snapshot_date", "overall_risk_score"]].rename(
+            columns={"snapshot_date": "日期", "overall_risk_score": "風險係數"}
+        )
+        hist_df["日期"] = pd.to_datetime(hist_df["日期"])
+        hist_df = hist_df.set_index("日期")
+        st.markdown("##### 風險係數趨勢（近 30 天）")
+        st.line_chart(hist_df)
+
+    breakdown = risk_data.get("asset_breakdown", [])
+    if breakdown:
+        st.markdown("##### 標的風險貢獻")
+        bd_df = pd.DataFrame(breakdown)[
+            ["ticker", "weighted_contribution", "risk_score", "weight"]
+        ]
+        bd_df.columns = ["標的", "加權貢獻", "風險分數", "市值佔比"]
+        st.bar_chart(bd_df.set_index("標的")["加權貢獻"])
+
+        st.markdown("##### 風險分解明細")
+        bd_df["市值佔比"] = bd_df["市值佔比"].map("{:.1%}".format)
+        bd_df["風險分數"] = bd_df["風險分數"].map("{:.2f}".format)
+        bd_df["加權貢獻"] = bd_df["加權貢獻"].map("{:.3f}".format)
+        st.dataframe(bd_df, hide_index=True, width="stretch")
+
+
 @st.dialog("📋 今日行動摘要", width="large")
 def _show_daily_summary_dialog(summary):
     st.caption(summary["timestamp"])
+
+    risk_data = summary.get("risk_data")
+    risk_alerts = summary.get("risk_alerts", [])
+    if risk_data and risk_alerts:
+        from core.analysis.overall_risk import get_risk_level
+
+        score = risk_data["risk_score"]
+        level_label, _ = get_risk_level(score)
+        st.warning(
+            f"**整體風險係數 {score} / 100　{level_label}**\n\n"
+            + "\n\n".join(risk_alerts)
+        )
 
     if summary["actionable"] or summary["warnings"]:
         st.markdown("##### 【標的摘要】")
@@ -116,24 +187,54 @@ def _show_daily_summary_dialog(summary):
 
 def render_report_component(df):
     has_report = "ai_report" in st.session_state
-    cols = st.columns(4 if has_report else 3)
+    row1 = st.columns(5)
 
-    with cols[0]:
+    with row1[0]:
         if st.button("📊 配置分析", width="stretch"):
             st.session_state["show_allocation"] = True
             st.rerun()
 
-    with cols[1]:
+    with row1[1]:
         if st.button("🎯 行動摘要", width="stretch"):
             with st.spinner("正在分析今日摘要..."):
+                from core.analysis.overall_risk import calculate_overall_risk_score
                 from core.daily_summary import generate_daily_summary
 
                 adv_res = dashboard_logic.run_advanced_analysis(df)
                 st.session_state["_adv_res_cache"] = adv_res
-                summary = generate_daily_summary(df, adv_res)
+                risk_data = (
+                    calculate_overall_risk_score(adv_res, df)
+                    if not adv_res.empty
+                    else {}
+                )
+                summary = generate_daily_summary(df, adv_res, risk_data=risk_data)
             _show_daily_summary_dialog(summary)
 
-    with cols[2]:
+    with row1[2]:
+        if st.session_state.get("_adv_res_cache") is not None:
+            if st.button("🔄 清除快取", width="stretch"):
+                st.session_state.pop("_adv_res_cache", None)
+                st.rerun()
+
+    with row1[3]:
+        if st.button("⚡ 風險儀表", width="stretch"):
+            with st.spinner("計算整體風險係數..."):
+                from core.analysis.overall_risk import calculate_overall_risk_score
+
+                adv_res = st.session_state.get("_adv_res_cache")
+                if adv_res is None or adv_res.empty:
+                    adv_res = dashboard_logic.run_advanced_analysis(df)
+                    st.session_state["_adv_res_cache"] = adv_res
+                risk_data = (
+                    calculate_overall_risk_score(adv_res, df)
+                    if not adv_res.empty
+                    else {}
+                )
+            if risk_data:
+                _show_risk_dashboard_dialog(risk_data)
+            else:
+                st.warning("無法計算風險係數，請確認進階分析資料是否載入。")
+    with row1[4]:
         if st.button("📋 盤後診斷", width="stretch"):
             with st.spinner("正在產生診斷報告..."):
                 from core import exporters
@@ -142,22 +243,16 @@ def render_report_component(df):
                 st.session_state["_adv_res_cache"] = adv_res
                 st.session_state["ai_report"] = exporters.export_for_ai(df, adv_res)
 
-    if st.session_state.get("_adv_res_cache") is not None:
-        if st.button("🔄 清除分析快取", width="stretch"):
-            st.session_state.pop("_adv_res_cache", None)
-            st.rerun()
-
     if has_report:
         from datetime import date
 
-        with cols[3]:
-            st.download_button(
-                label="⬇️ 下載報告 (.md)",
-                data=st.session_state["ai_report"],
-                file_name=f"ai_report_diagnosis_{date.today().strftime('%Y%m%d')}.md",
-                mime="text/markdown",
-                width="stretch",
-            )
+        st.download_button(
+            label="⬇️ 下載報告 (.md)",
+            data=st.session_state["ai_report"],
+            file_name=f"ai_report_diagnosis_{date.today().strftime('%Y%m%d')}.md",
+            mime="text/markdown",
+            width="stretch",
+        )
 
 
 def render_market_card(investment_df, radar_data):
@@ -417,7 +512,9 @@ def render_dataframe_component(df):
 def render_shareholding_component(df, summary=None):
     investment_df = df[~_cash_mask(df)]
 
-    actionable_map = {item["ticker"]: item for item in (summary or {}).get("actionable", [])}
+    actionable_map = {
+        item["ticker"]: item for item in (summary or {}).get("actionable", [])
+    }
     warning_map = {w["ticker"]: w for w in (summary or {}).get("warnings", [])}
 
     for idx, row in investment_df.iterrows():
