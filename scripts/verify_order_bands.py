@@ -217,7 +217,7 @@ def show_market_events():
             print()
             return
         rows = conn.execute(
-            "SELECT * FROM market_events ORDER BY event_date DESC LIMIT 10"
+            "SELECT * FROM market_events ORDER BY event_date DESC LIMIT 1"
         ).fetchall()
     if not rows:
         print("  （尚無資料）")
