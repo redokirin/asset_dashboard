@@ -10,6 +10,7 @@ from ui.streamlit.components import render_analysis_metrics_row
 
 def _fmt_reason(r: str) -> str:
     import re
+
     m = re.match(r"Pain Ratio (\d+)%（昨日 (\d+)%）", r)
     return f"Pain Ratio {m.group(2)}% > {m.group(1)}%" if m else r
 
@@ -162,8 +163,6 @@ def render_advanced_analysis_ui(res, warning=None, actionable=None):
 
         if actionable:
             _parts = []
-            if actionable.get("zone_range"):
-                _parts.append(f"目標區間 {actionable['zone_range']}")
             if actionable.get("fib_price") is not None:
                 _parts.append(f"最近支撐 {actionable['fib_price']:.2f}")
             if _parts:
