@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pandas as pd
 
+from core.tags import TAG_STRESS_FAIL
+
 _CASH_MARKETS = {"bank", "cash", "現金"}
 _HIGH_PAIN_THRESHOLD = 0.70
 
 
 def _is_stress_insufficient(tags) -> bool:
-    if not isinstance(tags, list):
-        return False
-    return any("壓力測試不足" in str(t) for t in tags)
+    return isinstance(tags, list) and TAG_STRESS_FAIL in tags
 
 
 def _asset_risk_score(

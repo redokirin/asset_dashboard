@@ -172,7 +172,8 @@ def render_advanced_analysis_ui(res, warning=None, actionable=None, hold_off=Non
 
         tags = res.get("tags")
         if tags:
-            tag_html = "".join([f'<span class="light_tags">{t}</span>' for t in tags])
+            from core.tags import TAG_DISPLAY
+            tag_html = "".join([f'<span class="light_tags">{TAG_DISPLAY.get(t, t)}</span>' for t in tags])
             st.markdown(
                 f"<div class='tag-report-row'>{tag_html}</div>",
                 unsafe_allow_html=True,

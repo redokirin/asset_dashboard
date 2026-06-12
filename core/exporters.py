@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from core.tags import TAG_DISPLAY
 from core.columns import (
     COL_ASSET_TYPE,
     COL_AVG_COST,
@@ -257,7 +258,7 @@ def export_for_ai(df_res, adv_res=None):
                 f"- **基本面**: EPS {eps} | P/E {pe} | 殖利率 {yield_val} | PEG {peg}\n"
                 f"- **量化指標**: RS百分位 {row.get('RS 百分位', '-')} | 乖離率 {bias} | 量比 {vol_ratio} | RSI {row.get('RSI', 0):.1f} | 夏普值 {row.get('夏普值', '-')} | α勝率 {row.get('Alpha 勝率', '-')}\n"
                 + (f"{risk_line}\n" if risk_line else "")
-                + f"- **診斷標籤**: {' '.join(row['tags']) if isinstance(row.get('tags'), list) else '-'}\n"
+                + f"- **診斷標籤**: {' '.join(TAG_DISPLAY.get(t, t) for t in row['tags']) if isinstance(row.get('tags'), list) else '-'}\n"
                 + f"- **AI 診斷建議**: {diag}"
             )
             report.append(quant_info)
@@ -440,7 +441,7 @@ def export_single_target_for_ai(row) -> str:
             f"- **基本面**: EPS {eps} | P/E {pe} | 殖利率 {yield_val} | PEG {peg}\n"
             f"- **量化指標**: RS百分位 {row.get('RS 百分位', '-')} | 乖離率 {bias} | 量比 {vol_ratio} | RSI {row.get('RSI', 0):.1f} | 夏普值 {row.get('夏普值', '-')} | α勝率 {row.get('Alpha 勝率', '-')}\n"
             + (f"{risk_line}\n" if risk_line else "")
-            + f"- **診斷標籤**: {' '.join(row['tags']) if isinstance(row.get('tags'), list) else '-'}\n"
+            + f"- **診斷標籤**: {' '.join(TAG_DISPLAY.get(t, t) for t in row['tags']) if isinstance(row.get('tags'), list) else '-'}\n"
             + f"- **AI 診斷建議**: {diag}"
         )
         report.append(quant_info)

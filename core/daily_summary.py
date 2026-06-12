@@ -3,6 +3,14 @@ from datetime import date, datetime
 
 import pandas as pd
 
+from core.tags import (
+    TAG_STRESS_FAIL,
+    TAG_VOL_CRASH,
+    TAG_VOL_SPIKE,
+    TAG_VOL_WEAK,
+    TAG_VP_UP,
+)
+
 _CASH_MARKETS = {"bank", "cash", "現金"}
 
 _SIGNAL_EMOJI = {
@@ -41,12 +49,6 @@ def _extract_signal(entry_zone_status):
     return None
 
 
-def _contains_tag(tags, keyword):
-    if not isinstance(tags, list):
-        return False
-    return any(keyword in str(t) for t in tags)
-
-
 def _classify_volume_quality(volume_ratio, tags):
     """
     Returns (quality_level, quality_note).
@@ -54,11 +56,13 @@ def _classify_volume_quality(volume_ratio, tags):
     """
     if volume_ratio is None or not isinstance(volume_ratio, (int, float)):
         return "normal", None
-    if _contains_tag(tags, "帶量下殺") or _contains_tag(tags, "異常爆量"):
+    if not isinstance(tags, list):
+        tags = []
+    if TAG_VOL_CRASH in tags or TAG_VOL_SPIKE in tags:
         return "caution", "⚠️ 異常量能，謹慎執行"
-    if _contains_tag(tags, "價量齊揚") or volume_ratio >= 1.5:
+    if TAG_VP_UP in tags or volume_ratio >= 1.5:
         return "strong", "✅ 價量齊揚，動能確認"
-    if _contains_tag(tags, "量能不足"):
+    if TAG_VOL_WEAK in tags:
         return "weak", "⚠️ 量偏低，建議小量"
     if volume_ratio >= 0.5:
         return "normal", None
@@ -212,9 +216,9 @@ def generate_daily_summary(
             and pd.notnull(pain_ratio_val)
             and float(pain_ratio_val) > pain_threshold
         )
-        is_volume_crash = _contains_tag(tags, "帶量下殺")
+        is_volume_crash = isinstance(tags, list) and TAG_VOL_CRASH in tags
         is_stress_fail = (
-            _contains_tag(tags, "壓力測試不足")
+            isinstance(tags, list) and TAG_STRESS_FAIL in tags
             and curr_dd is not None
             and pd.notnull(curr_dd)
             and float(curr_dd) < drawdown_threshold

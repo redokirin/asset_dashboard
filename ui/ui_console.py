@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
 
+from core.tags import TAG_DISPLAY
+
 try:
     from rich.console import Console
     from rich.table import Table
@@ -276,7 +278,7 @@ def show_console_rich(
                 console.print(risk_table)
 
             console.print(
-                f"{' '.join(row.get('tags', []))}\n{row.get('技術診斷', '-')}"
+                f"{' '.join(TAG_DISPLAY.get(t, t) for t in row.get('tags', []))}\n{row.get('技術診斷', '-')}"
             )
 
     if show_report:
