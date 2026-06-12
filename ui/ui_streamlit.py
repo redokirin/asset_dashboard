@@ -92,5 +92,6 @@ def show_streamlit(df, radar_data, exchange_rates):
     with col_right:
         with st.expander("🧰 報表工具", expanded=False):
             render_report_component(df)
-        with st.container(border=False):
+        # with st.container(border=False):
+        with st.expander("📋 持股明細", expanded=False):
             render_shareholding_component(investment_df, summary=_summary)

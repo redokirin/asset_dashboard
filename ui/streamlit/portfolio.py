@@ -550,7 +550,7 @@ def render_shareholding_component(df, summary=None):
 
     for idx, row in investment_df.iterrows():
         ticker = row["代碼"]
-        with st.container(border=True):
+        with st.container(border=False):
             with st.container():
                 c1, c2, c3, c4 = st.columns([0.65, 2.2, 1, 1])
                 with c1:
@@ -613,6 +613,7 @@ def render_shareholding_component(df, summary=None):
                         </div>""",
                         unsafe_allow_html=True,
                     )
+            # st.divider()
 
             if st.session_state.get(f"analyze_{ticker}", False):
                 render_cost_component(row)
