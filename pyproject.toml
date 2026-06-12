@@ -20,7 +20,8 @@ dependencies = [
     "gspread (>=6.2.1,<7.0.0)",
     "google-auth (>=2.49.1,<3.0.0)",
     "toml (>=0.10.2,<0.11.0)",
-    "yahooquery (>=2.4.1,<3.0.0)"
+    "yahooquery (>=2.4.1,<3.0.0)",
+    "watchdog (>=6.0.0,<7.0.0)"
 ]
 
 

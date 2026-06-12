@@ -47,6 +47,36 @@ def _contains_tag(tags, keyword):
     return any(keyword in str(t) for t in tags)
 
 
+def _classify_volume_quality(volume_ratio, tags):
+    """
+    Returns (quality_level, quality_note).
+    Levels: caution / strong / weak / warning / normal
+    """
+    if volume_ratio is None or not isinstance(volume_ratio, (int, float)):
+        return "normal", None
+    if _contains_tag(tags, "帶量下殺") or _contains_tag(tags, "異常爆量"):
+        return "caution", "⚠️ 異常量能，謹慎執行"
+    if _contains_tag(tags, "價量齊揚") or volume_ratio >= 1.5:
+        return "strong", "✅ 價量齊揚，動能確認"
+    if _contains_tag(tags, "量能不足"):
+        return "weak", "⚠️ 量偏低，建議小量"
+    if volume_ratio >= 0.5:
+        return "normal", None
+    if volume_ratio >= 0.3:
+        return "weak", "⚠️ 量偏低，建議小量"
+    return "warning", "⚠️ 量縮，反彈動能待確認"
+
+
+def _zone_close_position(current_price, zone_lower, zone_upper):
+    """Returns 0.0–1.0 relative position within zone, or None if indeterminate."""
+    if current_price is None or zone_lower is None or zone_upper is None:
+        return None
+    span = zone_upper - zone_lower
+    if span <= 0:
+        return None
+    return min(1.0, max(0.0, (current_price - zone_lower) / span))
+
+
 def _account_label(row):
     settlement = str(row.get("Settlement", "")).strip()
     if settlement:
@@ -146,6 +176,7 @@ def generate_daily_summary(
                 "dailyUpper",
                 "boundaryDailyRetest",
                 "boundaryRetestSniper",
+                "_vol_ratio_raw",
             ]
             if c in adv_res.columns
         ]
@@ -153,6 +184,7 @@ def generate_daily_summary(
 
     region_gaps = _calc_region_gaps(df_res, region_targets)
     actionable = []
+    hold_off = []
     warnings = []
 
     for _, row in work_df.iterrows():
@@ -167,6 +199,11 @@ def generate_daily_summary(
         pain_ratio_val = row.get("painRatio", None)
         curr_dd = row.get("currentDrawdownPct", None)
         tags = row.get("tags", [])
+        vol_ratio_raw = row.get("_vol_ratio_raw", None)
+        try:
+            vol_ratio_raw = float(vol_ratio_raw) if vol_ratio_raw is not None else None
+        except (ValueError, TypeError):
+            vol_ratio_raw = None
 
         signal = _extract_signal(entry_zone)
 
@@ -212,22 +249,49 @@ def generate_daily_summary(
                 zone_upper, zone_lower, current_price
             )
 
-            actionable.append(
-                {
-                    "ticker": ticker,
-                    "name": name,
-                    "signal": signal,
-                    "emoji": _SIGNAL_EMOJI.get(signal, "🟡"),
-                    "zone_range": zone_range,
-                    "zone_upper": zone_upper,
-                    "zone_lower": zone_lower,
-                    "fib_label": fib_label,
-                    "fib_price": fib_price,
-                    "adv_price": raw_price,
-                    "current_price": current_price,
-                    "asset_type": asset_type,
-                }
-            )
+            quality_level, quality_note = _classify_volume_quality(vol_ratio_raw, tags)
+            close_pos = _zone_close_position(current_price, zone_lower, zone_upper)
+
+            # 日常區上半 + 量縮 → 降為觀望
+            if (
+                signal == "日常加碼"
+                and quality_level == "warning"
+                and close_pos is not None
+                and close_pos > 0.5
+            ):
+                hold_off.append(
+                    {
+                        "ticker": ticker,
+                        "name": name,
+                        "signal": signal,
+                        "zone_range": zone_range,
+                        "quality_note": quality_note,
+                        "close_pos": close_pos,
+                    }
+                )
+            else:
+                # 回測/狙擊 + 量縮 → 可執行但升級提示為拆小量
+                if quality_level == "warning" and signal in ("回測加碼", "狙擊加碼"):
+                    quality_note = (quality_note or "") + "，建議拆小量執行"
+
+                actionable.append(
+                    {
+                        "ticker": ticker,
+                        "name": name,
+                        "signal": signal,
+                        "emoji": _SIGNAL_EMOJI.get(signal, "🟡"),
+                        "zone_range": zone_range,
+                        "zone_upper": zone_upper,
+                        "zone_lower": zone_lower,
+                        "fib_label": fib_label,
+                        "fib_price": fib_price,
+                        "adv_price": raw_price,
+                        "current_price": current_price,
+                        "asset_type": asset_type,
+                        "quality_note": quality_note,
+                        "quality_level": quality_level,
+                    }
+                )
 
         if has_warning:
             reasons = []
@@ -254,7 +318,7 @@ def generate_daily_summary(
             )
 
     warn_map = {w["ticker"]: w for w in warnings}
-    rendered: set[str] = set()
+    rendered: set[str] = {item["ticker"] for item in hold_off}
 
     lines = [f"📋 今日行動摘要｜{now_str}", ""]
 
@@ -274,9 +338,19 @@ def generate_daily_summary(
                 fib_str = ""
             parts = [p for p in [item["signal"], zone_str, fib_str] if p]
             lines.append(f"● {ticker}｜{'｜'.join(parts)}")
+            if item.get("quality_note"):
+                lines.append(f"  {item['quality_note']}")
             if ticker in warn_map:
                 w = warn_map[ticker]
                 lines.append(f"  {'、'.join(w['reasons'])} ｜ {w['advice']}")
+        lines.append("")
+
+    if hold_off:
+        lines.append("【觀望（量價異常）】")
+        for item in hold_off:
+            zone_str = f"區間 {item['zone_range']}" if item["zone_range"] else item["signal"]
+            reason = item.get("quality_note") or "量縮上漲，不追"
+            lines.append(f"● {item['ticker']}｜{zone_str}｜{reason}")
         lines.append("")
 
     warn_only = [w for w in warnings if w["ticker"] not in rendered]
@@ -316,12 +390,13 @@ def generate_daily_summary(
         except Exception:
             pass
 
-    if not actionable and not warnings and not region_gaps and not risk_alerts:
+    if not actionable and not hold_off and not warnings and not region_gaps and not risk_alerts:
         lines.append("✅ 今日無須特別行動，所有標的均正常")
 
     return {
         "text": "\n".join(lines),
         "actionable": actionable,
+        "hold_off": hold_off,
         "warnings": warnings,
         "region_gaps": region_gaps,
         "risk_data": risk_data,

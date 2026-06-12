@@ -15,7 +15,7 @@ def _fmt_reason(r: str) -> str:
     return f"Pain Ratio {m.group(2)}% > {m.group(1)}%" if m else r
 
 
-def render_advanced_analysis_ui(res, warning=None, actionable=None):
+def render_advanced_analysis_ui(res, warning=None, actionable=None, hold_off=None):
     """
     四層 Tab 決策 UI  ·  Decision → Risk → Quant → Fundamental
     Hero 區塊使用 st.metric() 大字顯示，其餘格子使用 render_analysis_metrics_row()。
@@ -165,6 +165,8 @@ def render_advanced_analysis_ui(res, warning=None, actionable=None):
             _parts = []
             if actionable.get("fib_price") is not None:
                 _parts.append(f"最近支撐 {actionable['fib_price']:.2f}")
+            if actionable.get("quality_note"):
+                _parts.append(actionable["quality_note"])
             if _parts:
                 st.caption("｜".join(_parts))
 
@@ -178,6 +180,11 @@ def render_advanced_analysis_ui(res, warning=None, actionable=None):
         diag = res.get("技術診斷")
         if diag:
             st.info(str(diag))
+        if hold_off:
+            reason = hold_off.get("quality_note") or "量縮上漲，不追"
+            zone_str = f"區間 {hold_off['zone_range']}" if hold_off.get("zone_range") else ""
+            body = "｜".join(p for p in [zone_str, reason] if p)
+            st.info(f"⚪ 觀望\n\n{body}")
         if warning:
             reasons = "｜".join(_fmt_reason(r) for r in warning["reasons"])
             st.warning(f"{warning['advice']}\n\n{reasons}")

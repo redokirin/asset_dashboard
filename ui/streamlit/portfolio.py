@@ -134,7 +134,9 @@ def _show_daily_summary_dialog(summary):
             + "\n\n".join(risk_alerts)
         )
 
-    if summary["actionable"] or summary["warnings"]:
+    hold_off = summary.get("hold_off", [])
+
+    if summary["actionable"] or summary["warnings"] or hold_off:
         st.markdown("##### 【標的摘要】")
         warn_map = {w["ticker"]: w for w in summary["warnings"]}
         rendered = set()
@@ -152,21 +154,32 @@ def _show_daily_summary_dialog(summary):
             else:
                 fib_str = ""
             detail = "｜".join(p for p in [zone_str, fib_str] if p)
+            quality_note = item.get("quality_note")
 
             w = warn_map.get(ticker)
             if w:
                 header = f"● **{ticker}** ｜ {w['advice']}"
                 reasons = "｜".join(_fmt_reason(r) for r in w["reasons"])
-                lines = [header] + [p for p in [detail, reasons] if p]
-                st.warning("\n\n".join(lines))
+                parts = [p for p in [detail, reasons, quality_note] if p]
+                st.warning("\n\n".join([header] + parts))
             else:
                 header = f"● **{ticker}** ｜ {item['signal']}"
-                st.success(f"{header}\n\n{detail}" if detail else header)
+                body_parts = [p for p in [detail, quality_note] if p]
+                body = "\n\n".join(body_parts)
+                st.success(f"{header}\n\n{body}" if body else header)
 
         for item in summary["warnings"]:
             if item["ticker"] not in rendered:
                 reasons = "｜".join(_fmt_reason(r) for r in item["reasons"])
                 st.warning(f"⚠️ **{item['ticker']}** ｜ {item['advice']}\n\n{reasons}")
+
+        if hold_off:
+            st.markdown("##### 【觀望（量價異常）】")
+            for item in hold_off:
+                rendered.add(item["ticker"])
+                zone_str = f"區間 {item['zone_range']}" if item.get("zone_range") else item.get("signal", "")
+                reason = item.get("quality_note") or "量縮上漲，不追"
+                st.info(f"⚪ **{item['ticker']}** ｜ {zone_str}\n\n{reason}")
 
     if summary["region_gaps"]:
         st.markdown("##### 【配置缺口】")
@@ -178,7 +191,7 @@ def _show_daily_summary_dialog(summary):
                 f" ｜ 缺口 {g['gap_pct'] * 100:+.1f}%"
             )
 
-    if not any([summary["actionable"], summary["warnings"], summary["region_gaps"]]):
+    if not any([summary["actionable"], hold_off, summary["warnings"], summary["region_gaps"]]):
         st.success("✅ 今日無須特別行動，所有標的均正常")
 
     with st.expander("📄 純文字版本"):
@@ -515,6 +528,9 @@ def render_shareholding_component(df, summary=None):
     actionable_map = {
         item["ticker"]: item for item in (summary or {}).get("actionable", [])
     }
+    hold_off_map = {
+        item["ticker"]: item for item in (summary or {}).get("hold_off", [])
+    }
     warning_map = {w["ticker"]: w for w in (summary or {}).get("warnings", [])}
 
     for idx, row in investment_df.iterrows():
@@ -548,6 +564,8 @@ def render_shareholding_component(df, summary=None):
                         indicator = '<span style="margin-left:5px;">🟠</span>'
                     elif ticker in actionable_map:
                         indicator = '<span style="margin-left:5px;">🟢</span>'
+                    elif ticker in hold_off_map:
+                        indicator = '<span style="margin-left:5px;">⚪</span>'
                     else:
                         indicator = ""
                     st.markdown(
@@ -601,4 +619,5 @@ def render_shareholding_component(df, summary=None):
                                 adv_results.iloc[0],
                                 warning=warning_map.get(ticker),
                                 actionable=actionable_map.get(ticker),
+                                hold_off=hold_off_map.get(ticker),
                             )
