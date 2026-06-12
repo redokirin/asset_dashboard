@@ -550,7 +550,7 @@ def render_shareholding_component(df, summary=None):
 
     for idx, row in investment_df.iterrows():
         ticker = row["代碼"]
-        with st.container(border=False):
+        with st.container(border=True):
             with st.container():
                 c1, c2, c3, c4 = st.columns([0.65, 2.2, 1, 1])
                 with c1:
