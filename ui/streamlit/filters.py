@@ -4,7 +4,7 @@ import streamlit as st
 
 def render_asset_filter(df):
     """資產篩選器組件，返回過濾後的 DataFrame"""
-    with st.expander("🔍 資產篩選器", expanded=False):
+    with st.expander("🔍 資產篩選", expanded=False):
         c1, c2 = st.columns(2)
 
         market_options = (

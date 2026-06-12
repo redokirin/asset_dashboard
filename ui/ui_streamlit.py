@@ -48,23 +48,26 @@ def show_streamlit(df, radar_data, exchange_rates):
 
     col_mid, col_right = st.columns([0.7, 1.3])
     with col_mid:
-        summary_container = st.container(border=False)
-        liquidity_container = st.container(border=True)
+        summary_container = st.expander("💹 資產概況", expanded=True)
+        # liquidity_container = st.container(border=True)
         filter_container = st.container(border=False)
 
         with filter_container:
             filtered_df = render_asset_filter(df)
         investment_df, _ = _split_cash_and_investments(filtered_df)
 
-        with liquidity_container:
-            render_liquidity_component(filtered_df)
+        # with liquidity_container:
 
         with summary_container:
             render_schedule_of_assets(filtered_df, investment_df)
-
-        # with st.container(border=False, gap="xxsmall"):
-        with st.expander("圖表", expanded=False):
+            render_liquidity_component(filtered_df)
             render_plotly_pie_charts(investment_df)
+
+            # with st.container(border=False, gap="xxsmall"):
+            # with st.expander("🥧 圖表", expanded=False):
+
+        with st.expander("📰 市場數據", expanded=False):
+            render_market_card(investment_df, radar_data)
 
     _adv_cache = st.session_state.get("_adv_res_cache")
     if _adv_cache is None or _adv_cache.empty:
@@ -87,12 +90,7 @@ def show_streamlit(df, radar_data, exchange_rates):
         _summary = generate_daily_summary(filtered_df, _adv_cache, risk_data=_risk_data)
 
     with col_right:
-        # with st.container(border=False):
-        with st.expander("持倉卡片", expanded=True):
-            render_shareholding_component(investment_df, summary=_summary)
-
-        with st.expander("指數", expanded=False):
-            render_market_card(investment_df, radar_data)
-
-        with st.expander("Tools", expanded=False):
+        with st.expander("🧰 報表工具", expanded=False):
             render_report_component(df)
+        with st.container(border=False):
+            render_shareholding_component(investment_df, summary=_summary)

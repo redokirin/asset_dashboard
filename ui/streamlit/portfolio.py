@@ -70,7 +70,13 @@ def _show_risk_dashboard_dialog(risk_data):
     level_label, level_advice = get_risk_level(score)
     prev_score = get_prev_risk_score()
 
-    _risk_colors = {"保守": "#00c853", "中低": "#a8d08d", "中等": "#ffc107", "中高": "#ff9800", "高風險": "#ff4b4b"}
+    _risk_colors = {
+        "保守": "#00c853",
+        "中低": "#a8d08d",
+        "中等": "#ffc107",
+        "中高": "#ff9800",
+        "高風險": "#ff4b4b",
+    }
     score_color = next((v for k, v in _risk_colors.items() if k in level_label), None)
 
     score_display = f"{score} / 100"
@@ -90,7 +96,10 @@ def _show_risk_dashboard_dialog(risk_data):
         "投資比例": f"{risk_data['invested_ratio']:.1%}",
         "現金緩衝": f"{risk_data['cash_buffer_ratio']:.1%}",
     }
-    st.markdown(render_analysis_metrics_row(metrics, title=f"建議：{level_advice}"), unsafe_allow_html=True)
+    st.markdown(
+        render_analysis_metrics_row(metrics, title=f"建議：{level_advice}"),
+        unsafe_allow_html=True,
+    )
 
     history = get_risk_score_history(30)
     if len(history) >= 2:
@@ -177,7 +186,11 @@ def _show_daily_summary_dialog(summary):
             st.markdown("##### 【觀望（量價異常）】")
             for item in hold_off:
                 rendered.add(item["ticker"])
-                zone_str = f"區間 {item['zone_range']}" if item.get("zone_range") else item.get("signal", "")
+                zone_str = (
+                    f"區間 {item['zone_range']}"
+                    if item.get("zone_range")
+                    else item.get("signal", "")
+                )
                 reason = item.get("quality_note") or "量縮上漲，不追"
                 st.info(f"⚪ **{item['ticker']}** ｜ {zone_str}\n\n{reason}")
 
@@ -191,7 +204,9 @@ def _show_daily_summary_dialog(summary):
                 f" ｜ 缺口 {g['gap_pct'] * 100:+.1f}%"
             )
 
-    if not any([summary["actionable"], hold_off, summary["warnings"], summary["region_gaps"]]):
+    if not any(
+        [summary["actionable"], hold_off, summary["warnings"], summary["region_gaps"]]
+    ):
         st.success("✅ 今日無須特別行動，所有標的均正常")
 
     with st.expander("📄 純文字版本"):
@@ -224,10 +239,10 @@ def render_report_component(df):
             _show_daily_summary_dialog(summary)
 
     with row1[2]:
-        if st.session_state.get("_adv_res_cache") is not None:
-            if st.button("🔄 清除快取", width="stretch"):
-                st.session_state.pop("_adv_res_cache", None)
-                st.rerun()
+        has_cache = st.session_state.get("_adv_res_cache") is not None
+        if st.button("🔄 清除快取", width="stretch", disabled=not has_cache):
+            st.session_state.pop("_adv_res_cache", None)
+            st.rerun()
 
     with row1[3]:
         if st.button("⚡ 風險儀表", width="stretch"):
