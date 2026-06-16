@@ -344,6 +344,10 @@ def show_console_rich(
             }
             table.add_row(*[data_map[c[0]] for c in cols_config])
         console.print(table)
+        daily_pnl = market_share_data.get("daily_pnl", 0)
+        daily_color = "red" if daily_pnl > 0 else "green"
         console.print(
-            f"\n💰 [bold]總市值: ${df['市值'].sum():,}[/] | 📈 [bold]總損益: {investment_df['損益'].sum():+,.0f}[/]"
+            f"\n💰 [bold]總市值: ${df['市值'].sum():,}[/] | "
+            f"📈 [bold]總損益: {investment_df['損益'].sum():+,.0f}[/] | "
+            f"📊 [bold]當日損益: [{daily_color}]{daily_pnl:+,.0f}[/{daily_color}][/]"
         )

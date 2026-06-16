@@ -46,7 +46,7 @@ def _split_cash_and_investments(df):
 def show_streamlit(df, radar_data, exchange_rates):
     load_css()
 
-    col_mid, col_right = st.columns([1.3, 0.7])
+    col_mid, col_right = st.columns([1, 0.8])
     with col_right:
         summary_container = st.expander("💹 資產概況", expanded=False)
         # liquidity_container = st.container(border=True)
