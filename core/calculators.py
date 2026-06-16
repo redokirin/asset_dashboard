@@ -22,6 +22,8 @@ from core.columns import (
     COL_UPDATED_AT,
     COL_VALUE,
     COL_WEIGHT,
+    COL_REGION,
+    COL_KEEP_TWD,
 )
 from core.data_loader import get_assets
 from core.fetchers import fetch_historical_data
@@ -114,7 +116,7 @@ def calculate_asset_row(
         COL_RETURN_PCT: (pl_val / cost_twd * 100) if cost_twd != 0 else 0,
         COL_GET_VALUE: asset.get("get_value", True),
         COL_SETTLEMENT: str(asset.get("settlement", "")).strip(),
-        "region": str(asset.get("region", "")).strip(),
+        COL_REGION: str(asset.get("region", "")).strip(),
     }
 
 
@@ -143,7 +145,7 @@ def calculate_bank_row(asset, exchange_rates):
         COL_RETURN_PCT: 0,
         COL_GET_VALUE: False,
         COL_SETTLEMENT: "",
-        "keepTwd": keep_twd,
+        COL_KEEP_TWD: keep_twd,
     }
 
 
@@ -296,4 +298,14 @@ def calculate_assets_data(exchange_rates):
         return _empty_assets_frame(), {}
 
     market_share = calculate_market_share(df)
+
+    tradeable = df[df[COL_ASSET_TYPE].isin({"ETF", "個股"}) & (df[COL_PRICE] > 0)]
+    market_share["daily_pnl"] = round(
+        (
+            tradeable[COL_CHANGE].fillna(0)
+            * tradeable[COL_MARKET_VALUE]
+            / tradeable[COL_PRICE]
+        ).sum()
+    )
+
     return df, market_share

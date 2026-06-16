@@ -23,6 +23,7 @@ COL_RETURN_PCT = "報酬率"
 COL_WEIGHT = "佔比"
 COL_GET_VALUE = "_get_value"
 COL_SETTLEMENT = "Settlement"
+COL_REGION = "region"
 
 COL_VALUE = "數值"
 COL_CHANGE_PCT = "漲跌幅"
@@ -36,3 +37,5 @@ COL_HOLD_ABILITY_SCORE = "hold_abilityScore"
 COL_COMFORT_SCORE = "comfortScore"
 COL_MATURITY_SCORE = "maturityScore"
 COL_HISTORY_YEARS = "historyYears"
+
+COL_KEEP_TWD = "keepTwd"
