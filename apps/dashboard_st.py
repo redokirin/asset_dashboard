@@ -146,9 +146,7 @@ if __name__ == "__main__":
     if "is_authenticated" not in st.session_state:
         st.session_state.is_authenticated = not USE_PASSWORD
 
-    tab_manual, tab_dashboard = st.tabs(
-        ["🧪 自選代碼量化分析", "📈 全球資產即時監控"]
-    )
+    tab_dashboard, tab_manual = st.tabs(["📈 全球資產即時監控", "🧪 自選代碼量化分析"])
 
     with tab_manual:
         from ui.dashboard_ui import show_manual_analysis_page
@@ -170,6 +168,7 @@ if __name__ == "__main__":
                     st.session_state["show_allocation"] = False
                     st.rerun()
                 from ui.streamlit.allocation_analysis import show_allocation_analysis
+
                 show_allocation_analysis(df_res)
             else:
                 show_streamlit(df_res, radar, exchange_rates)
