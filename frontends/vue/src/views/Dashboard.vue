@@ -19,49 +19,103 @@
     </div>
 
     <template v-if="summary">
-      <SummaryCard :summary="summary" />
+      <!-- 頂部：摘要 + 風險評分 -->
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-5">
+        <div class="lg:col-span-3">
+          <SummaryCard :summary="summary" />
+        </div>
+        <div>
+          <RiskScoreCard v-if="risk" :risk="risk" />
+          <div v-else class="rounded-xl bg-gray-800 p-4 text-xs text-gray-500 animate-pulse">
+            風險評分載入中…
+          </div>
+        </div>
+      </div>
 
+      <!-- 每日摘要（可折疊） -->
+      <DailySummaryCard v-if="dailySummary" :summary="dailySummary" />
+
+      <!-- 主體 -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div class="lg:col-span-2 space-y-5">
-          <AssetTable v-if="assets.length" :assets="assets" />
+          <AssetTable
+            v-if="assets.length"
+            :assets="assets"
+            :advancedMap="advancedMap"
+            :dailySummary="dailySummary"
+            @open-chart="({ ticker, name }) => { chartTicker = ticker; chartName = name }"
+          />
           <LiquidityCard v-if="assets.length" :assets="assets" />
         </div>
         <div class="space-y-5">
           <MarketPieChart v-if="marketShare" :marketShare="marketShare" />
           <AssetPieChart v-if="assets.length" :assets="assets" />
+          <ExportPanel />
         </div>
       </div>
     </template>
 
     <div v-else-if="loading" class="text-center py-20 text-gray-500">載入資料中…</div>
   </div>
+
+  <!-- K線圖 Modal -->
+  <ChartModal
+    v-if="chartTicker"
+    :ticker="chartTicker"
+    :name="chartName"
+    @close="chartTicker = ''"
+  />
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import SummaryCard from '../components/SummaryCard.vue'
+import RiskScoreCard from '../components/RiskScoreCard.vue'
+import DailySummaryCard from '../components/DailySummaryCard.vue'
 import AssetTable from '../components/AssetTable.vue'
+import ChartModal from '../components/ChartModal.vue'
 import MarketPieChart from '../components/MarketPieChart.vue'
 import AssetPieChart from '../components/AssetPieChart.vue'
 import LiquidityCard from '../components/LiquidityCard.vue'
-import { fetchPortfolio } from '../api/portfolio.js'
+import ExportPanel from '../components/ExportPanel.vue'
+import { fetchPortfolio, fetchRisk, fetchDailySummary, fetchAdvanced } from '../api/portfolio.js'
 
-const summary = ref(null)
-const assets = ref([])
-const marketShare = ref(null)
-const loading = ref(false)
-const error = ref('')
-const updatedAt = ref('')
+const summary      = ref(null)
+const assets       = ref([])
+const marketShare  = ref(null)
+const risk         = ref(null)
+const dailySummary = ref(null)
+const advancedMap  = ref({})
+const loading      = ref(false)
+const error        = ref('')
+const updatedAt    = ref('')
+const chartTicker  = ref('')
+const chartName    = ref('')
 
 async function load() {
   loading.value = true
-  error.value = ''
+  error.value   = ''
   try {
+    // portfolio 優先，畫面先出來
     const port = await fetchPortfolio()
-    assets.value = port.assets ?? []
+    assets.value      = port.assets ?? []
     marketShare.value = port.market_share ?? {}
-    summary.value = port.summary
-    updatedAt.value = new Date().toLocaleTimeString('zh-TW')
+    summary.value     = port.summary
+    updatedAt.value   = new Date().toLocaleTimeString('zh-TW')
+
+    // risk、daily summary、advanced 三個平行載入
+    const [riskData, summaryData, advData] = await Promise.allSettled([
+      fetchRisk(),
+      fetchDailySummary(),
+      fetchAdvanced(),
+    ])
+    if (riskData.status    === 'fulfilled') risk.value         = riskData.value
+    if (summaryData.status === 'fulfilled') dailySummary.value = summaryData.value
+    if (advData.status     === 'fulfilled') {
+      const map = {}
+      for (const row of advData.value.assets ?? []) map[row['代碼']] = row
+      advancedMap.value = map
+    }
   } catch (e) {
     error.value = `無法連線 API：${e.message}`
   } finally {

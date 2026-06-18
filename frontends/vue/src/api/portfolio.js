@@ -2,12 +2,44 @@ import axios from 'axios'
 
 const base = import.meta.env.VITE_API_BASE || ''
 
-export async function fetchSummary() {
-  const { data } = await axios.get(`${base}/api/summary`)
+export async function fetchPortfolio() {
+  const { data } = await axios.get(`${base}/api/portfolio`)
   return data
 }
 
-export async function fetchPortfolio() {
-  const { data } = await axios.get(`${base}/api/portfolio`)
+export async function fetchAdvanced() {
+  const { data } = await axios.get(`${base}/api/analysis/advanced`)
+  return data
+}
+
+export async function fetchRisk() {
+  const { data } = await axios.get(`${base}/api/analysis/risk`)
+  return data
+}
+
+export async function fetchDailySummary() {
+  const { data } = await axios.get(`${base}/api/summary/daily`)
+  return data
+}
+
+export async function fetchHistorical(ticker, period = '2y') {
+  const { data } = await axios.get(`${base}/api/ticker/${encodeURIComponent(ticker)}/historical`, {
+    params: { period },
+  })
+  return data
+}
+
+export async function fetchFundamental(ticker) {
+  const { data } = await axios.get(`${base}/api/ticker/${encodeURIComponent(ticker)}/fundamental`)
+  return data
+}
+
+export async function fetchExportAi() {
+  const { data } = await axios.get(`${base}/api/export/ai`)
+  return data
+}
+
+export async function fetchExportAiTicker(ticker) {
+  const { data } = await axios.get(`${base}/api/export/ai/${encodeURIComponent(ticker)}`)
   return data
 }

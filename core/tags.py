@@ -54,6 +54,12 @@ TAG_PB_FAIR         = "pb_fair"          # 📘 合理淨值區間 (PB 1-3)
 TAG_PB_PREMIUM      = "pb_premium"       # ⚠️ 淨值溢價偏高 (PB > 3)
 TAG_PB_EXTREME      = "pb_extreme"       # 🔴 淨值嚴重溢價 (PB > 6)
 
+# Entry zone status
+TAG_ZONE_CHASE  = "zone_chase"   # 🔴 追價警戒
+TAG_ZONE_DAILY  = "zone_daily"   # 🟡 日常加碼
+TAG_ZONE_RETEST = "zone_retest"  # 🟢 回測加碼
+TAG_ZONE_SNIPER = "zone_sniper"  # ⭐ 狙擊加碼
+
 # Fundamental — ETF / fund only
 TAG_HIGH_EFFICIENCY    = "high_efficiency"    # 💎 高效率資產
 TAG_STRONG_MGMT        = "strong_mgmt"        # 🛡️ 強勢管理
@@ -93,6 +99,10 @@ TAG_DISPLAY: dict[str, str] = {
     TAG_PB_FAIR:           "📘 合理淨值區間 (PB 1-3)",
     TAG_PB_PREMIUM:        "⚠️ 淨值溢價偏高 (PB > 3)",
     TAG_PB_EXTREME:        "🔴 淨值嚴重溢價 (PB > 6)",
+    TAG_ZONE_CHASE:        "🔴 追價警戒",
+    TAG_ZONE_DAILY:        "🟡 日常加碼",
+    TAG_ZONE_RETEST:       "🟢 回測加碼",
+    TAG_ZONE_SNIPER:       "⭐ 狙擊加碼",
     TAG_HIGH_EFFICIENCY:   "💎 高效率資產",
     TAG_STRONG_MGMT:       "🛡️ 強勢管理",
     TAG_ALLOC_OPPORTUNITY: "⚖️ 配置機會",

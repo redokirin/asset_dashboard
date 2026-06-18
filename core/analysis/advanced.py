@@ -39,6 +39,7 @@ from core.fetchers import (
     get_ticker_fundamental_info,
 )
 from core.risk import calculate_asset_drawdown
+from core.tags import TAG_DISPLAY, TAG_ZONE_CHASE, TAG_ZONE_DAILY, TAG_ZONE_RETEST, TAG_ZONE_SNIPER
 
 
 def run_advanced_analysis(df_res):
@@ -247,7 +248,8 @@ def run_advanced_analysis(df_res):
                 sniper_upper = None
                 boundary_daily_retest = None
                 boundary_retest_sniper = None
-                entry_zone_status = "-"
+                _zone_tag = None          # raw key，傳給 diagnosis
+                entry_zone_status = "-"  # display string，存入 results
                 if entries and annualized_vol > 0:
                     tolerance = (_REFERENCE_VOL / annualized_vol) * _BASE_TOLERANCE
                     _daily_bid = entries[COL_DAILY_LEVEL]
@@ -259,13 +261,14 @@ def run_advanced_analysis(df_res):
                     boundary_daily_retest = round((_daily_bid + retest_upper) / 2, 2)
                     boundary_retest_sniper = round((_retest_bid + sniper_upper) / 2, 2)
                     if price_val > daily_upper:
-                        entry_zone_status = "🔴 追價警戒"
+                        _zone_tag = TAG_ZONE_CHASE
                     elif price_val > boundary_daily_retest:
-                        entry_zone_status = "🟡 日常加碼"
+                        _zone_tag = TAG_ZONE_DAILY
                     elif price_val > boundary_retest_sniper:
-                        entry_zone_status = "🟢 回測加碼"
+                        _zone_tag = TAG_ZONE_RETEST
                     else:
-                        entry_zone_status = "⭐ 狙擊加碼"
+                        _zone_tag = TAG_ZONE_SNIPER
+                    entry_zone_status = TAG_DISPLAY.get(_zone_tag, "-")
 
                 full_diag_text, tags = generate_advanced_diagnosis(
                     bias=bias_numeric,
@@ -287,7 +290,7 @@ def run_advanced_analysis(df_res):
                     asset_type=asset_type,
                     alpha_win_rate=alpha_win_str,
                     history_years=history_years,
-                    entry_zone_status=entry_zone_status,
+                    entry_zone_status=_zone_tag,  # raw key
                 )
 
                 results.append(

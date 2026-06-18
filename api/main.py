@@ -18,6 +18,7 @@ from core.analysis.advanced import run_advanced_analysis
 from core.analysis.overall_risk import calculate_overall_risk_score, get_risk_level, get_risk_alerts
 from core.daily_summary import generate_daily_summary
 from core.exporters import export_for_ai, export_single_target_for_ai
+from core.tags import TAG_DISPLAY
 
 app = FastAPI(title="Asset Tracking API", version="0.1.0")
 
@@ -123,7 +124,11 @@ def get_advanced_analysis():
     adv_res = _load_advanced()
     if adv_res.empty:
         return {"assets": []}
-    return {"assets": _df_to_records(adv_res)}
+    records = _df_to_records(adv_res)
+    for rec in records:
+        if isinstance(rec.get("tags"), list):
+            rec["tags"] = [TAG_DISPLAY.get(t, t) for t in rec["tags"]]
+    return {"assets": records}
 
 
 @app.get("/api/summary/daily")
