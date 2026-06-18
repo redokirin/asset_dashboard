@@ -207,19 +207,29 @@ const stats = computed(() => {
 
 // --- 資料載入 ---
 async function loadChart() {
+  // 每次重新載入前先清掉舊 chart，避免指向已移除的 DOM 節點
+  if (chart) {
+    chart.dispose()
+    chart = null
+    window.removeEventListener('resize', onResize)
+  }
+
   loading.value = true
   error.value   = ''
   rawData.value = []
   try {
-    const res   = await fetchHistorical(props.ticker, period.value)
+    const res = await fetchHistorical(props.ticker, period.value)
     rawData.value = res.data ?? []
     if (!rawData.value.length) { error.value = '無歷史資料'; return }
 
+    // 先關掉 loading，讓 v-else 的 chartEl div 出現在 DOM 後再 init
+    loading.value = false
     await nextTick()
-    if (!chart) {
-      chart = echarts.init(chartEl.value, 'dark')
-      window.addEventListener('resize', onResize)
-    }
+
+    if (!chartEl.value) { error.value = '圖表容器未就緒'; return }
+
+    chart = echarts.init(chartEl.value, 'dark')
+    window.addEventListener('resize', onResize)
     chart.setOption(buildOption(rawData.value), true)
   } catch (e) {
     error.value = `載入失敗：${e.message}`
