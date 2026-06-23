@@ -101,7 +101,11 @@
         class="border-t border-gray-700/50 bg-gray-850"
       >
         <!-- 成本區塊（永遠顯示） -->
-        <div class="px-4 py-3 grid grid-cols-3 gap-2 border-b border-gray-700/40">
+        <div class="px-4 py-3 grid grid-cols-4 gap-2 border-b border-gray-700/40">
+          <div class="rounded-lg bg-gray-700/40 px-3 py-2 text-center">
+            <div class="text-sm font-medium tabular-nums">{{ fmtUnits(row['單位數']) }}</div>
+            <div class="text-xs text-gray-500 mt-0.5">持股數</div>
+          </div>
           <div class="rounded-lg bg-gray-700/40 px-3 py-2 text-center">
             <div class="text-sm font-medium tabular-nums">{{ fmtCost(row['成本']) }}</div>
             <div class="text-xs text-gray-500 mt-0.5">成本</div>
@@ -237,6 +241,7 @@ function tagClass(n) {
 
 const intFmt   = new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 0 })
 const priceFmt = new Intl.NumberFormat('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const fmtUnits  = (n) => n == null ? '—' : new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 4 }).format(n)
 const fmtPrice  = (n) => n == null ? '—' : priceFmt.format(n)
 const fmtCost   = (n) => n == null ? '—' : intFmt.format(n)
 const fmtChange = (n) => {
