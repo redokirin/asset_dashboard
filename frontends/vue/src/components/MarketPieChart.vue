@@ -28,16 +28,16 @@ function buildOption(data) {
       formatter: '{b}: {d}%',
     },
     legend: {
-      orient: 'vertical',
-      right: 10,
-      top: 'center',
+      orient: 'horizontal',
+      bottom: 0,
+      left: 'center',
       textStyle: { color: '#9ca3af', fontSize: 12 },
     },
     series: [
       {
         type: 'pie',
         radius: ['40%', '70%'],
-        center: ['40%', '50%'],
+        center: ['50%', '42%'],
         data: items,
         label: { show: false },
         emphasis: {

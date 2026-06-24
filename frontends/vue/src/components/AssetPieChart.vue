@@ -1,12 +1,12 @@
 <template>
   <div class="rounded-xl bg-gray-800 p-4">
     <div class="font-semibold text-sm mb-3">資產佔比</div>
-    <div ref="chartEl" class="w-full" style="height: 280px" />
+    <div ref="chartEl" class="w-full" :style="`height: ${chartHeight}px`" />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import * as echarts from 'echarts'
 
 const props = defineProps({
@@ -16,12 +16,23 @@ const props = defineProps({
 const chartEl = ref(null)
 let chart = null
 
-function buildOption(assets) {
-  const items = assets
+const PIE_HEIGHT = 220  // 圓餅固定高度
+const ROW_HEIGHT = 22   // 每列圖例高度
+const ITEMS_PER_ROW = 4 // 估算每列項目數
+
+const filteredItems = computed(() =>
+  props.assets
     .filter(r => r['市場'] !== '現金' && r['enabled'] !== 0 && (r['市值'] ?? 0) > 0)
     .map(r => ({ name: r['名稱'] || r['代碼'], value: r['市值'] }))
     .sort((a, b) => b.value - a.value)
+)
 
+const chartHeight = computed(() => {
+  const rows = Math.ceil(filteredItems.value.length / ITEMS_PER_ROW)
+  return PIE_HEIGHT + rows * ROW_HEIGHT + 16
+})
+
+function buildOption(items) {
   return {
     backgroundColor: 'transparent',
     tooltip: {
@@ -29,17 +40,17 @@ function buildOption(assets) {
       formatter: (p) => `${p.name}<br/>${p.percent}%`,
     },
     legend: {
-      orient: 'vertical',
-      right: 10,
-      top: 'middle',
+      orient: 'horizontal',
+      bottom: 0,
+      left: 'center',
       textStyle: { color: '#9ca3af', fontSize: 11 },
-      type: 'scroll',
+      itemGap: 8,
     },
     series: [
       {
         type: 'pie',
-        radius: ['40%', '70%'],
-        center: ['38%', '50%'],
+        radius: ['38%', '65%'],
+        center: ['50%', `${PIE_HEIGHT / 2}px`],
         data: items,
         label: { show: false },
         emphasis: {
@@ -52,7 +63,7 @@ function buildOption(assets) {
 
 onMounted(() => {
   chart = echarts.init(chartEl.value, 'dark')
-  chart.setOption(buildOption(props.assets))
+  chart.setOption(buildOption(filteredItems.value))
   window.addEventListener('resize', () => chart?.resize())
 })
 
@@ -61,9 +72,9 @@ onUnmounted(() => {
   window.removeEventListener('resize', () => chart?.resize())
 })
 
-watch(
-  () => props.assets,
-  (val) => chart?.setOption(buildOption(val), true),
-  { deep: true }
-)
+watch(filteredItems, (items) => {
+  if (!chart) return
+  chart.setOption(buildOption(items), true)
+  chart.resize()
+}, { deep: true })
 </script>
