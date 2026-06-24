@@ -4,14 +4,14 @@
       <span class="font-semibold text-sm">持倉明細</span>
       <div class="flex items-center gap-2 text-xs text-gray-400">
         <!-- 視圖切換 tag -->
-        <div class="flex gap-1 pr-2 border-r border-gray-700/60">
+        <!-- <div class="flex gap-1 pr-2 border-r border-gray-700/60">
           <button
             v-for="view in VIEW_OPTS"
             :key="view.key"
             :class="['px-2 py-0.5 rounded transition-colors', viewMode === view.key ? 'bg-blue-600/50 text-blue-300' : 'hover:text-white']"
             @click="viewMode = view.key"
           >{{ view.label }}</button>
-        </div>
+        </div> -->
         <span>排序：</span>
         <button
           v-for="opt in SORT_OPTS"
