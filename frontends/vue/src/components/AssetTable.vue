@@ -32,66 +32,70 @@
     >
       <!-- 主列（點擊展開） -->
       <div
-        class="px-4 py-3 grid gap-x-3 cursor-pointer hover:bg-gray-750 transition-colors"
-        style="grid-template-columns: 1fr auto auto auto"
+        class="px-4 py-3 cursor-pointer hover:bg-gray-750 transition-colors"
         @click="toggleExpand(row['代碼'])"
       >
-        <!-- 左：meta + 名稱 -->
-        <div class="min-w-0">
-          <div class="text-xs text-gray-400 leading-tight">
-            {{ row['市場'] }} |
-            <button
-              class="font-mono hover:text-blue-400 hover:underline transition-colors"
-              @click.stop="emit('open-chart', { ticker: row['代碼'], name: row['名稱'] })"
-            >{{ row['代碼'] }}</button>
-            <span class="ml-1">({{ fmtPct1(row['佔比']) }}%)</span>
-            <span v-if="row['更新時間']" class="ml-2">⏳ {{ row['更新時間'] }}</span>
-          </div>
-          <div class="flex items-center gap-2 mt-0.5">
-            <span class="font-semibold text-sm truncate">{{ row['名稱'] }}</span>
-            <span
-              v-if="adv(row)?.entryZoneStatus && adv(row).entryZoneStatus !== '-'"
-              class="text-xs shrink-0"
-            >{{ adv(row).entryZoneStatus }}</span>
-          </div>
-        </div>
-
-        <!-- 中：現價 / 漲跌 -->
-        <div class="text-right shrink-0">
-          <div class="text-xs text-gray-400">現價 / 漲跌</div>
-          <div class="flex items-center gap-1.5 justify-end mt-0.5">
-            <span class="text-sm font-medium tabular-nums">{{ fmtPrice(row['股價']) }}</span>
-            <span :class="['text-xs px-1.5 py-0.5 rounded tabular-nums', tagClass(row['漲跌'])]">
-              {{ fmtChange(row['漲跌']) }}
-            </span>
-          </div>
-        </div>
-
-        <!-- 右：損益/報酬 或 成本/均價（依視圖切換） -->
-        <div class="text-right shrink-0">
-          <template v-if="viewMode === 'pl'">
-            <div class="text-xs text-gray-400">損益 / 報酬</div>
-            <div class="flex items-center gap-1.5 justify-end mt-0.5">
-              <span class="text-sm font-medium tabular-nums">{{ fmtPl(row['損益']) }}</span>
-              <span :class="['text-xs px-1.5 py-0.5 rounded tabular-nums', tagClass(row['報酬率'])]">
-                {{ fmtRoi(row['報酬率']) }}
-              </span>
+        <div class="flex flex-wrap sm:flex-nowrap sm:items-center items-start gap-x-3 gap-y-1.5">
+          <!-- 左：meta + 名稱（手機佔滿整行，桌機 flex-1） -->
+          <div class="w-full sm:flex-1 sm:w-auto min-w-0">
+            <div class="text-xs text-gray-400 leading-tight">
+              {{ row['市場'] }} |
+              <button
+                class="font-mono hover:text-blue-400 hover:underline transition-colors"
+                @click.stop="emit('open-chart', { ticker: row['代碼'], name: row['名稱'] })"
+              >{{ row['代碼'] }}</button>
+              <span class="ml-1">({{ fmtPct1(row['佔比']) }}%)</span>
+              <span v-if="row['更新時間']" class="ml-2">⏳ {{ row['更新時間'] }}</span>
             </div>
-          </template>
-          <template v-else>
-            <div class="text-xs text-gray-400">成本 / 均價</div>
-            <div class="flex items-center gap-1.5 justify-end mt-0.5">
-              <span class="text-sm font-medium tabular-nums">{{ fmtCost(row['成本']) }}</span>
-              <span class="text-xs px-1.5 py-0.5 rounded tabular-nums bg-gray-700 text-gray-300">
-                {{ fmtPrice(row['平均成本']) }}
-              </span>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="font-semibold text-sm truncate">{{ row['名稱'] }}</span>
+              <span
+                v-if="adv(row)?.entryZoneStatus && adv(row).entryZoneStatus !== '-'"
+                class="text-xs shrink-0"
+              >{{ adv(row).entryZoneStatus }}</span>
             </div>
-          </template>
-        </div>
+          </div>
 
-        <!-- 展開箭頭 -->
-        <div class="flex items-center text-gray-600 shrink-0">
-          <span class="text-xs">{{ expanded.has(row['代碼']) ? '▲' : '▼' }}</span>
+          <!-- 中右 + 箭頭：手機靠右下，桌機接在名稱後 -->
+          <div class="flex items-center gap-3 ml-auto sm:ml-0 shrink-0">
+            <!-- 中：現價 / 漲跌 -->
+            <div class="text-right">
+              <div class="text-xs text-gray-400">現價 / 漲跌</div>
+              <div class="flex items-center gap-1.5 justify-end mt-0.5">
+                <span class="text-sm font-medium tabular-nums">{{ fmtPrice(row['股價']) }}</span>
+                <span :class="['text-xs px-1.5 py-0.5 rounded tabular-nums', tagClass(row['漲跌'])]">
+                  {{ fmtChange(row['漲跌']) }}
+                </span>
+              </div>
+            </div>
+
+            <!-- 右：損益/報酬 或 成本/均價（依視圖切換） -->
+            <div class="text-right">
+              <template v-if="viewMode === 'pl'">
+                <div class="text-xs text-gray-400">損益 / 報酬</div>
+                <div class="flex items-center gap-1.5 justify-end mt-0.5">
+                  <span class="text-sm font-medium tabular-nums">{{ fmtPl(row['損益']) }}</span>
+                  <span :class="['text-xs px-1.5 py-0.5 rounded tabular-nums', tagClass(row['報酬率'])]">
+                    {{ fmtRoi(row['報酬率']) }}
+                  </span>
+                </div>
+              </template>
+              <template v-else>
+                <div class="text-xs text-gray-400">成本 / 均價</div>
+                <div class="flex items-center gap-1.5 justify-end mt-0.5">
+                  <span class="text-sm font-medium tabular-nums">{{ fmtCost(row['成本']) }}</span>
+                  <span class="text-xs px-1.5 py-0.5 rounded tabular-nums bg-gray-700 text-gray-300">
+                    {{ fmtPrice(row['平均成本']) }}
+                  </span>
+                </div>
+              </template>
+            </div>
+
+            <!-- 展開箭頭 -->
+            <div class="flex items-center text-gray-600">
+              <span class="text-xs">{{ expanded.has(row['代碼']) ? '▲' : '▼' }}</span>
+            </div>
+          </div>
         </div>
       </div>
 
