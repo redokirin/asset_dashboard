@@ -2,6 +2,9 @@ import sys
 import os
 import math
 import time
+import asyncio
+import datetime
+from contextlib import asynccontextmanager
 from functools import lru_cache
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -20,7 +23,44 @@ from core.daily_summary import generate_daily_summary
 from core.exporters import export_for_ai, export_single_target_for_ai
 from core.tags import TAG_DISPLAY
 
-app = FastAPI(title="Asset Tracking API", version="0.1.0")
+_TZ_TW = datetime.timezone(datetime.timedelta(hours=8))
+_WARM_INTERVAL = 9 * 60  # 每 9 分鐘（< portfolio TTL 10 分鐘）
+
+def _is_trading_hours() -> bool:
+    """台股 09:00–13:30 / 日股 08:00–14:30（台灣時間），週一~五。"""
+    now = datetime.datetime.now(tz=_TZ_TW)
+    if now.weekday() >= 5:
+        return False
+    t = now.hour * 60 + now.minute
+    return (8 * 60) <= t <= (14 * 60 + 30)
+
+
+async def _cache_warmer():
+    while True:
+        await asyncio.sleep(_WARM_INTERVAL)
+        if _is_trading_hours():
+            try:
+                _load_data()
+            except Exception:
+                pass
+            try:
+                _load_advanced()
+            except Exception:
+                pass
+
+
+@asynccontextmanager
+async def lifespan(app):
+    task = asyncio.create_task(_cache_warmer())
+    yield
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
+app = FastAPI(title="Asset Tracking API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
