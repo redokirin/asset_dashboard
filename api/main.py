@@ -69,8 +69,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_PORTFOLIO_TTL = 600   # 秒：GSheets + 股價快取時間
-_ANALYSIS_TTL  = 3600  # 秒：量化分析快取時間（yfinance batch 下載較慢）
+_PORTFOLIO_TTL      = 600    # 開盤：10 分鐘
+_PORTFOLIO_TTL_IDLE = 7200  # 收盤：2 小時
+_ANALYSIS_TTL       = 3600  # 開盤：1 小時
+_ANALYSIS_TTL_IDLE  = 86400 # 收盤：24 小時
 
 
 def _safe(v):
@@ -111,24 +113,23 @@ def _cached_portfolio(cache_key: int):
 
 def _load_data():
     try:
-        cache_key = int(time.time() // _PORTFOLIO_TTL)
-        return _cached_portfolio(cache_key)
+        ttl = _PORTFOLIO_TTL if _is_trading_hours() else _PORTFOLIO_TTL_IDLE
+        return _cached_portfolio(int(time.time() // ttl))
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
 
 @lru_cache(maxsize=1)
 def _cached_advanced(cache_key: int):
-    """cache_key = int(time.time() // _ANALYSIS_TTL)，每小時失效一次。"""
-    portfolio_key = int(time.time() // _PORTFOLIO_TTL)
-    df, _, _, _ = _cached_portfolio(portfolio_key)
+    ttl = _PORTFOLIO_TTL if _is_trading_hours() else _PORTFOLIO_TTL_IDLE
+    df, _, _, _ = _cached_portfolio(int(time.time() // ttl))
     return run_advanced_analysis(df)
 
 
 def _load_advanced():
     try:
-        cache_key = int(time.time() // _ANALYSIS_TTL)
-        return _cached_advanced(cache_key)
+        ttl = _ANALYSIS_TTL if _is_trading_hours() else _ANALYSIS_TTL_IDLE
+        return _cached_advanced(int(time.time() // ttl))
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
