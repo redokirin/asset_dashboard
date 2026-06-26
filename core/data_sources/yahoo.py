@@ -166,6 +166,29 @@ def fetch_ohlc(ticker: str, date: str) -> dict | None:
         return None
 
 
+def fetch_fast_info(tickers: list) -> dict:
+    """批次取得即時報價與前日收盤，回傳 {ticker: {price, change, previous_close, date}}。"""
+    import datetime
+    today = datetime.date.today().strftime("%Y-%m-%d")
+    result = {}
+    for ticker in tickers:
+        try:
+            fi = yf.Ticker(ticker).fast_info
+            price = fi.last_price
+            prev  = fi.previous_close
+            if price is None or prev is None:
+                continue
+            result[ticker] = {
+                "price":          float(price),
+                "change":         float(price - prev),
+                "previous_close": float(prev),
+                "date":           today,
+            }
+        except Exception as exc:
+            logging.warning(f"[fast_info] {ticker} 失敗: {exc}")
+    return result
+
+
 def fetch_common_data(tickers, period="2y", fetchers=None):
     """抓取基準指數或匯率等共用數據"""
     normalized_tickers = normalize_tickers(tickers)

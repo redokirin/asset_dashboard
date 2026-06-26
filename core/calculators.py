@@ -27,6 +27,7 @@ from core.columns import (
 )
 from core.data_loader import get_assets
 from core.fetchers import fetch_historical_data
+from core.data_sources.yahoo import fetch_fast_info
 
 
 def calculate_tick_price(target_price, market_type):
@@ -200,57 +201,59 @@ def fetch_batch_prices(assets, cat_key):
     batch_prices = {}
     batch_changes = {}
     batch_times = {}
-    tickers = []
-    for asset in assets.get(cat_key, {}).values():
-        if _is_enabled(asset.get("enabled")) and _is_enabled(asset.get("get_value")):
-            tickers.append(asset["id"])
+    tickers = [
+        asset["id"]
+        for asset in assets.get(cat_key, {}).values()
+        if _is_enabled(asset.get("enabled")) and _is_enabled(asset.get("get_value"))
+    ]
 
     if not tickers:
         return batch_prices, batch_changes, batch_times
 
-    try:
-        logging.info(f"正在抓取 {cat_key} 價格: {tickers}")
-        hist_data = fetch_historical_data(tuple(tickers), period="1mo")
+    # 優先用 fast_info 取即時報價與漲跌（lastPrice - previousClose）
+    logging.info(f"正在抓取 {cat_key} fast_info: {tickers}")
+    fast = fetch_fast_info(tickers)
+    for ticker, info in fast.items():
+        batch_prices[ticker]  = info["price"]
+        batch_changes[ticker] = info["change"]
+        batch_times[ticker]   = info["date"]
 
-        for ticker in tickers:
-            try:
-                df = _extract_ticker_history(hist_data, ticker, len(tickers))
-                if df is None or df.empty or "Close" not in df.columns:
-                    continue
-
-                close_s = df["Close"]
-                df_clean = close_s[close_s.notnull()].copy()
-                if df_clean.empty:
-                    continue
-
-                last_val = df_clean.iloc[-1]
-                batch_prices[ticker] = (
-                    float(last_val.iloc[0])
-                    if isinstance(last_val, pd.Series)
-                    else float(last_val)
-                )
+    # 對 fast_info 失敗的標的，退回歷史資料
+    missing = [t for t in tickers if t not in batch_prices]
+    if missing:
+        logging.info(f"fast_info 失敗，改用歷史資料: {missing}")
+        try:
+            hist_data = fetch_historical_data(tuple(missing), period="1mo")
+            for ticker in missing:
                 try:
-                    last_time = pd.to_datetime(df_clean.index[-1])
-                    if last_time.tzinfo is None:
-                        last_time = last_time.tz_localize("UTC")
-                    batch_times[ticker] = last_time.tz_convert("Asia/Taipei").strftime(
-                        "%Y-%m-%d"
+                    df = _extract_ticker_history(hist_data, ticker, len(missing))
+                    if df is None or df.empty or "Close" not in df.columns:
+                        continue
+                    close_s = df["Close"]
+                    df_clean = close_s[close_s.notnull()].copy()
+                    if df_clean.empty:
+                        continue
+                    last_val = df_clean.iloc[-1]
+                    batch_prices[ticker] = (
+                        float(last_val.iloc[0]) if isinstance(last_val, pd.Series) else float(last_val)
                     )
-                except Exception:
-                    batch_times[ticker] = ""
-
-                if len(df_clean) >= 2:
-                    prev_val = df_clean.iloc[-2]
-                    p_val = (
-                        float(prev_val.iloc[0])
-                        if isinstance(prev_val, pd.Series)
-                        else float(prev_val)
-                    )
-                    batch_changes[ticker] = float(batch_prices[ticker] - p_val)
-            except Exception as e:
-                logging.warning(f"解析 {ticker} 價格失敗: {e}")
-    except Exception as e:
-        logging.error(f"批次抓取 {cat_key} 失敗: {e}")
+                    try:
+                        last_time = pd.to_datetime(df_clean.index[-1])
+                        if last_time.tzinfo is None:
+                            last_time = last_time.tz_localize("UTC")
+                        batch_times[ticker] = last_time.tz_convert("Asia/Taipei").strftime("%Y-%m-%d")
+                    except Exception:
+                        batch_times[ticker] = ""
+                    if len(df_clean) >= 2:
+                        prev_val = df_clean.iloc[-2]
+                        p_val = (
+                            float(prev_val.iloc[0]) if isinstance(prev_val, pd.Series) else float(prev_val)
+                        )
+                        batch_changes[ticker] = float(batch_prices[ticker] - p_val)
+                except Exception as e:
+                    logging.warning(f"解析 {ticker} 歷史價格失敗: {e}")
+        except Exception as e:
+            logging.error(f"批次歷史抓取 {cat_key} 失敗: {e}")
 
     return batch_prices, batch_changes, batch_times
 
