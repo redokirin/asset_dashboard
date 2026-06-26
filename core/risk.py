@@ -157,9 +157,7 @@ def calculate_drawdown(
     if max_drawdown == 0.0:
         pain_ratio = 0.0
     else:
-        pain_ratio = min(
-            1.0, max(0.0, abs(current_drawdown) / abs(max_drawdown))
-        )
+        pain_ratio = min(1.0, max(0.0, abs(current_drawdown) / abs(max_drawdown)))
 
     comfort_score = _compute_comfort_score(max_drawdown)
 

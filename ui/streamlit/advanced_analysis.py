@@ -130,7 +130,7 @@ def render_advanced_analysis_ui(res, warning=None, actionable=None, hold_off=Non
                     _price_pct = 75.0 - ((_p - _brs) / _zr) * 25
                 else:
                     _price_pct = min(100.0, 75.0 + ((_brs - _p) / _zr) * 25)
-            except ValueError, TypeError, ZeroDivisionError:
+            except (ValueError, TypeError, ZeroDivisionError):
                 _price_pct = 12.5
 
             st.markdown(
@@ -173,7 +173,13 @@ def render_advanced_analysis_ui(res, warning=None, actionable=None, hold_off=Non
         tags = res.get("tags")
         if tags:
             from core.tags import TAG_DISPLAY
-            tag_html = "".join([f'<span class="light_tags">{TAG_DISPLAY.get(t, t)}</span>' for t in tags])
+
+            tag_html = "".join(
+                [
+                    f'<span class="light_tags">{TAG_DISPLAY.get(t, t)}</span>'
+                    for t in tags
+                ]
+            )
             st.markdown(
                 f"<div class='tag-report-row'>{tag_html}</div>",
                 unsafe_allow_html=True,
@@ -183,7 +189,9 @@ def render_advanced_analysis_ui(res, warning=None, actionable=None, hold_off=Non
             st.info(str(diag))
         if hold_off:
             reason = hold_off.get("quality_note") or "量縮上漲，不追"
-            zone_str = f"區間 {hold_off['zone_range']}" if hold_off.get("zone_range") else ""
+            zone_str = (
+                f"區間 {hold_off['zone_range']}" if hold_off.get("zone_range") else ""
+            )
             body = "｜".join(p for p in [zone_str, reason] if p)
             st.info(f"⚪ 觀望\n\n{body}")
         if warning:
@@ -259,11 +267,11 @@ def render_advanced_analysis_ui(res, warning=None, actionable=None, hold_off=Non
         eps_v = res.get("EPS")
         try:
             pe_str = f"{float(pe_v):.1f}" if pe_v is not None else "-"
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             pe_str = "-"
         try:
             eps_str = f"{float(eps_v):.2f}" if eps_v is not None else "-"
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             eps_str = "-"
 
         fund_row = render_analysis_metrics_row(
