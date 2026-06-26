@@ -2,17 +2,15 @@
     <div class="min-h-screen p-4 md:p-6 space-y-5">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-4">
-                <h1 class="text-lg font-bold tracking-tight">資產追蹤看板</h1>
+                <!-- <h1 class="text-lg font-bold tracking-tight">資產追蹤看板</h1> -->
                 <!-- 頁面切換 -->
                 <div class="flex gap-0.5 text-xs border border-gray-700 rounded-lg overflow-hidden">
                     <button
                         :class="['px-3 py-1.5 transition-colors', page === 'portfolio' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-700']"
-                        @click="page = 'portfolio'"
-                    >持倉</button>
+                        @click="page = 'portfolio'">持倉看板</button>
                     <button
                         :class="['px-3 py-1.5 transition-colors', page === 'manual' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-700']"
-                        @click="page = 'manual'"
-                    >自選分析</button>
+                        @click="page = 'manual'">自選分析</button>
                 </div>
             </div>
             <div class="flex items-center gap-3">
