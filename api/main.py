@@ -13,8 +13,13 @@ import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
-from core.columns import COL_MARKET_VALUE, COL_COST, COL_PROFIT_LOSS
+from core.columns import (
+    COL_ASSET_TYPE, COL_AVG_COST, COL_BUY_LEVELS, COL_CHANGE, COL_COST,
+    COL_CURRENCY, COL_GET_VALUE, COL_MARKET, COL_MARKET_VALUE, COL_NAME,
+    COL_PRICE, COL_PROFIT_LOSS, COL_RETURN_PCT, COL_TICKER, COL_UNITS, COL_WEIGHT,
+)
 from core.fetchers import get_market_radar_data, fetch_historical_data, get_ticker_fundamental_info
 from core.calculators import exchange_rate, calculate_assets_data
 from core.analysis.advanced import run_advanced_analysis
@@ -65,7 +70,7 @@ app = FastAPI(title="Asset Tracking API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -237,6 +242,60 @@ def get_export_ai_ticker(ticker: str):
 def get_ticker_fundamental(ticker: str):
     info = get_ticker_fundamental_info(ticker)
     return _safe_obj(info)
+
+
+class ManualAnalysisRequest(BaseModel):
+    tickers: list[str]
+
+
+@app.post("/api/analysis/manual")
+def post_manual_analysis(req: ManualAnalysisRequest):
+    tickers = [t.strip().upper() for t in req.tickers if t.strip()]
+    if not tickers:
+        return {"assets": []}
+
+    manual_df = pd.DataFrame([
+        {
+            COL_MARKET: "手動",
+            COL_ASSET_TYPE: "個股",
+            COL_NAME: t,
+            COL_TICKER: t,
+            COL_CURRENCY: "TWD",
+            COL_UNITS: 0,
+            COL_AVG_COST: 0.0,
+            COL_CHANGE: None,
+            COL_PRICE: 0.0,
+            COL_BUY_LEVELS: 0.0,
+            COL_COST: 0,
+            COL_MARKET_VALUE: 0,
+            COL_PROFIT_LOSS: 0,
+            COL_RETURN_PCT: 0.0,
+            COL_WEIGHT: 0.0,
+            COL_GET_VALUE: True,
+        }
+        for t in tickers
+    ])
+
+    try:
+        adv = run_advanced_analysis(manual_df)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    if adv.empty:
+        return {"assets": []}
+
+    records = _df_to_records(adv)
+    for rec in records:
+        if isinstance(rec.get("tags"), list):
+            rec["tags"] = [TAG_DISPLAY.get(t, t) for t in rec["tags"]]
+        try:
+            ticker_rows = adv[adv[COL_TICKER] == rec.get("代碼")]
+            if not ticker_rows.empty:
+                rec["_report"] = export_single_target_for_ai(ticker_rows.iloc[0])
+        except Exception:
+            rec["_report"] = None
+
+    return {"assets": records}
 
 
 @app.get("/api/analysis/risk")

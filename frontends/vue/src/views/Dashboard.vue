@@ -1,55 +1,73 @@
 <template>
     <div class="min-h-screen p-4 md:p-6 space-y-5">
         <div class="flex items-center justify-between">
-            <h1 class="text-lg font-bold tracking-tight">資產追蹤看板</h1>
+            <div class="flex items-center gap-4">
+                <h1 class="text-lg font-bold tracking-tight">資產追蹤看板</h1>
+                <!-- 頁面切換 -->
+                <div class="flex gap-0.5 text-xs border border-gray-700 rounded-lg overflow-hidden">
+                    <button
+                        :class="['px-3 py-1.5 transition-colors', page === 'portfolio' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-700']"
+                        @click="page = 'portfolio'"
+                    >持倉</button>
+                    <button
+                        :class="['px-3 py-1.5 transition-colors', page === 'manual' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-700']"
+                        @click="page = 'manual'"
+                    >自選分析</button>
+                </div>
+            </div>
             <div class="flex items-center gap-3">
                 <span v-if="updatedAt" class="text-xs text-gray-500">{{ updatedAt }}</span>
-                <button @click="load" :disabled="loading"
+                <button v-if="page === 'portfolio'" @click="load" :disabled="loading"
                     class="text-xs px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-50 transition-colors">
                     {{ loading ? '載入中…' : '重新整理' }}
                 </button>
             </div>
         </div>
 
-        <div v-if="error" class="rounded-xl bg-red-900/40 border border-red-700 p-4 text-sm text-red-300">
-            {{ error }}
-        </div>
+        <!-- 自選分析頁 -->
+        <ManualAnalysis v-if="page === 'manual'" />
 
-        <template v-if="summary">
-            <!-- 頂部：摘要 + 風險評分 -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                <div class="lg:col-span-3">
-                    <SummaryCard :summary="summary" />
-                </div>
+        <!-- 持倉頁 -->
+        <template v-if="page === 'portfolio'">
+            <div v-if="error" class="rounded-xl bg-red-900/40 border border-red-700 p-4 text-sm text-red-300">
+                {{ error }}
             </div>
-            <!-- 主體 -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                <div class="lg:col-span-2 space-y-5">
-                    <!-- 每日摘要（可折疊） -->
-                    <DailySummaryCard v-if="dailySummary" :summary="dailySummary" />
-                    <AssetTable v-if="assets.length" :assets="assets" :advancedMap="advancedMap"
-                        :dailySummary="dailySummary"
-                        @open-chart="({ ticker, name }) => { chartTicker = ticker; chartName = name }" />
-                </div>
-                <div class="space-y-5">
-                    <div>
-                        <RiskScoreCard v-if="risk" :risk="risk" />
-                        <div v-else class="rounded-xl bg-gray-800 p-4 text-xs text-gray-500 animate-pulse">
-                            風險評分載入中…
-                        </div>
+
+            <template v-if="summary">
+                <!-- 頂部：摘要 + 風險評分 -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                    <div class="lg:col-span-3">
+                        <SummaryCard :summary="summary" />
                     </div>
-                    <LiquidityCard v-if="assets.length" :assets="assets" />
-                    <MarketPieChart v-if="marketShare" :marketShare="marketShare" />
-                    <AssetPieChart v-if="assets.length" :assets="assets" />
-                    <ExportPanel />
                 </div>
-            </div>
-        </template>
+                <!-- 主體 -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                    <div class="lg:col-span-2 space-y-5">
+                        <DailySummaryCard v-if="dailySummary" :summary="dailySummary" />
+                        <AssetTable v-if="assets.length" :assets="assets" :advancedMap="advancedMap"
+                            :dailySummary="dailySummary"
+                            @open-chart="({ ticker, name }) => { chartTicker = ticker; chartName = name }" />
+                    </div>
+                    <div class="space-y-5">
+                        <div>
+                            <RiskScoreCard v-if="risk" :risk="risk" />
+                            <div v-else class="rounded-xl bg-gray-800 p-4 text-xs text-gray-500 animate-pulse">
+                                風險評分載入中…
+                            </div>
+                        </div>
+                        <LiquidityCard v-if="assets.length" :assets="assets" />
+                        <MarketPieChart v-if="marketShare" :marketShare="marketShare" />
+                        <AssetPieChart v-if="assets.length" :assets="assets" />
+                        <ExportPanel />
+                    </div>
+                </div>
+            </template>
 
-        <div v-else-if="loading" class="text-center py-20 text-gray-500">載入資料中…</div>
+            <div v-else-if="loading" class="text-center py-20 text-gray-500">載入資料中…</div>
+        </template>
     </div>
 
-    <!-- K線圖 Modal -->
+    <!-- K線圖 Modal（持倉頁用） -->
     <ChartModal v-if="chartTicker" :ticker="chartTicker" :name="chartName" @close="chartTicker = ''" />
 </template>
 
@@ -64,8 +82,10 @@ import MarketPieChart from '../components/MarketPieChart.vue'
 import AssetPieChart from '../components/AssetPieChart.vue'
 import LiquidityCard from '../components/LiquidityCard.vue'
 import ExportPanel from '../components/ExportPanel.vue'
+import ManualAnalysis from '../components/ManualAnalysis.vue'
 import { fetchPortfolio, fetchRisk, fetchDailySummary, fetchAdvanced } from '../api/portfolio.js'
 
+const page = ref('portfolio')
 const summary = ref(null)
 const assets = ref([])
 const marketShare = ref(null)

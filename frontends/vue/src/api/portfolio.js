@@ -43,3 +43,8 @@ export async function fetchExportAiTicker(ticker) {
   const { data } = await axios.get(`${base}/api/export/ai/${encodeURIComponent(ticker)}`)
   return data
 }
+
+export async function fetchManualAnalysis(tickers) {
+  const { data } = await axios.post(`${base}/api/analysis/manual`, { tickers })
+  return data
+}
