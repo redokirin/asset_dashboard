@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import time
 from functools import lru_cache
 
 import pandas as pd
@@ -63,9 +64,12 @@ def squeeze_single_ticker_frame(df_all):
     return df_all
 
 
-@lru_cache(maxsize=128)
-def get_ticker_fundamental_info(ticker_symbol):
-    """獲取 Ticker 的基本面與即時數據，並提供安全性處理"""
+_FUND_INFO_TTL = 600  # 10 分鐘，與 requests_cache 對齊
+
+
+@lru_cache(maxsize=256)
+def _fetch_ticker_fundamental_info(ticker_symbol: str, cache_key: int):
+    """實際抓取邏輯；cache_key = int(time.time() // TTL) 讓快取每 TTL 秒自動失效。"""
     try:
         ticker = yf.Ticker(ticker_symbol)
         info = ticker.info
@@ -111,6 +115,12 @@ def get_ticker_fundamental_info(ticker_symbol):
             "volume": 0,
             "avg_volume": 1,
         }
+
+
+def get_ticker_fundamental_info(ticker_symbol: str) -> dict:
+    """TTL wrapper：每 10 分鐘自動失效，確保盤中量比數據不會凍結。"""
+    key = int(time.time() // _FUND_INFO_TTL)
+    return _fetch_ticker_fundamental_info(ticker_symbol, key)
 
 
 def fetch_historical_data(tickers, period="2y", group_by="ticker", fetchers=None):
