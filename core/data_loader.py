@@ -133,7 +133,7 @@ def get_config_from_gsheets():
             config["funds"] = _clean_asset_rows(
                 funds_data,
                 key_candidates=["Key", "key"],
-                numeric_cols=["nav", "units", "cost", "shares"],
+                numeric_cols=["nav", "units", "cost", "shares", "value"],
                 bool_cols=["enabled", "get_value"],
             )
         except Exception as e:
@@ -146,7 +146,7 @@ def get_config_from_gsheets():
             config["etfs"] = _clean_asset_rows(
                 etfs_data,
                 key_candidates=["Ticker", "ticker"],
-                numeric_cols=["shares", "cost", "discount", "units"],
+                numeric_cols=["shares", "cost", "discount", "units", "value"],
                 bool_cols=["enabled", "get_value"],
             )
         except Exception as e:
@@ -159,7 +159,7 @@ def get_config_from_gsheets():
             config["stocks"] = _clean_asset_rows(
                 stocks_data,
                 key_candidates=["Ticker", "ticker"],
-                numeric_cols=["shares", "cost", "discount", "units"],
+                numeric_cols=["shares", "cost", "discount", "units", "value"],
                 bool_cols=["enabled", "get_value"],
             )
         except Exception as e:

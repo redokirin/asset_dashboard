@@ -27,6 +27,7 @@ from core.analysis.overall_risk import calculate_overall_risk_score, get_risk_le
 from core.daily_summary import generate_daily_summary
 from core.exporters import export_for_ai, export_single_target_for_ai
 from core.tags import TAG_DISPLAY
+from core.xray import analyze_portfolio_exposures
 
 _TZ_TW = datetime.timezone(datetime.timedelta(hours=8))
 _WARM_INTERVAL = 9 * 60  # 每 9 分鐘（< portfolio TTL 10 分鐘）
@@ -78,6 +79,8 @@ _PORTFOLIO_TTL      = 600    # 開盤：10 分鐘
 _PORTFOLIO_TTL_IDLE = 7200  # 收盤：2 小時
 _ANALYSIS_TTL       = 3600  # 開盤：1 小時
 _ANALYSIS_TTL_IDLE  = 86400 # 收盤：24 小時
+_XRAY_TTL           = 3600  # 開盤：1 小時（holdings 本身有 7 天 file cache）
+_XRAY_TTL_IDLE      = 86400 # 收盤：24 小時
 
 
 def _safe(v):
@@ -135,6 +138,19 @@ def _load_advanced():
     try:
         ttl = _ANALYSIS_TTL if _is_trading_hours() else _ANALYSIS_TTL_IDLE
         return _cached_advanced(int(time.time() // ttl))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@lru_cache(maxsize=1)
+def _cached_xray(cache_key: int):
+    return analyze_portfolio_exposures()
+
+
+def _load_xray():
+    try:
+        ttl = _XRAY_TTL if _is_trading_hours() else _XRAY_TTL_IDLE
+        return _cached_xray(int(time.time() // ttl))
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -296,6 +312,11 @@ def post_manual_analysis(req: ManualAnalysisRequest):
             rec["_report"] = None
 
     return {"assets": records}
+
+
+@app.get("/api/xray")
+def get_xray():
+    return _safe_obj(_load_xray())
 
 
 @app.get("/api/analysis/risk")

@@ -101,7 +101,9 @@ def run_advanced_analysis(df_res):
                 if t_df_clean is None:
                     continue
 
-                price_val = to_float_scalar(t_df_clean["Close"].iloc[-1])
+                hist_price = to_float_scalar(t_df_clean["Close"].iloc[-1])
+                rt_price = to_float_scalar(row_data.get(COL_PRICE, 0))
+                price_val = rt_price if rt_price and rt_price > 0 else hist_price
                 prev_close = (
                     to_float_scalar(t_df_clean["Close"].iloc[-2])
                     if len(t_df_clean) >= 2
