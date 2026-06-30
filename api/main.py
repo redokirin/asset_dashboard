@@ -27,7 +27,7 @@ from core.analysis.overall_risk import calculate_overall_risk_score, get_risk_le
 from core.daily_summary import generate_daily_summary
 from core.exporters import export_for_ai, export_single_target_for_ai
 from core.tags import TAG_DISPLAY
-from core.xray import analyze_portfolio_exposures
+from core.xray import analyze_portfolio_exposures, get_ticker_holdings
 
 _TZ_TW = datetime.timezone(datetime.timedelta(hours=8))
 _WARM_INTERVAL = 9 * 60  # 每 9 分鐘（< portfolio TTL 10 分鐘）
@@ -317,6 +317,18 @@ def post_manual_analysis(req: ManualAnalysisRequest):
 @app.get("/api/xray")
 def get_xray():
     return _safe_obj(_load_xray())
+
+
+@lru_cache(maxsize=64)
+def _cached_ticker_holdings(ticker: str, cache_key: int) -> list:
+    return get_ticker_holdings(ticker)
+
+
+@app.get("/api/holdings/{ticker}")
+def get_holdings_endpoint(ticker: str):
+    t = ticker.strip().upper()
+    key = int(time.time() // 3600)  # 1 小時 in-memory cache（file cache 為 7 天）
+    return {"ticker": t, "holdings": _safe_obj(_cached_ticker_holdings(t, key))}
 
 
 @app.get("/api/analysis/risk")

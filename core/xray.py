@@ -128,6 +128,22 @@ def get_holdings(ticker: str, cache: dict, depth: int = 0) -> tuple[list[dict], 
     return holdings, f"OK  {len(holdings)} 筆  coverage {top_sum * 100:.1f}%"
 
 
+# ── Public single-ticker query ───────────────────────────────────────────────
+
+def get_ticker_holdings(ticker: str) -> list[dict]:
+    """
+    取得單一 ETF/基金前十大持股（帶 7 天 file cache）。
+
+    Returns:
+        [{"symbol": str, "name": str, "weight": float}, ...]  最多 10 筆。
+        個股或查無資料時回傳空 list。
+    """
+    cache = _load_cache()
+    holdings, _ = get_holdings(ticker.upper(), cache)
+    _save_cache(cache)
+    return holdings[:10]
+
+
 # ── Main analysis ─────────────────────────────────────────────────────────────
 
 def analyze_portfolio_exposures(
