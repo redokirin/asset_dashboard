@@ -1,8 +1,27 @@
 # -*- coding: utf-8 -*-
+import logging
+
 import pandas as pd
 import numpy as np
 
 from core.risk import calculate_asset_drawdown
+
+
+def _remove_price_spikes(df: pd.DataFrame, factor: float = 3.0) -> pd.DataFrame:
+    """
+    移除價格超出 5 日 rolling median `factor` 倍的資料點。
+    防止 yfinance 回傳單日錯誤 adjusted close 污染波動率 / MDD 計算。
+    若清理後不足 20 筆則 fallback 回原始資料（避免短歷史標的被過度過濾）。
+    """
+    if len(df) < 10:
+        return df
+    med = df["Close"].rolling(5, center=True, min_periods=2).median()
+    valid = (df["Close"] <= med * factor) & (df["Close"] >= med / factor)
+    n_bad = int((~valid).sum())
+    if n_bad:
+        logging.warning(f"[technical] 移除 {n_bad} 筆異常價格點（超出 rolling median {factor}×）")
+    cleaned = df[valid].copy()
+    return cleaned if len(cleaned) >= 20 else df
 
 
 def to_float_scalar(value) -> float | None:
@@ -122,6 +141,8 @@ def calculate_alpha_metrics(comb):
 
 
 def calculate_drawdown_metrics(t_df_clean, sharpe):
+    t_df_clean = _remove_price_spikes(t_df_clean)
+
     drawdown_result = None
     if len(t_df_clean) >= 2:
         price_history = [

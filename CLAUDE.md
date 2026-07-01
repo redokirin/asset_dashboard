@@ -28,6 +28,7 @@ asset_tracking/
 │   ├── risk.py                 # 回撤計算（calculate_drawdown）
 │   ├── tags.py                 # 決策標籤常數（TAG_* + TAG_DISPLAY）
 │   ├── analysis_quant.py       # 量化分析入口（re-export analysis/*）
+│   ├── xray.py                 # ETF 持股穿透（analyze_portfolio_exposures、get_ticker_holdings）
 │   ├── analysis/               # 量化分析子模組
 │   │   ├── advanced.py         # run_advanced_analysis() — 主量化管線
 │   │   ├── benchmark.py        # get_smart_benchmark() — 基準選擇
@@ -80,7 +81,11 @@ asset_tracking/
 │   └── portfolio.db            # SQLite 資料庫檔案（勿提交）
 │
 ├── tests/                      # pytest 測試（對應 core/ 各模組）
-├── scripts/                    # 一次性資料庫種子與維護腳本
+├── scripts/                    # 維護腳本
+│   ├── x-ray.py                # 持倉穿透 terminal（呼叫 core/xray.py）
+│   ├── holdings.py             # 查詢單一 ETF 前十大持股 terminal
+│   ├── update_ohlc_zones.py    # 更新 OHLC 區間資料
+│   └── verify_order_bands.py   # 驗證掛單區間
 ├── analyze/                    # 匯出的 AI 報告（勿提交重要決策內容）
 ├── refactor/                   # 重構規劃文件（參考用）
 ├── docs/                       # 投資策略文件
@@ -118,6 +123,13 @@ api/main.py                              ←→  frontends/vue/（主力 UI）
   /api/ticker/{ticker}/historical             → ChartModal（ECharts K 線）
   /api/ticker/{ticker}/fundamental
   /api/export/ai[/{ticker}]                   → ExportPanel
+  /api/xray                                   → ETF 持股穿透（依 region 彙總曝險）
+  /api/holdings/{ticker}                      → 單一標的前十大持股
+
+core/xray.py → analyze_portfolio_exposures() / get_ticker_holdings()
+    ← yfinance funds_data.top_holdings（7 天 file cache：analyze/.xray_holdings_cache.json）
+    → scripts/x-ray.py（terminal，on_ticker 進度 callback）
+    → scripts/holdings.py（terminal，單一代碼查詢）
 
 apps/dashboard_st.py  ←→  ui/streamlit/*（仍可執行，逐步退場）
 ```
@@ -137,8 +149,13 @@ apps/dashboard_st.py  ←→  ui/streamlit/*（仍可執行，逐步退場）
 | `GET /api/ticker/{ticker}/fundamental` | — | 基本面資料 |
 | `GET /api/export/ai` | — | 整份 AI 報告 |
 | `GET /api/export/ai/{ticker}` | — | 單一標的 AI 報告 |
+| `GET /api/xray` | 3600s | ETF 持股穿透；buckets 依 region 欄位彙總為「XX其他持股」 |
+| `GET /api/holdings/{ticker}` | 1h (memory) | 單一標的前十大持股 |
+| `POST /api/analysis/manual` | — | 自選代碼量化分析（傳入 `{"tickers": [...]}` ） |
 
-快取實作：`lru_cache(maxsize=1)`，cache_key = `int(time.time() // TTL)`。
+快取實作：`lru_cache(maxsize=1)`，cache_key = `int(time.time() // TTL)`。  
+`/api/holdings/{ticker}` 使用 `lru_cache(maxsize=64)` per ticker。  
+`core/xray.py` 另有獨立 file-based cache（`analyze/.xray_holdings_cache.json`，TTL 7 天），terminal 與 API 共享同一份快取。
 
 ---
 
@@ -217,6 +234,18 @@ poetry run python scripts/update_ohlc_zones.py
 poetry run python scripts/verify_order_bands.py
 ```
 
+### X-Ray 持股穿透
+
+```bash
+# 整份持倉穿透（依 region 彙總曝險）
+poetry run python scripts/x-ray.py
+
+# 查詢單一 ETF/基金前十大持股
+poetry run python scripts/holdings.py VOO
+poetry run python scripts/holdings.py 1655.T
+poetry run python scripts/holdings.py        # 互動輸入
+```
+
 ---
 
 ## 關鍵設計規則
@@ -251,4 +280,5 @@ poetry run python scripts/verify_order_bands.py
 雙軌並行，Vue 為主力：
 - **現況**：Vue 3 → FastAPI → `core/`（主力 UI，所有端點已接通）
 - **Streamlit**：仍可執行（`apps/dashboard_st.py`），功能完整，但不再主動維護
-- **待補 Vue 功能**：手動分析頁（`show_manual_analysis_page` 對應）、配置分析視圖
+- **已補 Vue 功能**：`ManualAnalysis.vue`（自選代碼量化分析，對應 `show_manual_analysis_page`）
+- **待補 Vue 功能**：X-Ray 持股穿透視圖（`/api/xray`、`/api/holdings/{ticker}` 已備妥）、配置分析視圖
