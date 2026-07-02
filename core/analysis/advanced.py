@@ -7,6 +7,7 @@ import pandas as pd
 from core.analysis.benchmark import get_smart_benchmark
 from core.analysis.diagnosis import generate_advanced_diagnosis
 from core.analysis.technical import (
+    _remove_price_spikes,
     calculate_alpha_metrics,
     calculate_drawdown_metrics,
     calculate_moving_averages,
@@ -87,9 +88,11 @@ def run_advanced_analysis(df_res):
                     )
                     continue
 
+                # 只清理用於 MDD 計算的副本，b_series_final 本身留給 alpha/beta 對齊使用
+                bench_df_clean = _remove_price_spikes(b_series_final.to_frame("Close"))
                 bench_price_history = [
                     {"date": str(idx.date()), "value": float(v)}
-                    for idx, v in b_series_final.items()
+                    for idx, v in bench_df_clean["Close"].items()
                     if pd.notnull(v) and float(v) > 0
                 ]
                 bench_drawdown = calculate_asset_drawdown(bench_price_history)
