@@ -36,6 +36,32 @@ MANUAL_LABELS: dict[str, str] = {
     "009821.TW": "全球戰略稀土與關鍵資源",
 }
 
+# yfinance 對 sector 的命名不一致：funds_data.sector_weightings 用 snake_case
+# （如 "technology"），個股 info.sector 用 Title Case（如 "Technology"）。
+# 統一正規化成同一組標籤，避免同一產業在彙總時被拆成兩筆。
+_SECTOR_LABELS: dict[str, str] = {
+    "basic_materials":         "Basic Materials",
+    "communication_services":  "Communication Services",
+    "consumer_cyclical":       "Consumer Cyclical",
+    "consumer_defensive":      "Consumer Defensive",
+    "energy":                  "Energy",
+    "financial_services":      "Financial Services",
+    "healthcare":              "Healthcare",
+    "industrials":             "Industrials",
+    "real_estate":             "Real Estate",
+    "realestate":              "Real Estate",
+    "technology":              "Technology",
+    "utilities":               "Utilities",
+}
+
+
+def _normalize_sector(name: str | None) -> str | None:
+    """把不同來源的 sector 命名統一成同一組標籤，查無對應表時原樣回傳。"""
+    if not name:
+        return name
+    key = name.strip().lower().replace(" ", "_")
+    return _SECTOR_LABELS.get(key, name)
+
 _CACHE_PATH = Path(__file__).parent.parent / "analyze" / ".xray_holdings_cache.json"
 _CACHE_TTL = 7 * 86400  # 7 days
 
@@ -103,7 +129,11 @@ def _fetch_fund_sector_weightings(ticker: str) -> dict[str, float]:
         sw = fd.sector_weightings
         if not sw:
             return {}
-        return {str(k): float(v) for k, v in sw.items()}
+        result: dict[str, float] = {}
+        for k, v in sw.items():
+            sec = _normalize_sector(str(k))
+            result[sec] = result.get(sec, 0.0) + float(v)
+        return result
     except Exception:
         return {}
 
@@ -112,7 +142,7 @@ def _fetch_stock_sector(ticker: str) -> str | None:
     """回傳個股 sector（yfinance info.sector），失敗回傳 None。"""
     try:
         sector = yf.Ticker(ticker).info.get("sector")
-        return str(sector) if sector else None
+        return _normalize_sector(str(sector)) if sector else None
     except Exception:
         return None
 
@@ -317,14 +347,16 @@ def analyze_portfolio_exposures(
         pw = info["port_weight"]
 
         # sector 彙總：獨立於個股穿透，避免對每筆持股逐一呼叫 API
+        # 這裡再正規化一次，讓已存在的舊 cache（尚未套用命名統一）也能立即彙總正確
         if info["sheet"] == "stocks":
-            sector = get_stock_sector(ticker, cache) or "未分類"
+            sector = _normalize_sector(get_stock_sector(ticker, cache)) or "未分類"
             sector_weights[sector] = sector_weights.get(sector, 0.0) + pw
         else:
             weightings = get_fund_sector_weightings(ticker, cache)
             if weightings:
                 covered = 0.0
                 for sec, w in weightings.items():
+                    sec = _normalize_sector(sec)
                     sector_weights[sec] = sector_weights.get(sec, 0.0) + pw * w
                     covered += w
                 leftover = max(0.0, 1.0 - covered)
