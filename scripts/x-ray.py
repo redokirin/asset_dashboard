@@ -36,6 +36,7 @@ def main():
     count      = result["assets_count"]
     exposures  = result["exposures"]
     buckets    = result["buckets"]
+    sectors    = result["sector_exposures"]
     identified = result["identified_pct"]
     unresolved = result["unidentified_pct"]
     top_n      = min(30, len(exposures))
@@ -65,6 +66,14 @@ def main():
         print("=" * 70)
         for b in buckets:
             print(f"  {b['label']:<54}  {_pct(b['weight'])}")
+
+    if sectors:
+        print()
+        print("=" * 70)
+        print("  產業配置")
+        print("=" * 70)
+        for s in sectors:
+            print(f"  {s['sector']:<54}  {_pct(s['weight'])}")
 
     print()
     print("=" * 70)

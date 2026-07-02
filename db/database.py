@@ -2,6 +2,7 @@
 import json
 import logging
 import sqlite3
+import time
 from datetime import date
 from pathlib import Path
 
@@ -92,6 +93,16 @@ CREATE TABLE IF NOT EXISTS asset_snapshot (
     tags            TEXT,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(snapshot_date, ticker)
+);
+
+CREATE TABLE IF NOT EXISTS ticker_cache (
+    ticker     TEXT    NOT NULL,
+    kind       TEXT    NOT NULL,   -- 'holdings' | 'sector'
+    year       INTEGER NOT NULL,   -- ISO year
+    week       INTEGER NOT NULL,   -- ISO week (1~53)
+    data_json  TEXT    NOT NULL,
+    created_at REAL    NOT NULL,   -- epoch seconds，僅供除錯/顯示用
+    PRIMARY KEY (ticker, kind, year, week)
 );
 
 CREATE TABLE IF NOT EXISTS cash_snapshot (
@@ -763,3 +774,68 @@ def update_report_run_event(
         values.append(run["id"])
         conn.execute(f"UPDATE report_runs SET {', '.join(updates)} WHERE id = ?", values)
     return True
+
+
+# ── Ticker Cache（xray 單標的查詢，週度快照歷史）───────────────────────────────
+
+
+def get_ticker_cache(ticker: str, kind: str, year: int, week: int):
+    """查詢指定 ISO 年週的快取，查無回傳 None。"""
+    try:
+        init_db()
+        with _get_connection() as conn:
+            row = conn.execute(
+                "SELECT data_json FROM ticker_cache WHERE ticker=? AND kind=? AND year=? AND week=?",
+                (ticker, kind, year, week),
+            ).fetchone()
+        return json.loads(row["data_json"]) if row else None
+    except Exception as exc:
+        logging.warning(f"[db] ticker_cache 讀取失敗 {ticker}/{kind}: {exc}")
+        return None
+
+
+def set_ticker_cache(ticker: str, kind: str, year: int, week: int, data) -> None:
+    """寫入指定 ISO 年週的快取（同一週內重複寫入會覆蓋，不同週各自保留一筆）。"""
+    try:
+        init_db()
+        with _get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO ticker_cache (ticker, kind, year, week, data_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(ticker, kind, year, week) DO UPDATE SET
+                    data_json  = excluded.data_json,
+                    created_at = excluded.created_at
+                """,
+                (ticker, kind, year, week, json.dumps(data, ensure_ascii=False), time.time()),
+            )
+    except Exception as exc:
+        logging.warning(f"[db] ticker_cache 寫入失敗 {ticker}/{kind}: {exc}")
+
+
+def get_ticker_cache_history(ticker: str, kind: str, limit: int = 52) -> list[dict]:
+    """回傳指定標的最近 N 週的快取歷史（供回測 holdings/sector 變化用），依時間新到舊排序。"""
+    try:
+        init_db()
+        with _get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT year, week, data_json, created_at FROM ticker_cache
+                WHERE ticker=? AND kind=?
+                ORDER BY year DESC, week DESC
+                LIMIT ?
+                """,
+                (ticker, kind, limit),
+            ).fetchall()
+        return [
+            {
+                "year": r["year"],
+                "week": r["week"],
+                "data": json.loads(r["data_json"]),
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
+    except Exception as exc:
+        logging.warning(f"[db] ticker_cache 歷史讀取失敗 {ticker}/{kind}: {exc}")
+        return []

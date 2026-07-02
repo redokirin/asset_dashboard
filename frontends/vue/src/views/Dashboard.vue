@@ -54,8 +54,10 @@
                             </div>
                         </div>
                         <LiquidityCard v-if="assets.length" :assets="assets" />
-                        <MarketPieChart v-if="marketShare" :marketShare="marketShare" />
-                        <AssetPieChart v-if="assets.length" :assets="assets" />
+                        <button v-if="marketShare && assets.length" @click="showAllocationModal = true"
+                            class="w-full text-xs px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors">
+                            🔍 詳細配置分析（含 X-Ray 個股穿透）
+                        </button>
                         <ExportPanel />
                     </div>
                 </div>
@@ -67,6 +69,10 @@
 
     <!-- K線圖 Modal（持倉頁用） -->
     <ChartModal v-if="chartTicker" :ticker="chartTicker" :name="chartName" @close="chartTicker = ''" />
+
+    <!-- 資產配置分析 Modal（市場佔比／資產佔比／X-Ray 個股穿透） -->
+    <AllocationModal v-if="showAllocationModal" :marketShare="marketShare" :assets="assets"
+        @close="showAllocationModal = false" />
 </template>
 
 <script setup>
@@ -76,8 +82,7 @@ import RiskScoreCard from '../components/RiskScoreCard.vue'
 import DailySummaryCard from '../components/DailySummaryCard.vue'
 import AssetTable from '../components/AssetTable.vue'
 import ChartModal from '../components/ChartModal.vue'
-import MarketPieChart from '../components/MarketPieChart.vue'
-import AssetPieChart from '../components/AssetPieChart.vue'
+import AllocationModal from '../components/AllocationModal.vue'
 import LiquidityCard from '../components/LiquidityCard.vue'
 import ExportPanel from '../components/ExportPanel.vue'
 import ManualAnalysis from '../components/ManualAnalysis.vue'
@@ -95,6 +100,7 @@ const error = ref('')
 const updatedAt = ref('')
 const chartTicker = ref('')
 const chartName = ref('')
+const showAllocationModal = ref(false)
 
 async function load() {
     loading.value = true

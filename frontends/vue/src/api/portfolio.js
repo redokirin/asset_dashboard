@@ -48,3 +48,13 @@ export async function fetchManualAnalysis(tickers) {
   const { data } = await axios.post(`${base}/api/analysis/manual`, { tickers })
   return data
 }
+
+export async function fetchHoldings(ticker) {
+  const { data } = await axios.get(`${base}/api/holdings/${encodeURIComponent(ticker)}`)
+  return data
+}
+
+export async function fetchXray() {
+  const { data } = await axios.get(`${base}/api/xray`)
+  return data
+}

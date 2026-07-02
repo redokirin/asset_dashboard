@@ -14,7 +14,7 @@ from pathlib import Path
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.xray import get_ticker_holdings
+from core.xray import get_ticker_holdings, get_ticker_sector
 
 
 def main():
@@ -32,13 +32,25 @@ def main():
 
     if not holdings:
         print(f"  找不到 {ticker} 的持股資料（可能是個股或 yfinance 不支援）\n")
+    else:
+        print(f"  {'#':<3}  {'代碼':<14}  {'名稱':<40}  {'比重':>7}")
+        print(f"  {'-'*3}  {'-'*14}  {'-'*40}  {'-'*7}")
+        for i, h in enumerate(holdings, 1):
+            name = h["name"][:38]
+            print(f"  {i:<3}  {h['symbol']:<14}  {name:<40}  {h['weight'] * 100:6.2f}%")
+        print()
+
+    print(f"查詢 {ticker} 產業配置…\n")
+    sectors = get_ticker_sector(ticker)
+
+    if not sectors:
+        print(f"  找不到 {ticker} 的產業配置資料\n")
         return
 
-    print(f"  {'#':<3}  {'代碼':<14}  {'名稱':<40}  {'比重':>7}")
-    print(f"  {'-'*3}  {'-'*14}  {'-'*40}  {'-'*7}")
-    for i, h in enumerate(holdings, 1):
-        name = h["name"][:38]
-        print(f"  {i:<3}  {h['symbol']:<14}  {name:<40}  {h['weight'] * 100:6.2f}%")
+    print(f"  {'#':<3}  {'產業':<40}  {'比重':>7}")
+    print(f"  {'-'*3}  {'-'*40}  {'-'*7}")
+    for i, s in enumerate(sectors, 1):
+        print(f"  {i:<3}  {s['sector']:<40}  {s['weight'] * 100:6.2f}%")
     print()
 
 
