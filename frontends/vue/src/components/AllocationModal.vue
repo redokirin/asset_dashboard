@@ -139,7 +139,7 @@ async function renderXrayCharts() {
   if (exposuresTop.value.length && xrayBarEl.value) {
     xrayBarChart = echarts.init(xrayBarEl.value, 'dark')
     xrayBarChart.setOption(buildHorizontalBarOption(exposuresTop.value, {
-      getName: e => e.name || e.symbol,
+      getName: e => e.symbol,
       getValue: e => e.weight,
     }))
   }

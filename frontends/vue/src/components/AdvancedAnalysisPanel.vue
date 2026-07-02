@@ -378,7 +378,7 @@ async function renderHoldingsCharts() {
     if (holdingsList.value.length && holdingsChartEl.value) {
         holdingsChart = echarts.init(holdingsChartEl.value, 'dark')
         holdingsChart.setOption(buildHorizontalBarOption(holdingsList.value, {
-            getName: h => h.name || h.symbol,
+            getName: h => h.symbol,
             getValue: h => h.weight,
         }))
     }
