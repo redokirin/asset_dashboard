@@ -410,14 +410,14 @@ async function renderHoldingsCharts() {
     if (holdingsList.value.length && holdingsChartEl.value) {
         holdingsChart = echarts.init(holdingsChartEl.value, 'dark')
         holdingsChart.setOption(buildHorizontalBarOption(holdingsList.value, {
-            getName: h => h.symbol,
+            getName: h => h.ticker || h.symbol,
             getValue: h => h.weight,
         }))
     }
     if (sectorList.value.length && sectorChartEl.value) {
         sectorChart = echarts.init(sectorChartEl.value, 'dark')
         sectorChart.setOption(buildPieOption(sectorList.value, {
-            getName: s => s.sector,
+            getName: s => s.name || s.sector,
             getValue: s => s.weight,
         }))
     }

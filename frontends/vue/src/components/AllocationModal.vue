@@ -139,14 +139,14 @@ async function renderXrayCharts() {
   if (exposuresTop.value.length && xrayBarEl.value) {
     xrayBarChart = echarts.init(xrayBarEl.value, 'dark')
     xrayBarChart.setOption(buildHorizontalBarOption(exposuresTop.value, {
-      getName: e => e.symbol,
+      getName: e => e.ticker || e.symbol,
       getValue: e => e.weight,
     }))
   }
   if (sectorList.value.length && xraySectorEl.value) {
     xraySectorChart = echarts.init(xraySectorEl.value, 'dark')
     xraySectorChart.setOption(buildPieOption(sectorList.value, {
-      getName: s => s.sector,
+      getName: s => s.name || s.sector,
       getValue: s => s.weight,
     }))
   }

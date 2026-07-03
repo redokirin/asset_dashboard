@@ -73,7 +73,7 @@ def main():
         print("  產業配置")
         print("=" * 70)
         for s in sectors:
-            print(f"  {s['sector']:<54}  {_pct(s['weight'])}")
+            print(f"  {s.get('name', s['sector']):<54}  {_pct(s['weight'])}")
 
     print()
     print("=" * 70)

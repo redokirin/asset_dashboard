@@ -9,9 +9,9 @@ Portfolio X-Ray：穿透 ETF/基金持股，計算組合真實個股曝險比例
     {
         "total_value_twd": float,
         "assets_count":    int,
-        "exposures":       [{"symbol", "name", "weight", "sources"}, ...],  # sorted desc
+        "exposures":       [{"symbol", "name", "weight", "sources", "ticker"}, ...],  # sorted desc；ticker：_TICKER_LABELS 對應則為「中文名(代碼)」，否則為代碼原值
         "buckets":         [{"label", "weight", "ticker"}, ...],
-        "sector_exposures": [{"sector", "weight"}, ...],  # sorted desc；個股用 info.sector，ETF/基金用 funds_data.sector_weightings
+        "sector_exposures": [{"sector", "weight", "name"}, ...],  # sorted desc；個股用 info.sector，ETF/基金用 funds_data.sector_weightings；name：_INDUSTRY_TRANS 對應則為中文，否則為 sector 原值
         "identified_pct":  float,   # 0~1
         "unidentified_pct": float,
     }
@@ -54,6 +54,93 @@ _SECTOR_LABELS: dict[str, str] = {
     "utilities":               "Utilities",
 }
 
+_INDUSTRY_TRANS: dict[str, str] = {
+    "technology":               "科技",
+    "industrials":              "工業",
+    "financial_services":       "金融",
+    "consumer_cyclical":        "非必需消費",
+    "communication_services":   "通訊服務",
+    "healthcare":               "醫療保健",
+    "consumer_defensive":       "必需消費",
+    "basic_materials":          "基本材料",
+    "energy":                   "能源",
+    "real_estate":              "房地產",
+    "utilities":                "公用事業",
+}
+
+_TICKER_LABELS: dict[str, str] = {
+    "NVDA":     "NVIDIA",
+    "AAPL":     "Apple",
+    "MSFT":     "Microsoft",
+    "AMZN":     "Amazon",
+    "GOOGL":    "Google",
+    "AVGO":     "Broadcom",
+    "GOOG":     "Google",
+    "MU":       "Micron",
+    "META":     "Meta",
+    "TSLA":     "Tesla",
+    "LITE":     "Lumentum",
+    "GLW":      "康寧",
+    "CIEN":     "Ciena",
+    "GEV":      "奇異",
+    "AMD":      "AMD",
+    "SNDK":     "SANDISK",
+    "AMAT":     "Applied Materials",
+
+    "2330.TW": "台積電",
+    "2383.TW": "台光電",
+    "2317.TW": "鴻海",
+    "2303.TW": "聯電",
+    "2360.TW": "致茂",
+    "2382.TW": "廣達",
+    "2308.TW": "台達電",
+    "2395.TW": "研華",
+    "2345.TW": "智邦",
+    "2368.TW": "金像電",
+    "3017.TW": "奇鋐",
+    "3653.TW": "健策",
+    "6515.TW": "穎崴",
+    "3037.TW": "欣興",
+    "3711.TW": "日月光投控",
+    "3665.TW": "貿聯-KY",
+    "2412.TW": "中華電信",
+    "1216.TW": "統一",
+    "4904.TW": "遠傳",
+    "2881.TW": "富邦金",
+    "2891.TW": "中信金",
+    "2885.TW": "元大金",
+    "2887.TW": "台新新光金",
+    "6442.TW": "光聖",
+    "3189.TW": "景碩",
+    "8996.TW": "高力",
+    "2454.TW": "聯發科",
+    "2327.TW": "國巨",
+
+    "6223.TWO": "旺矽",
+    "5274.TWO": "信驊",
+    "3293.TWO": "鈊象",
+    "4749.TWO": "新應材",
+    "3081.TWO": "聯亞",
+
+    "8306.T": "三菱UFJ",
+    "7203.T": "トヨタ自動車",
+    "9984.T": "ソフトバンク",
+    "6501.T": "日立製作所",
+    "8316.T": "三井住友",
+    "6758.T": "ソニーグループ",
+    "8035.T": "東京エレクトロン",
+    "8411.T": "みずほ",
+    "8058.T": "三菱商事",
+    "6787.T": "メイコー",
+    "5801.T": "古河電気工業",
+    "6981.T": "村田製作所",
+    "285A.T": "キオクシア",
+    "6976.T": "太陽誘電",
+    "7270.T" : "Subaru",
+
+    "009150.KS" : "Samsung",
+}
+
 
 def _normalize_sector(name: str | None) -> str | None:
     """把不同來源的 sector 命名統一成同一組標籤，查無對應表時原樣回傳。"""
@@ -61,6 +148,25 @@ def _normalize_sector(name: str | None) -> str | None:
         return name
     key = name.strip().lower().replace(" ", "_")
     return _SECTOR_LABELS.get(key, name)
+
+
+def _with_industry_name(sector_row: dict) -> dict:
+    """
+    附加 name 欄位：_INDUSTRY_TRANS 有對應則翻譯成中文，查無對應表時回傳原值。
+    _INDUSTRY_TRANS 的 key 是 snake_case（跟 _SECTOR_LABELS 一致），但 sector 欄位
+    實際值可能是 _normalize_sector() 正規化後的 Title Case，也可能是尚未正規化的
+    舊快取值，查表前統一轉成同一種 key 格式比對，兩種來源都能正確命中。
+    """
+    sec = sector_row.get("sector", "")
+    key = sec.strip().lower().replace(" ", "_") if sec else sec
+    return {**sector_row, "name": _INDUSTRY_TRANS.get(key, sec)}
+
+
+def _with_ticker_label(holding: dict) -> dict:
+    """附加 ticker 欄位：_TICKER_LABELS 有對應則顯示「中文名(代碼)」，查無對應表時回傳代碼原值。"""
+    sym = holding.get("symbol", "")
+    label = _TICKER_LABELS.get(sym)
+    return {**holding, "ticker": f"{label}({sym})" if label else sym}
 
 _CACHE_PATH = Path(__file__).parent.parent / "analyze" / ".xray_holdings_cache.json"
 _CACHE_TTL = 7 * 86400  # 7 days
@@ -96,7 +202,7 @@ def _cache_set(cache: dict, ticker: str, holdings: list[dict]) -> None:
 # ── Holdings fetch ────────────────────────────────────────────────────────────
 
 def _fetch_top_holdings(ticker: str) -> list[dict]:
-    """回傳 [{"symbol", "name", "weight"}, ...]，失敗回傳空 list。"""
+    """回傳 [{"symbol", "name", "ticker", "weight"}, ...]，失敗回傳空 list。"""
     try:
         fd = yf.Ticker(ticker).funds_data
         if fd is None:
@@ -110,10 +216,10 @@ def _fetch_top_holdings(ticker: str) -> list[dict]:
         df = df.reset_index()  # Symbol 從 index 升為欄位
         result = []
         for _, row in df.iterrows():
-            sym  = str(row.get("Symbol") or row.get("symbol") or "").strip()
-            name = str(row.get("Name")   or row.get("name")   or sym).strip()
-            wt   = float(row.get("Holding Percent") or row.get("holding percent") or 0)
-            if sym:
+            sym    = str(row.get("Symbol") or row.get("symbol") or "").strip()
+            name   = str(row.get("Name")   or row.get("name")   or sym).strip()
+            wt     = float(row.get("Holding Percent") or row.get("holding percent") or 0)
+            if sym and ticker:
                 result.append({"symbol": sym, "name": name, "weight": wt})
         return result
     except Exception:
@@ -234,7 +340,8 @@ def get_ticker_holdings(ticker: str) -> list[dict]:
     取得單一 ETF/基金前十大持股（帶 SQLite 週度快照，同一 ISO 年週只抓一次）。
 
     Returns:
-        [{"symbol": str, "name": str, "weight": float}, ...]  最多 10 筆。
+        [{"symbol": str, "name": str, "weight": float, "ticker": str}, ...]  最多 10 筆。
+        "ticker"：_TICKER_LABELS 有對應則為「中文名(代碼)」，否則為代碼原值。
         個股或查無資料時回傳空 list。
     """
     t = ticker.upper()
@@ -244,7 +351,7 @@ def get_ticker_holdings(ticker: str) -> list[dict]:
         cache_get=lambda k: get_ticker_cache(k, "holdings", year, week),
         cache_set=lambda k, v: set_ticker_cache(k, "holdings", year, week, v),
     )
-    return holdings[:10]
+    return [_with_ticker_label(h) for h in holdings[:10]]
 
 
 def get_ticker_sector(ticker: str) -> list[dict]:
@@ -255,14 +362,15 @@ def get_ticker_sector(ticker: str) -> list[dict]:
     個股：回傳單一 sector、weight 1.0 的清單。
 
     Returns:
-        [{"sector": str, "weight": float}, ...]  查無資料時回傳空 list。
+        [{"sector": str, "weight": float, "name": str}, ...]  查無資料時回傳空 list。
+        "name"：_INDUSTRY_TRANS 有對應則為中文翻譯，否則為 sector 原值。
     """
     t = ticker.upper()
     year, week, _ = date.today().isocalendar()
 
     cached = get_ticker_cache(t, "sector", year, week)
     if cached is not None:
-        return cached
+        return [_with_industry_name(s) for s in cached]
 
     weightings = _fetch_fund_sector_weightings(t)
     if weightings:
@@ -276,7 +384,7 @@ def get_ticker_sector(ticker: str) -> list[dict]:
         result = [{"sector": sector, "weight": 1.0}] if sector else []
 
     set_ticker_cache(t, "sector", year, week, result)
-    return result
+    return [_with_industry_name(s) for s in result]
 
 
 # ── Main analysis ─────────────────────────────────────────────────────────────
@@ -430,7 +538,10 @@ def analyze_portfolio_exposures(
     )
 
     sector_exposures = sorted(
-        [{"sector": sec, "weight": round(w, 6)} for sec, w in sector_weights.items()],
+        [
+            _with_industry_name({"sector": sec, "weight": round(w, 6)})
+            for sec, w in sector_weights.items()
+        ],
         key=lambda x: x["weight"],
         reverse=True,
     )
@@ -439,12 +550,12 @@ def analyze_portfolio_exposures(
         "total_value_twd":  total_value,
         "assets_count":     len(portfolio),
         "exposures": [
-            {
+            _with_ticker_label({
                 "symbol":  sym,
                 "name":    info["name"],
                 "weight":  round(info["weight"], 6),
                 "sources": info["sources"],
-            }
+            })
             for sym, info in ranked
         ],
         "buckets": merged_buckets,
