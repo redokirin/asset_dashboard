@@ -131,6 +131,7 @@
             :actionable="signalFor(row['代碼']).actionable"
             :warning="signalFor(row['代碼']).warning"
             :holdOff="signalFor(row['代碼']).holdOff"
+            :transactions="transactionsMap[row['代碼']] || []"
           />
         </div>
         <div v-else class="px-4 pb-3 text-xs text-gray-500">
@@ -174,9 +175,10 @@ const SORT_OPTS = [
 ]
 
 const props = defineProps({
-  assets:       { type: Array,  required: true },
-  advancedMap:  { type: Object, default: () => ({}) },
-  dailySummary: { type: Object, default: null },
+  assets:          { type: Array,  required: true },
+  advancedMap:     { type: Object, default: () => ({}) },
+  dailySummary:    { type: Object, default: null },
+  transactionsMap: { type: Object, default: () => ({}) },
 })
 
 const viewMode   = ref('pl')

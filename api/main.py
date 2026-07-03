@@ -4,6 +4,7 @@ import math
 import time
 import asyncio
 import datetime
+import threading
 from contextlib import asynccontextmanager
 from functools import lru_cache
 
@@ -28,6 +29,7 @@ from core.daily_summary import generate_daily_summary
 from core.exporters import export_for_ai, export_single_target_for_ai
 from core.tags import TAG_DISPLAY
 from core.xray import analyze_portfolio_exposures, get_ticker_holdings, get_ticker_sector
+from core.data_loader import get_etf_transactions
 
 _TZ_TW = datetime.timezone(datetime.timedelta(hours=8))
 _WARM_INTERVAL = 9 * 60  # 每 9 分鐘（< portfolio TTL 10 分鐘）
@@ -81,6 +83,7 @@ _ANALYSIS_TTL       = 3600  # 開盤：1 小時
 _ANALYSIS_TTL_IDLE  = 86400 # 收盤：24 小時
 _XRAY_TTL           = 3600  # 開盤：1 小時（holdings 本身有 7 天 file cache）
 _XRAY_TTL_IDLE      = 86400 # 收盤：24 小時
+_TRANSACTIONS_TTL   = 3600  # 交易紀錄不會頻繁變動，固定 1 小時
 
 
 def _safe(v):
@@ -119,10 +122,19 @@ def _cached_portfolio(cache_key: int):
     return df, market_share, rates, radar
 
 
+# lru_cache 本身沒有鎖：同一個 cache_key 若被多個 request 同時打中 cache miss，
+# 每個都會各自重算一次（cache stampede）。這兩把鎖讓 miss 時的重算序列化，
+# 後到的 request 等第一個算完後直接吃 lru_cache 命中，而不是各自重跑一次。
+_portfolio_lock = threading.Lock()
+_advanced_lock = threading.Lock()
+
+
 def _load_data():
     try:
         ttl = _PORTFOLIO_TTL if _is_trading_hours() else _PORTFOLIO_TTL_IDLE
-        return _cached_portfolio(int(time.time() // ttl))
+        key = int(time.time() // ttl)
+        with _portfolio_lock:
+            return _cached_portfolio(key)
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -137,7 +149,9 @@ def _cached_advanced(cache_key: int):
 def _load_advanced():
     try:
         ttl = _ANALYSIS_TTL if _is_trading_hours() else _ANALYSIS_TTL_IDLE
-        return _cached_advanced(int(time.time() // ttl))
+        key = int(time.time() // ttl)
+        with _advanced_lock:
+            return _cached_advanced(key)
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -338,6 +352,18 @@ def get_holdings_endpoint(ticker: str):
         "holdings": _safe_obj(_cached_ticker_holdings(t, key)),
         "sector_allocation": _safe_obj(_cached_ticker_sector(t, key)),
     }
+
+
+@lru_cache(maxsize=1)
+def _cached_transactions(cache_key: int):
+    return get_etf_transactions()
+
+
+@app.get("/api/transactions")
+def get_transactions():
+    """依 ticker 分組的 ETF 交易紀錄（來源：Google Sheets JPY / TWD 分頁）。"""
+    key = int(time.time() // _TRANSACTIONS_TTL)
+    return _safe_obj(_cached_transactions(key))
 
 
 @app.get("/api/analysis/risk")

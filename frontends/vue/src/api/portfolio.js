@@ -58,3 +58,8 @@ export async function fetchXray() {
   const { data } = await axios.get(`${base}/api/xray`)
   return data
 }
+
+export async function fetchTransactions() {
+  const { data } = await axios.get(`${base}/api/transactions`)
+  return data
+}

@@ -69,8 +69,8 @@ def _clean_asset_rows(rows, key_candidates, numeric_cols, bool_cols):
     return cleaned_assets
 
 
-def get_config_from_gsheets():
-    """從 Google Sheets 讀取資產配置，支援本地檔案與 Streamlit Secrets"""
+def _get_spreadsheet():
+    """建立 gspread 連線並開啟主要試算表，支援本地檔案與 Streamlit Secrets，失敗回傳 None。"""
     creds = None
 
     # 1. 優先嘗試從 Streamlit Secrets 讀取 (適合 Cloud 部署)
@@ -112,8 +112,19 @@ def get_config_from_gsheets():
 
     try:
         gc = gspread.authorize(creds)
-        sh = gc.open_by_key(SPREADSHEET_ID)
+        return gc.open_by_key(SPREADSHEET_ID)
+    except Exception as e:
+        logging.error(f"開啟 Google Sheets 失敗: {e}")
+        return None
 
+
+def get_config_from_gsheets():
+    """從 Google Sheets 讀取資產配置，支援本地檔案與 Streamlit Secrets"""
+    sh = _get_spreadsheet()
+    if sh is None:
+        return None
+
+    try:
         config = {}
 
         # 1. 讀取 radar_tickers
@@ -181,6 +192,49 @@ def get_config_from_gsheets():
     except Exception as e:
         logging.error(f"Google Sheets 讀取失敗: {e}")
         return None
+
+
+def _parse_transaction_row(row: dict, currency: str) -> dict | None:
+    """row 為 get_all_records() 單列 dict；ticker 空白（如累計/空白列）時回傳 None。"""
+    ticker = str(row.get("ticker", "")).strip()
+    if not ticker:
+        return None
+    return {
+        "ticker": ticker,
+        "settlement": str(row.get("Settlement", "")).strip(),
+        "type": str(row.get("type", "")).strip(),
+        "date": str(row.get("date", "")).strip(),
+        "shares": _parse_numeric(row.get("shares", "")),
+        "price": _parse_numeric(row.get("price", "")),
+        "cost": _parse_numeric(row.get("cost", "")),
+        "fee": _parse_numeric(row.get("fee", "")),
+        "total": _parse_numeric(row.get("total", "")),
+        "pnl": _parse_numeric(row.get("P&L", "")),
+        "currency": currency,
+    }
+
+
+def get_etf_transactions() -> dict[str, list[dict]]:
+    """
+    讀取 JPY / TWD 分頁的 ETF 交易紀錄，依 ticker 分組回傳（沿用表單原本新到舊的排序）。
+    找不到 ticker 的列（空白列、累計 summary 列）自動略過。
+    """
+    sh = _get_spreadsheet()
+    if sh is None:
+        return {}
+
+    result: dict[str, list[dict]] = {}
+    for tab, currency in [("JPY", "JPY"), ("TWD", "TWD")]:
+        try:
+            ws = sh.worksheet(tab)
+            for raw_row in ws.get_all_records():
+                record = _parse_transaction_row(raw_row, currency)
+                if record:
+                    result.setdefault(record["ticker"], []).append(record)
+        except Exception as e:
+            logging.error(f"讀取 {tab} 交易紀錄分頁失敗: {e}")
+
+    return result
 
 
 def get_config():

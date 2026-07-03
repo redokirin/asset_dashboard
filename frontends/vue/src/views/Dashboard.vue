@@ -43,7 +43,7 @@
                     <div class="lg:col-span-2 space-y-5">
                         <DailySummaryCard v-if="dailySummary" :summary="dailySummary" />
                         <AssetTable v-if="assets.length" :assets="assets" :advancedMap="advancedMap"
-                            :dailySummary="dailySummary"
+                            :dailySummary="dailySummary" :transactionsMap="transactionsMap"
                             @open-chart="({ ticker, name }) => { chartTicker = ticker; chartName = name }" />
                     </div>
                     <div class="space-y-5">
@@ -86,7 +86,7 @@ import AllocationModal from '../components/AllocationModal.vue'
 import LiquidityCard from '../components/LiquidityCard.vue'
 import ExportPanel from '../components/ExportPanel.vue'
 import ManualAnalysis from '../components/ManualAnalysis.vue'
-import { fetchPortfolio, fetchRisk, fetchDailySummary, fetchAdvanced } from '../api/portfolio.js'
+import { fetchPortfolio, fetchRisk, fetchDailySummary, fetchAdvanced, fetchTransactions } from '../api/portfolio.js'
 
 const page = ref('portfolio')
 const summary = ref(null)
@@ -95,6 +95,7 @@ const marketShare = ref(null)
 const risk = ref(null)
 const dailySummary = ref(null)
 const advancedMap = ref({})
+const transactionsMap = ref({})
 const loading = ref(false)
 const error = ref('')
 const updatedAt = ref('')
@@ -113,11 +114,12 @@ async function load() {
         summary.value = port.summary
         updatedAt.value = new Date().toLocaleTimeString('zh-TW')
 
-        // risk、daily summary、advanced 三個平行載入
-        const [riskData, summaryData, advData] = await Promise.allSettled([
+        // risk、daily summary、advanced、transactions 四個平行載入
+        const [riskData, summaryData, advData, txData] = await Promise.allSettled([
             fetchRisk(),
             fetchDailySummary(),
             fetchAdvanced(),
+            fetchTransactions(),
         ])
         if (riskData.status === 'fulfilled') risk.value = riskData.value
         if (summaryData.status === 'fulfilled') dailySummary.value = summaryData.value
@@ -126,6 +128,7 @@ async function load() {
             for (const row of advData.value.assets ?? []) map[row['代碼']] = row
             advancedMap.value = map
         }
+        if (txData.status === 'fulfilled') transactionsMap.value = txData.value ?? {}
     } catch (e) {
         error.value = `無法連線 API：${e.message}`
     } finally {

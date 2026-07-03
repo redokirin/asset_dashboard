@@ -74,6 +74,10 @@ def run_advanced_analysis(df_res):
             tuple(active_tickers), period="2y", group_by="ticker"
         )
 
+        # 同一基準常被多檔標的共用（如所有 .T 標的都用 1306.T），
+        # 每個基準的 MDD 只需算一次，避免重複運算與重複噴 log
+        bench_drawdown_cache: dict[str, object] = {}
+
         for ticker in active_tickers:
             try:
                 row_data = df_to_analyze[df_to_analyze[COL_TICKER] == ticker].iloc[0]
@@ -88,14 +92,20 @@ def run_advanced_analysis(df_res):
                     )
                     continue
 
-                # 只清理用於 MDD 計算的副本，b_series_final 本身留給 alpha/beta 對齊使用
-                bench_df_clean = _remove_price_spikes(b_series_final.to_frame("Close"))
-                bench_price_history = [
-                    {"date": str(idx.date()), "value": float(v)}
-                    for idx, v in bench_df_clean["Close"].items()
-                    if pd.notnull(v) and float(v) > 0
-                ]
-                bench_drawdown = calculate_asset_drawdown(bench_price_history)
+                if current_benchmark in bench_drawdown_cache:
+                    bench_drawdown = bench_drawdown_cache[current_benchmark]
+                else:
+                    # 只清理用於 MDD 計算的副本，b_series_final 本身留給 alpha/beta 對齊使用
+                    bench_df_clean = _remove_price_spikes(
+                        b_series_final.to_frame("Close"), label=f"基準 {current_benchmark}"
+                    )
+                    bench_price_history = [
+                        {"date": str(idx.date()), "value": float(v)}
+                        for idx, v in bench_df_clean["Close"].items()
+                        if pd.notnull(v) and float(v) > 0
+                    ]
+                    bench_drawdown = calculate_asset_drawdown(bench_price_history)
+                    bench_drawdown_cache[current_benchmark] = bench_drawdown
                 bench_mdd = (
                     bench_drawdown.maxDrawdownPercent if bench_drawdown else None
                 )
@@ -243,7 +253,7 @@ def run_advanced_analysis(df_res):
                     history_years,
                     annualized_vol,
                     vol_grade,
-                ) = calculate_drawdown_metrics(t_df_clean, sharpe)
+                ) = calculate_drawdown_metrics(t_df_clean, sharpe, label=ticker)
 
                 # 動態容忍區間（波動小→帶寬較寬，波動大→帶寬較窄）
                 _REFERENCE_VOL = 0.25

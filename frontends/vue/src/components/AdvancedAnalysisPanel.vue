@@ -211,6 +211,35 @@
                 </div>
             </template>
         </div>
+
+        <!-- ── Details（交易紀錄） ─────────────────────────────── -->
+        <div v-else-if="activeTab === 'details'" class="space-y-2">
+            <div v-if="!transactions.length" class="text-xs text-gray-500 text-center py-6">無交易紀錄</div>
+            <div v-else class="overflow-x-auto">
+                <table class="w-full text-xs">
+                    <thead>
+                        <tr class="text-gray-500 border-b border-gray-700/50">
+                            <th class="text-left py-1.5 pr-2">日期</th>
+                            <th class="text-right py-1.5 pr-2">股數</th>
+                            <th class="text-right py-1.5 pr-2">價格</th>
+                            <th class="text-right py-1.5 pr-2">手續費</th>
+                            <th class="text-right py-1.5 pr-2">總額</th>
+                            <th class="text-right py-1.5">損益</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(t, i) in transactions" :key="i" class="border-b border-gray-800">
+                            <td class="py-1.5 pr-2 text-gray-300 whitespace-nowrap">{{ t.date }}</td>
+                            <td class="py-1.5 pr-2 text-right tabular-nums">{{ fmtInt(t.shares) }}</td>
+                            <td class="py-1.5 pr-2 text-right tabular-nums">{{ fmt2(t.price) }}</td>
+                            <td class="py-1.5 pr-2 text-right tabular-nums text-gray-400">{{ fmtInt(t.fee) }}</td>
+                            <td class="py-1.5 pr-2 text-right tabular-nums">{{ fmtInt(t.total) }}</td>
+                            <td class="py-1.5 text-right tabular-nums" :class="plColor(t.pnl)">{{ fmtInt(t.pnl) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -219,19 +248,22 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
 import { fetchHoldings } from '../api/portfolio.js'
 import { buildHorizontalBarOption, buildPieOption, horizontalBarHeight, pieChartHeight } from '../utils/chartOptions.js'
+import { plColor } from '../utils/colors.js'
 
 const props = defineProps({
     res: { type: Object, required: true },
     actionable: { type: Object, default: null },   // from dailySummary.actionable
     warning: { type: Object, default: null },   // from dailySummary.warnings
     holdOff: { type: Object, default: null },   // from dailySummary.hold_off
+    transactions: { type: Array, default: () => [] },   // from transactionsMap[ticker]
 })
 
 const TABS = [
     { key: 'decision', label: '🎯 決策' },
     { key: 'risk', label: '⚠️ 風險' },
     { key: 'quant', label: '📊 量化' },
-    { key: 'holdings', label: '📋 持倉' },
+    { key: 'holdings', label: '🔬 成分' },
+    { key: 'details', label: '📋 明細' },
 ]
 const activeTab = ref('decision')
 
@@ -353,16 +385,16 @@ const yieldClr = computed(() => {
 // ── Holdings tab（持股穿透 + 產業配置） ─────────────────
 const ticker = computed(() => r.value['代碼'])
 
-const holdingsList   = ref([])
-const sectorList     = ref([])
+const holdingsList = ref([])
+const sectorList = ref([])
 const holdingsLoading = ref(false)
-const holdingsError   = ref('')
+const holdingsError = ref('')
 let loadedTicker = null
 
 const holdingsChartEl = ref(null)
-const sectorChartEl   = ref(null)
+const sectorChartEl = ref(null)
 let holdingsChart = null
-let sectorChart   = null
+let sectorChart = null
 
 const holdingsChartHeight = computed(() => horizontalBarHeight(holdingsList.value.length))
 const sectorChartHeight = computed(() => pieChartHeight(sectorList.value.length))
@@ -442,5 +474,10 @@ function fmt2(n) {
     if (n == null || n === '-' || n === '') return '—'
     const v = Number(n)
     return isNaN(v) ? String(n) : v.toFixed(2)
+}
+function fmtInt(n) {
+    if (n == null || n === '-' || n === '') return '—'
+    const v = Number(n)
+    return isNaN(v) ? String(n) : Math.round(v).toLocaleString('zh-TW')
 }
 </script>
