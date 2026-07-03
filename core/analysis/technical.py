@@ -17,12 +17,16 @@ def _remove_price_spikes(df: pd.DataFrame, factor: float = 3.0, label: str = "")
     """
     if len(df) < 10:
         return df
-    med = df["Close"].rolling(5, center=True, min_periods=2).median()
-    valid = (df["Close"] <= med * factor) & (df["Close"] >= med / factor)
-    n_bad = int((~valid).sum())
-    if n_bad:
+    close = df["Close"]
+    med = close.rolling(5, center=True, min_periods=2).median()
+    valid = (close <= med * factor) & (close >= med / factor)
+    # NaN 跟任何數字比較都是 False，會被 valid 判定為要丟棄，但那只是缺盤日
+    # （例如多檔一起批次下載時，其他市場交易但當地休市造成的日期對齊空值），
+    # 不是真正的價格異常，計數/log 時要排除，只算真正超出 rolling median 的暴衝點
+    n_spikes = int(((~valid) & close.notna()).sum())
+    if n_spikes:
         tag = f"{label} " if label else ""
-        logging.warning(f"[technical] {tag}移除 {n_bad} 筆異常價格點（超出 rolling median {factor}×）")
+        logging.warning(f"[technical] {tag}移除 {n_spikes} 筆異常價格點（超出 rolling median {factor}×）")
     cleaned = df[valid].copy()
     return cleaned if len(cleaned) >= 20 else df
 
