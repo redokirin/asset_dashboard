@@ -87,12 +87,14 @@ function buildOption(data) {
         splitLine: { show: false } },
     ],
     yAxis: [
-      { type: 'value', gridIndex: 0, name: 'TWD',
+      // 左軸下限動態抓資料最小值的 90%，避免總市值/投入成本波動被硬拉到含 0 的滿版壓縮
+      { type: 'value', gridIndex: 0, position: 'left', name: 'TWD',
+        min: (value) => Math.round(value.min * 0.9),
         nameTextStyle: { color: '#6b7280', fontSize: 10 },
         axisLabel: { color: '#6b7280', fontSize: 10, formatter: (v) => (v / 10000).toFixed(0) + '萬' },
         splitLine: { lineStyle: { color: '#1f2937' } },
         axisLine: { show: false } },
-      { type: 'value', gridIndex: 0, name: '%',
+      { type: 'value', gridIndex: 0, position: 'right', name: '%',
         nameTextStyle: { color: '#6b7280', fontSize: 10 },
         axisLabel: { color: '#6b7280', fontSize: 10, formatter: '{value}%' },
         splitLine: { show: false },
