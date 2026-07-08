@@ -30,6 +30,7 @@ from core.exporters import export_for_ai, export_single_target_for_ai
 from core.tags import TAG_DISPLAY
 from core.xray import analyze_portfolio_exposures, get_ticker_holdings, get_ticker_sector
 from core.data_loader import get_etf_transactions
+from db.database import get_portfolio_value_history
 
 _TZ_TW = datetime.timezone(datetime.timedelta(hours=8))
 _WARM_INTERVAL = 9 * 60  # 每 9 分鐘（< portfolio TTL 10 分鐘）
@@ -364,6 +365,15 @@ def get_transactions():
     """依 ticker 分組的 ETF 交易紀錄（來源：Google Sheets JPY / TWD 分頁）。"""
     key = int(time.time() // _TRANSACTIONS_TTL)
     return _safe_obj(_cached_transactions(key))
+
+
+@app.get("/api/portfolio/history")
+def get_portfolio_history(days: int = Query(default=90, ge=1, le=36500)):
+    """
+    資產總覽時間序列（total_value / total_gain / invest_value / total_gain_pct），
+    依日期升冪排列，供折線圖使用。days 給一個很大的值（如 36500）等同於拉全部歷史。
+    """
+    return _safe_obj(get_portfolio_value_history(days))
 
 
 @app.get("/api/analysis/risk")

@@ -54,6 +54,7 @@
                             </div>
                         </div>
                         <LiquidityCard v-if="assets.length" :assets="assets" />
+                        <PortfolioTrendChart />
                         <button v-if="marketShare && assets.length" @click="showAllocationModal = true"
                             class="w-full text-xs px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors">
                             🔍 詳細配置分析（含 X-Ray 個股穿透）
@@ -84,6 +85,7 @@ import AssetTable from '../components/AssetTable.vue'
 import ChartModal from '../components/ChartModal.vue'
 import AllocationModal from '../components/AllocationModal.vue'
 import LiquidityCard from '../components/LiquidityCard.vue'
+import PortfolioTrendChart from '../components/PortfolioTrendChart.vue'
 import ExportPanel from '../components/ExportPanel.vue'
 import ManualAnalysis from '../components/ManualAnalysis.vue'
 import { fetchPortfolio, fetchRisk, fetchDailySummary, fetchAdvanced, fetchTransactions } from '../api/portfolio.js'

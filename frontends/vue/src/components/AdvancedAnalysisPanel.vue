@@ -18,7 +18,7 @@
                 <div class="space-y-0.5">
                     <div class="relative h-4 text-[10px] text-gray-400">
                         <span class="absolute" :style="`left:25%;transform:translateX(-50%)`">{{ fmt2(r.dailyUpper)
-                            }}</span>
+                        }}</span>
                         <span class="absolute" :style="`left:50%;transform:translateX(-50%)`">{{
                             fmt2(r.boundaryDailyRetest) }}</span>
                         <span class="absolute" :style="`left:75%;transform:translateX(-50%)`">{{
@@ -259,11 +259,11 @@ const props = defineProps({
 })
 
 const TABS = [
-    { key: 'decision', label: '🎯 決策' },
-    { key: 'risk', label: '⚠️ 風險' },
-    { key: 'quant', label: '📊 量化' },
-    { key: 'holdings', label: '🔬 成分' },
-    { key: 'details', label: '📋 明細' },
+    { key: 'decision', label: '🎯決策' },
+    { key: 'risk', label: '⚠️風險' },
+    { key: 'quant', label: '📊量化' },
+    { key: 'holdings', label: '🔬成分' },
+    { key: 'details', label: '📋明細' },
 ]
 const activeTab = ref('decision')
 

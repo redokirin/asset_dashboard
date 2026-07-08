@@ -63,3 +63,8 @@ export async function fetchTransactions() {
   const { data } = await axios.get(`${base}/api/transactions`)
   return data
 }
+
+export async function fetchPortfolioHistory(days = 90) {
+  const { data } = await axios.get(`${base}/api/portfolio/history`, { params: { days } })
+  return data
+}

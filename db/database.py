@@ -420,6 +420,40 @@ def get_risk_score_history(days: int = 30) -> list[dict]:
         return []
 
 
+def get_portfolio_value_history(days: int | None = 90) -> list[dict]:
+    """
+    回傳資產總覽時間序列（total_value / total_gain / invest_value / total_gain_pct），
+    依日期升冪排列，供折線圖使用。days=None 時回傳全部歷史。
+    """
+    try:
+        init_db()
+        sql = """
+            SELECT snapshot_date, total_value, total_gain, invest_value, total_gain_pct
+            FROM portfolio_snapshot
+            ORDER BY snapshot_date DESC
+        """
+        params: tuple = ()
+        if days is not None:
+            sql += " LIMIT ?"
+            params = (days,)
+        with _get_connection() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        # 少數歷史列的數值欄位存成帶千分位逗號的字串，統一轉成 float 避免前端畫圖出錯
+        return [
+            {
+                "snapshot_date":  r["snapshot_date"],
+                "total_value":    _safe_float(r["total_value"]),
+                "total_gain":     _safe_float(r["total_gain"]),
+                "invest_value":   _safe_float(r["invest_value"]),
+                "total_gain_pct": _safe_float(r["total_gain_pct"]),
+            }
+            for r in reversed(rows)
+        ]
+    except Exception as exc:
+        logging.warning(f"[db] 資產趨勢歷史讀取失敗：{exc}")
+        return []
+
+
 def get_prev_risk_score() -> float | None:
     """取得前一次已儲存的整體風險係數（排除今日）。"""
     try:

@@ -84,10 +84,11 @@ def run_cli():
     # 當同時指定 --ai 與 --analyze 時，寫入診斷報告檔案
     if args.ai and args.analyze:
         ai_text = dashboard_logic.export_for_ai(df_final, adv_res=advanced_results)
-        analyze_dir = os.path.join(os.path.dirname(__file__), "..", "analyze")
+        now = datetime.datetime.now()
+        analyze_dir = os.path.join(os.path.dirname(__file__), "..", "analyze", now.strftime("%Y%m%d"))
         os.makedirs(analyze_dir, exist_ok=True)
-        ts = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-        report_path = os.path.join(analyze_dir, f"report_diagnosis_{ts}.md")
+        ts = now.strftime("%Y%m%d%H%M%S")
+        report_path = os.path.join(analyze_dir, f"report_{ts}.md")
         with open(report_path, "w", encoding="utf-8") as f:
             f.write(ai_text)
         print(f"\n✅ 診斷報告已寫入: {report_path}")

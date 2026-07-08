@@ -300,7 +300,7 @@ def _append_risk_balance_section(
         comp_df = build_comparison_df(valid, bank_df=bank_df if has_bank else None)
         reg_df = build_region_df(
             valid,
-            region_targets={"台股": 0.35, "日股": 0.30, "美股": 0.35},
+            region_targets={"台股": 0.31, "日股": 0.31, "美股": 0.31, "全球": 0.07},
             bank_df=bank_df if has_bank else None,
         )
         has_acct_col = "理論(資金加權)" in comp_df.columns
