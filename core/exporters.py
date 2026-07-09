@@ -34,6 +34,7 @@ def check_data_freshness(ticker, last_update_time):
     特別處理台股開盤緩衝期（09:00–09:25）。
     """
     import datetime
+
     now = datetime.datetime.now()
 
     if isinstance(last_update_time, str) and last_update_time.strip():
@@ -51,11 +52,7 @@ def check_data_freshness(ticker, last_update_time):
     delay_minutes = (now - last_update_time).total_seconds() / 60
 
     if delay_minutes > 5:
-        return (
-            "⚠️ 即時資料可能延遲，"
-            "開盤前 20 分鐘訊號僅供參考，"
-            "請以既定掛單規則優先。"
-        )
+        return "⚠️ 即時資料可能延遲，開盤前 20 分鐘訊號僅供參考，請以既定掛單規則優先。"
 
     ticker_str = str(ticker)
     if ticker_str.endswith(".TW") or ticker_str.endswith(".TWO"):
@@ -86,7 +83,7 @@ def _bank_mask(df):
 
 def export_for_ai(df_res, adv_res=None):
     """導出結構化的診斷報告（盤後模式：OHLC zone、Pain Ratio 變化、市場事件）。"""
-    now_str = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')
+    now_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
     report = [f"# 診斷報告｜{now_str} 收盤後\n"]
     report.append(f"> 🕒 製表時間: {now_str}\n")
 
@@ -118,6 +115,7 @@ def export_for_ai(df_res, adv_res=None):
                 build_risk_report_section,
                 calculate_overall_risk_score,
             )
+
             risk_data = calculate_overall_risk_score(adv_res, df_res)
             risk_section = build_risk_report_section(risk_data)
             if risk_section:
@@ -283,9 +281,7 @@ def _append_risk_balance_section(
 
         work = investment_df.copy()
         if adv_res is not None and not adv_res.empty and COL_TICKER in adv_res.columns:
-            cols = adv_res.columns.difference(
-                work.columns.difference([COL_TICKER])
-            )
+            cols = adv_res.columns.difference(work.columns.difference([COL_TICKER]))
             work = pd.merge(work, adv_res[cols], on=COL_TICKER, how="left")
 
         if "annualizedVol" in work.columns:
@@ -307,11 +303,19 @@ def _append_risk_balance_section(
 
         report.append("\n## 風險加權配置分析\n")
         if has_acct_col:
-            report.append("| 標的 | 波動率 | 理論(波動率) | 理論(資金加權) | 實際配置 | 差異(資金加權) |")
-            report.append("|------|--------|-------------|--------------|---------|--------------|")
+            report.append(
+                "| 標的 | 波動率 | 理論(波動率) | 理論(資金加權) | 實際配置 | 差異(資金加權) |"
+            )
+            report.append(
+                "|------|--------|-------------|--------------|---------|--------------|"
+            )
         else:
-            report.append("| 標的 | 波動率 | 理論(波動率) | 理論(綜合) | 實際配置 | 差異(波動率) |")
-            report.append("|------|--------|-------------|-----------|---------|-------------|")
+            report.append(
+                "| 標的 | 波動率 | 理論(波動率) | 理論(綜合) | 實際配置 | 差異(波動率) |"
+            )
+            report.append(
+                "|------|--------|-------------|-----------|---------|-------------|"
+            )
 
         for _, r in comp_df.iterrows():
             if has_acct_col:
@@ -452,9 +456,11 @@ def export_single_target_for_ai(row) -> str:
 def _append_diagnosis_sections(report: list) -> None:
     """在診斷模式報告末尾附加 OHLC zone、市場事件與 Pain Ratio 變化。"""
     from datetime import date
+
     today_str = str(date.today())
     try:
         from db.database import _get_connection, init_db
+
         init_db()
         with _get_connection() as conn:
             ohlc_rows = conn.execute(
@@ -472,6 +478,7 @@ def _append_diagnosis_sections(report: list) -> None:
             ).fetchall()
 
         if ohlc_rows:
+
             def _zp(zone, pos):
                 if zone is None:
                     return "-"
@@ -504,6 +511,7 @@ def _append_diagnosis_sections(report: list) -> None:
 
     try:
         from db.database import get_latest_two_snapshots
+
         latest, previous = get_latest_two_snapshots()
         if latest.get("assets") and previous.get("assets"):
             prev_map = {

@@ -66,12 +66,12 @@ function buildOption(data) {
     },
     axisPointer: { link: [{ xAxisIndex: 'all' }] },
     legend: {
-      data: ['總市值', '投入成本', '報酬率%', '每日損益變化'],
+      data: ['總市值', '持股市值', '報酬率%', '每日損益變化'],
       top: 0,
       textStyle: { color: '#9ca3af', fontSize: 11 },
       itemWidth: 14, itemHeight: 2,
     },
-    // 主圖（總市值/投入成本/報酬率%，佔 70%）+ 附圖（每日損益變化長條圖，佔 30%），x 軸對齊共用
+    // 主圖（總市值/持股市值/報酬率%，佔 70%）+ 附圖（每日損益變化長條圖，佔 30%），x 軸對齊共用
     grid: [
       { left: 60, right: 50, top: 34, height: '48%' },
       { left: 60, right: 50, top: '68%', bottom: 30 },
@@ -87,7 +87,7 @@ function buildOption(data) {
         splitLine: { show: false } },
     ],
     yAxis: [
-      // 左軸下限動態抓資料最小值的 90%，避免總市值/投入成本波動被硬拉到含 0 的滿版壓縮
+      // 左軸下限動態抓資料最小值的 90%，避免總市值/持股市值波動被硬拉到含 0 的滿版壓縮
       { type: 'value', gridIndex: 0, position: 'left', name: 'TWD',
         min: (value) => Math.round(value.min * 0.9),
         nameTextStyle: { color: '#6b7280', fontSize: 10 },
@@ -109,7 +109,7 @@ function buildOption(data) {
     series: [
       { name: '總市值', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: data.map(d => d.total_value),
         smooth: true, symbol: 'none', lineStyle: { color: '#60a5fa', width: 2 } },
-      { name: '投入成本', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: data.map(d => d.invest_value),
+      { name: '持股市值', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: data.map(d => d.invest_value),
         smooth: true, symbol: 'none', lineStyle: { color: '#a78bfa', width: 1.5 } },
       { name: '報酬率%', type: 'line', xAxisIndex: 0, yAxisIndex: 1, data: data.map(d => d.total_gain_pct),
         smooth: true, symbol: 'none', lineStyle: { color: '#34d399', width: 1.5, type: 'dashed' } },
