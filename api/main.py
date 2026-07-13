@@ -4,6 +4,7 @@ import math
 import time
 import asyncio
 import datetime
+import logging
 import threading
 from contextlib import asynccontextmanager
 from functools import lru_cache
@@ -24,6 +25,7 @@ from core.columns import (
 from core.fetchers import get_market_radar_data, fetch_historical_data, get_ticker_fundamental_info
 from core.calculators import exchange_rate, calculate_assets_data
 from core.analysis.advanced import run_advanced_analysis
+from core import analysis_quant  # facade：run_advanced_analysis() 額外會寫 save_snapshot / save_order_bands，只給每日排程用
 from core.analysis.overall_risk import calculate_overall_risk_score, get_risk_level, get_risk_alerts
 from core.daily_summary import generate_daily_summary
 from core.exporters import export_for_ai, export_single_target_for_ai
@@ -34,6 +36,8 @@ from db.database import get_portfolio_value_history
 
 _TZ_TW = datetime.timezone(datetime.timedelta(hours=8))
 _WARM_INTERVAL = 9 * 60  # 每 9 分鐘（< portfolio TTL 10 分鐘）
+_SNAPSHOT_HOUR = 15  # 每日快照存檔時間（台灣時間），涵蓋台股(13:30)/日股(14:30)收盤
+_SNAPSHOT_MINUTE = 0
 
 def _is_trading_hours() -> bool:
     """台股 09:00–13:30 / 日股 08:00–14:30（台灣時間），週一~五。"""
@@ -58,15 +62,36 @@ async def _cache_warmer():
                 pass
 
 
+def _seconds_until_next_snapshot() -> float:
+    now = datetime.datetime.now(tz=_TZ_TW)
+    target = now.replace(hour=_SNAPSHOT_HOUR, minute=_SNAPSHOT_MINUTE, second=0, microsecond=0)
+    if target <= now:
+        target += datetime.timedelta(days=1)
+    return (target - now).total_seconds()
+
+
+async def _daily_snapshot_scheduler():
+    """每日固定時間跑一次完整量化分析並落地 snapshot / order_bands（走 analysis_quant facade）。"""
+    while True:
+        await asyncio.sleep(_seconds_until_next_snapshot())
+        try:
+            df, _, _, _ = _load_data()
+            analysis_quant.run_advanced_analysis(df)
+        except Exception as exc:
+            logging.warning(f"[snapshot] 每日排程存檔失敗：{exc}")
+
+
 @asynccontextmanager
 async def lifespan(app):
-    task = asyncio.create_task(_cache_warmer())
+    tasks = [asyncio.create_task(_cache_warmer()), asyncio.create_task(_daily_snapshot_scheduler())]
     yield
-    task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
+    for task in tasks:
+        task.cancel()
+    for task in tasks:
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="Asset Tracking API", version="0.1.0", lifespan=lifespan)

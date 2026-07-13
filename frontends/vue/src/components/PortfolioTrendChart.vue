@@ -1,7 +1,12 @@
 <template>
   <div class="rounded-xl bg-gray-800 p-4">
     <div class="flex items-center justify-between mb-3">
-      <div class="font-semibold text-sm">📈 資產趨勢</div>
+      <div class="flex items-center gap-2">
+        <div class="font-semibold text-sm">📈 資產趨勢</div>
+        <div v-if="livePl" :class="['text-xs tabular-nums', plColor(livePl.value)]">
+          即時損益 {{ livePl.value >= 0 ? '+' : '' }}${{ livePl.valueFmt }}（{{ livePl.pct >= 0 ? '+' : '' }}{{ livePl.pct }}%）
+        </div>
+      </div>
       <div class="flex gap-1">
         <button v-for="r in RANGES" :key="r.key" :class="[
           'text-xs px-2 py-1 rounded-lg transition-colors',
@@ -24,9 +29,14 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
 import { fetchPortfolioHistory } from '../api/portfolio.js'
+import { plColor } from '../utils/colors.js'
+
+const props = defineProps({
+  summary: { type: Object, default: null },
+})
 
 const RANGES = [
   { key: 90, label: '90天' },
@@ -39,6 +49,17 @@ const error = ref('')
 const rows = ref([])
 const chartEl = ref(null)
 let chart = null
+
+// 即時損益：以 SummaryCard 同一份 /api/portfolio summary 現算，避免只顯示到昨日收盤快照
+const livePl = computed(() => {
+  const s = props.summary
+  if (!s || s.total_pl_twd == null) return null
+  return {
+    value: s.total_pl_twd,
+    valueFmt: new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 0 }).format(s.total_pl_twd),
+    pct: s.return_pct ?? 0,
+  }
+})
 
 // 每日損益變化 = 當日損益 - 前一日損益；第一筆沒有前一日資料，留空不畫
 function calcDailyChange(data) {
