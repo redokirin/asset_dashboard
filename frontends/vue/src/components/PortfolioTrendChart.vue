@@ -3,8 +3,8 @@
     <div class="flex items-center justify-between mb-3">
       <div class="flex items-center gap-2">
         <div class="font-semibold text-sm">📈 資產趨勢</div>
-        <div v-if="livePl" :class="['text-xs tabular-nums', plColor(livePl.value)]">
-          即時損益 {{ livePl.value >= 0 ? '+' : '' }}${{ livePl.valueFmt }}（{{ livePl.pct >= 0 ? '+' : '' }}{{ livePl.pct }}%）
+        <div v-if="dailyPnl != null" :class="['text-xs tabular-nums', plColor(dailyPnl)]">
+          每日損益變化 {{ dailyPnl >= 0 ? '+' : '' }}${{ dailyPnlFmt }}
         </div>
       </div>
       <div class="flex gap-1">
@@ -35,7 +35,7 @@ import { fetchPortfolioHistory } from '../api/portfolio.js'
 import { plColor } from '../utils/colors.js'
 
 const props = defineProps({
-  summary: { type: Object, default: null },
+  dailyPnl: { type: Number, default: null },
 })
 
 const RANGES = [
@@ -50,17 +50,6 @@ const rows = ref([])
 const chartEl = ref(null)
 let chart = null
 
-// 即時損益：以 SummaryCard 同一份 /api/portfolio summary 現算，避免只顯示到昨日收盤快照
-const livePl = computed(() => {
-  const s = props.summary
-  if (!s || s.total_pl_twd == null) return null
-  return {
-    value: s.total_pl_twd,
-    valueFmt: new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 0 }).format(s.total_pl_twd),
-    pct: s.return_pct ?? 0,
-  }
-})
-
 // 每日損益變化 = 當日損益 - 前一日損益；第一筆沒有前一日資料，留空不畫
 function calcDailyChange(data) {
   return data.map((d, i) => {
@@ -68,6 +57,11 @@ function calcDailyChange(data) {
     return +(d.total_gain - data[i - 1].total_gain).toFixed(2)
   })
 }
+
+// 標題旁小標籤：與 ui_console.py 的「當日損益」同一份 market_share.daily_pnl
+const dailyPnlFmt = computed(() =>
+  props.dailyPnl == null ? '' : new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 0 }).format(props.dailyPnl)
+)
 
 function buildOption(data) {
   const dates = data.map(d => d.snapshot_date)

@@ -51,7 +51,7 @@ def show_console_rich(
         color = "red" if item["漲跌幅"] > 0 else "green"
         radar_table.add_row(
             item["名稱"],
-            f"{item['數值']:,.2f}",
+            f"{item['數值']:,.4f}",
             f"[{color}]{item['漲跌幅']:+.2f}%[/{color}]",
         )
     console.print(radar_table)
