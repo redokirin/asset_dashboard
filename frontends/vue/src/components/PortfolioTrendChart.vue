@@ -63,9 +63,13 @@ const dailyPnlFmt = computed(() =>
   props.dailyPnl == null ? '' : new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 0 }).format(props.dailyPnl)
 )
 
-function buildOption(data) {
+function buildOption(data, dailyPnl) {
   const dates = data.map(d => d.snapshot_date)
   const dailyChange = calcDailyChange(data)
+  // 最新一筆長條改用即時 daily_pnl 覆蓋，跟標題徽章對齊（快照差值本身可能還沒寫入今天，或含基金/交易影響）
+  if (dailyPnl != null && dailyChange.length) {
+    dailyChange[dailyChange.length - 1] = dailyPnl
+  }
   const upColor = '#ef4444'   // 紅漲（台股慣例）
   const downColor = '#22c55e' // 綠跌
 
@@ -151,12 +155,15 @@ async function load() {
   await nextTick()
   if (!chartEl.value) return
   chart = echarts.init(chartEl.value, 'dark')
-  chart.setOption(buildOption(rows.value))
+  chart.setOption(buildOption(rows.value, props.dailyPnl))
 }
 
 function onResize() { chart?.resize() }
 
 watch(range, load)
+watch(() => props.dailyPnl, (val) => {
+  if (chart && rows.value.length) chart.setOption(buildOption(rows.value, val))
+})
 onMounted(() => {
   load()
   window.addEventListener('resize', onResize)

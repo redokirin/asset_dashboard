@@ -1,0 +1,57 @@
+#!/bin/sh
+
+  # 停掉舊的
+  pkill -f "uvicorn api.main:app" 2>/dev/null
+  sleep 1
+  cat /volume1/homes/redokirin/nginx.pid 2>/dev/null | xargs kill 2>/dev/null
+  sleep 1
+
+  # FastAPI
+  cd /volume1/web/assests
+  export TMPDIR=/volume1/homes/redokirin/tmp
+  mkdir -p "$TMPDIR"
+  nohup uvicorn api.main:app --host 0.0.0.0 --port 8888 \
+    &> /volume1/homes/redokirin/uvicorn.log &
+
+  # Nginx
+  nginx -e /volume1/homes/redokirin/nginx-error.log \
+        -c /volume1/homes/redokirin/nginx-asset.conf
+
+
+殺掉占用 port 的 process（Windows）：
+
+  # 查 port 8000 的 PID
+  Get-NetTCPConnection -LocalPort 8000 -State Listen | Select-Object -ExpandProperty OwningProcess
+
+  # 停掉該 PID（把 46200 換成查到的數字）
+  Stop-Process -Id 46200 -Force
+
+  或一行完成：
+
+  Get-NetTCPConnection -LocalPort 8000 -State Listen | Select-Object -ExpandProperty OwningProcess | ForEach-Object {
+  Stop-Process -Id $_ -Force }
+
+
+  rm -rf assests
+  git clone git@bitbucket.org:redokirin/asset_tracking.git assests
+
+1. 重裝 Python 依賴
+cd /volume1/web/assests
+pip3.12 install -r requirements-api.txt \
+--extra-index-url https://www.piwheels.org/simple/ \
+--prefer-binary
+
+2. 重 build Vue
+cd frontends/vue
+npm install
+npm run build
+
+3. 重啟 FastAPI
+cd /volume1/web/assests
+mkdir -p ~/tmp && export TMPDIR=~/tmp
+uvicorn api.main:app --host 0.0.0.0 --port 8888 &
+
+
+nohup uvicorn api.main:app --host 0.0.0.0 --port 8888 &> ~/uvicorn.log &
+
+scp -r -p22 dist/ redokirin@192.168.50.37:/web/assests/frontends/vue/
