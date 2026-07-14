@@ -18,26 +18,54 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from core.columns import (
-    COL_ASSET_TYPE, COL_AVG_COST, COL_BUY_LEVELS, COL_CHANGE, COL_COST,
-    COL_CURRENCY, COL_GET_VALUE, COL_MARKET, COL_MARKET_VALUE, COL_NAME,
-    COL_PRICE, COL_PROFIT_LOSS, COL_RETURN_PCT, COL_TICKER, COL_UNITS, COL_WEIGHT,
+    COL_ASSET_TYPE,
+    COL_AVG_COST,
+    COL_BUY_LEVELS,
+    COL_CHANGE,
+    COL_COST,
+    COL_CURRENCY,
+    COL_GET_VALUE,
+    COL_MARKET,
+    COL_MARKET_VALUE,
+    COL_NAME,
+    COL_PRICE,
+    COL_PROFIT_LOSS,
+    COL_RETURN_PCT,
+    COL_TICKER,
+    COL_UNITS,
+    COL_WEIGHT,
 )
-from core.fetchers import get_market_radar_data, fetch_historical_data, get_ticker_fundamental_info
+from core.fetchers import (
+    get_market_radar_data,
+    fetch_historical_data,
+    get_ticker_fundamental_info,
+)
 from core.calculators import exchange_rate, calculate_assets_data
 from core.analysis.advanced import run_advanced_analysis
-from core import analysis_quant  # facade：run_advanced_analysis() 額外會寫 save_snapshot / save_order_bands，只給每日排程用
-from core.analysis.overall_risk import calculate_overall_risk_score, get_risk_level, get_risk_alerts
+from core import (
+    analysis_quant,
+)  # facade：run_advanced_analysis() 額外會寫 save_snapshot / save_order_bands，只給每日排程用
+from core.analysis.overall_risk import (
+    calculate_overall_risk_score,
+    get_risk_level,
+    get_risk_alerts,
+)
 from core.daily_summary import generate_daily_summary
 from core.exporters import export_for_ai, export_single_target_for_ai
 from core.tags import TAG_DISPLAY
-from core.xray import analyze_portfolio_exposures, get_ticker_holdings, get_ticker_sector
+from core.xray import (
+    analyze_portfolio_exposures,
+    get_ticker_holdings,
+    get_ticker_sector,
+)
 from core.data_loader import get_etf_transactions
-from db.database import get_portfolio_value_history
+from db.database import get_portfolio_value_history, update_ohlc_zones
 
 _TZ_TW = datetime.timezone(datetime.timedelta(hours=8))
 _WARM_INTERVAL = 9 * 60  # 每 9 分鐘（< portfolio TTL 10 分鐘）
 _SNAPSHOT_HOUR = 15  # 每日快照存檔時間（台灣時間），涵蓋台股(13:30)/日股(14:30)收盤
 _SNAPSHOT_MINUTE = 0
+
 
 def _is_trading_hours() -> bool:
     """台股 09:00–13:30 / 日股 08:00–14:30（台灣時間），週一~五。"""
@@ -64,14 +92,19 @@ async def _cache_warmer():
 
 def _seconds_until_next_snapshot() -> float:
     now = datetime.datetime.now(tz=_TZ_TW)
-    target = now.replace(hour=_SNAPSHOT_HOUR, minute=_SNAPSHOT_MINUTE, second=0, microsecond=0)
+    target = now.replace(
+        hour=_SNAPSHOT_HOUR, minute=_SNAPSHOT_MINUTE, second=0, microsecond=0
+    )
     if target <= now:
         target += datetime.timedelta(days=1)
     return (target - now).total_seconds()
 
 
 async def _daily_snapshot_scheduler():
-    """每日固定時間跑一次完整量化分析並落地 snapshot / order_bands（走 analysis_quant facade）。"""
+    """
+    每日固定時間跑一次完整量化分析並落地 snapshot / order_bands（走 analysis_quant facade），
+    緊接著補當天的 OHLC 區間位置。15:00 台灣時間台股(13:30)/日股(14:30)已收盤。
+    """
     while True:
         await asyncio.sleep(_seconds_until_next_snapshot())
         try:
@@ -79,11 +112,19 @@ async def _daily_snapshot_scheduler():
             analysis_quant.run_advanced_analysis(df)
         except Exception as exc:
             logging.warning(f"[snapshot] 每日排程存檔失敗：{exc}")
+            continue
+        try:
+            update_ohlc_zones(str(datetime.date.today()))
+        except Exception as exc:
+            logging.warning(f"[snapshot] 每日 OHLC 區間補齊失敗：{exc}")
 
 
 @asynccontextmanager
 async def lifespan(app):
-    tasks = [asyncio.create_task(_cache_warmer()), asyncio.create_task(_daily_snapshot_scheduler())]
+    tasks = [
+        asyncio.create_task(_cache_warmer()),
+        asyncio.create_task(_daily_snapshot_scheduler()),
+    ]
     yield
     for task in tasks:
         task.cancel()
@@ -103,13 +144,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_PORTFOLIO_TTL      = 600    # 開盤：10 分鐘
+_PORTFOLIO_TTL = 600  # 開盤：10 分鐘
 _PORTFOLIO_TTL_IDLE = 7200  # 收盤：2 小時
-_ANALYSIS_TTL       = 3600  # 開盤：1 小時
-_ANALYSIS_TTL_IDLE  = 86400 # 收盤：24 小時
-_XRAY_TTL           = 3600  # 開盤：1 小時（holdings 本身有 7 天 file cache）
-_XRAY_TTL_IDLE      = 86400 # 收盤：24 小時
-_TRANSACTIONS_TTL   = 3600  # 交易紀錄不會頻繁變動，固定 1 小時
+_ANALYSIS_TTL = 3600  # 開盤：1 小時
+_ANALYSIS_TTL_IDLE = 86400  # 收盤：24 小時
+_XRAY_TTL = 3600  # 開盤：1 小時（holdings 本身有 7 天 file cache）
+_XRAY_TTL_IDLE = 86400  # 收盤：24 小時
+_TRANSACTIONS_TTL = 3600  # 交易紀錄不會頻繁變動，固定 1 小時
 
 
 def _safe(v):
@@ -127,7 +168,9 @@ def _safe(v):
 
 
 def _df_to_records(df: pd.DataFrame) -> list:
-    return [{k: _safe(v) for k, v in row.items()} for row in df.to_dict(orient="records")]
+    return [
+        {k: _safe(v) for k, v in row.items()} for row in df.to_dict(orient="records")
+    ]
 
 
 def _safe_obj(obj):
@@ -205,8 +248,8 @@ def get_portfolio():
     df, market_share, rates, _radar = _load_data()
 
     total_value = int(df[COL_MARKET_VALUE].sum()) if not df.empty else 0
-    total_cost  = int(df[COL_COST].sum())         if not df.empty else 0
-    total_pl    = int(df[COL_PROFIT_LOSS].sum())  if not df.empty else 0
+    total_cost = int(df[COL_COST].sum()) if not df.empty else 0
+    total_pl = int(df[COL_PROFIT_LOSS].sum()) if not df.empty else 0
 
     return {
         "exchange_rates": rates,
@@ -214,9 +257,9 @@ def get_portfolio():
         "market_share": market_share,
         "summary": {
             "total_value_twd": total_value,
-            "total_cost_twd":  total_cost,
-            "total_pl_twd":    total_pl,
-            "return_pct":      round(total_pl / total_cost * 100, 2) if total_cost else 0,
+            "total_cost_twd": total_cost,
+            "total_pl_twd": total_pl,
+            "return_pct": round(total_pl / total_cost * 100, 2) if total_cost else 0,
         },
     }
 
@@ -238,7 +281,9 @@ def get_daily_summary():
     df, _, _, _ = _load_data()
     adv_res = _load_advanced()
     risk_data = calculate_overall_risk_score(adv_res, df)
-    result = generate_daily_summary(df_res=df, adv_res=adv_res, risk_data=risk_data or None)
+    result = generate_daily_summary(
+        df_res=df, adv_res=adv_res, risk_data=risk_data or None
+    )
     return _safe_obj(result)
 
 
@@ -262,11 +307,11 @@ def get_ticker_historical(
 
     data = [
         {
-            "date":   idx.strftime("%Y-%m-%d"),
-            "open":   _safe(row.get("Open")),
-            "high":   _safe(row.get("High")),
-            "low":    _safe(row.get("Low")),
-            "close":  _safe(row.get("Close")),
+            "date": idx.strftime("%Y-%m-%d"),
+            "open": _safe(row.get("Open")),
+            "high": _safe(row.get("High")),
+            "low": _safe(row.get("Low")),
+            "close": _safe(row.get("Close")),
             "volume": _safe(row.get("Volume")),
         }
         for idx, row in df.iterrows()
@@ -310,27 +355,29 @@ def post_manual_analysis(req: ManualAnalysisRequest):
     if not tickers:
         return {"assets": []}
 
-    manual_df = pd.DataFrame([
-        {
-            COL_MARKET: "手動",
-            COL_ASSET_TYPE: "個股",
-            COL_NAME: t,
-            COL_TICKER: t,
-            COL_CURRENCY: "TWD",
-            COL_UNITS: 0,
-            COL_AVG_COST: 0.0,
-            COL_CHANGE: None,
-            COL_PRICE: 0.0,
-            COL_BUY_LEVELS: 0.0,
-            COL_COST: 0,
-            COL_MARKET_VALUE: 0,
-            COL_PROFIT_LOSS: 0,
-            COL_RETURN_PCT: 0.0,
-            COL_WEIGHT: 0.0,
-            COL_GET_VALUE: True,
-        }
-        for t in tickers
-    ])
+    manual_df = pd.DataFrame(
+        [
+            {
+                COL_MARKET: "手動",
+                COL_ASSET_TYPE: "個股",
+                COL_NAME: t,
+                COL_TICKER: t,
+                COL_CURRENCY: "TWD",
+                COL_UNITS: 0,
+                COL_AVG_COST: 0.0,
+                COL_CHANGE: None,
+                COL_PRICE: 0.0,
+                COL_BUY_LEVELS: 0.0,
+                COL_COST: 0,
+                COL_MARKET_VALUE: 0,
+                COL_PROFIT_LOSS: 0,
+                COL_RETURN_PCT: 0.0,
+                COL_WEIGHT: 0.0,
+                COL_GET_VALUE: True,
+            }
+            for t in tickers
+        ]
+    )
 
     try:
         adv = run_advanced_analysis(manual_df)
@@ -382,7 +429,9 @@ def get_holdings_endpoint(ticker: str):
 
 @lru_cache(maxsize=1)
 def _cached_transactions(cache_key: int):
-    return get_etf_transactions()
+    df, _, _, _ = _load_data()
+    price_map = dict(zip(df[COL_TICKER], df[COL_PRICE])) if not df.empty else {}
+    return get_etf_transactions(price_map)
 
 
 @app.get("/api/transactions")
@@ -411,9 +460,11 @@ def get_risk():
     score = risk_data["risk_score"]
     level_label, level_advice = get_risk_level(score)
     alerts = get_risk_alerts(risk_data)
-    return _safe_obj({
-        **risk_data,
-        "risk_level": level_label,
-        "risk_advice": level_advice,
-        "alerts": alerts,
-    })
+    return _safe_obj(
+        {
+            **risk_data,
+            "risk_level": level_label,
+            "risk_advice": level_advice,
+            "alerts": alerts,
+        }
+    )

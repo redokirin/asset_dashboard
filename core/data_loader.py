@@ -194,41 +194,56 @@ def get_config_from_gsheets():
         return None
 
 
-def _parse_transaction_row(row: dict, currency: str) -> dict | None:
-    """row 為 get_all_records() 單列 dict；ticker 空白（如累計/空白列）時回傳 None。"""
+def _parse_transaction_row(row: dict, currency: str, current_price: float | None = None) -> dict | None:
+    """
+    row 為 get_all_records() 單列 dict；ticker 空白（如累計/空白列）時回傳 None。
+    pnl：優先用 current_price（App 即時股價）現算 shares * current_price - total，
+    避免吃到 Google Sheets 的 P&L 公式格（該格靠 GOOGLEFINANCE 之類的機制，只有人打開試算表才會重新計算，
+    透過 API 讀到的常是舊快照）。current_price 缺值時（如標的已從投組移除）才退回 sheet 原始 P&L。
+    """
     ticker = str(row.get("ticker", "")).strip()
     if not ticker:
         return None
+    shares = _parse_numeric(row.get("shares", ""))
+    total = _parse_numeric(row.get("total", ""))
+    pnl = (
+        shares * current_price - total
+        if current_price is not None
+        else _parse_numeric(row.get("P&L", ""))
+    )
     return {
         "ticker": ticker,
         "settlement": str(row.get("Settlement", "")).strip(),
         "type": str(row.get("type", "")).strip(),
         "date": str(row.get("date", "")).strip(),
-        "shares": _parse_numeric(row.get("shares", "")),
+        "shares": shares,
         "price": _parse_numeric(row.get("price", "")),
         "cost": _parse_numeric(row.get("cost", "")),
         "fee": _parse_numeric(row.get("fee", "")),
-        "total": _parse_numeric(row.get("total", "")),
-        "pnl": _parse_numeric(row.get("P&L", "")),
+        "total": total,
+        "pnl": pnl,
         "currency": currency,
     }
 
 
-def get_etf_transactions() -> dict[str, list[dict]]:
+def get_etf_transactions(price_map: dict[str, float] | None = None) -> dict[str, list[dict]]:
     """
     讀取 JPY / TWD 分頁的 ETF 交易紀錄，依 ticker 分組回傳（沿用表單原本新到舊的排序）。
     找不到 ticker 的列（空白列、累計 summary 列）自動略過。
+    price_map：{ticker: 現價}，用來現算 pnl；不傳則退回 sheet 原始 P&L 欄位。
     """
     sh = _get_spreadsheet()
     if sh is None:
         return {}
 
+    price_map = price_map or {}
     result: dict[str, list[dict]] = {}
     for tab, currency in [("JPY", "JPY"), ("TWD", "TWD")]:
         try:
             ws = sh.worksheet(tab)
             for raw_row in ws.get_all_records():
-                record = _parse_transaction_row(raw_row, currency)
+                ticker = str(raw_row.get("ticker", "")).strip()
+                record = _parse_transaction_row(raw_row, currency, price_map.get(ticker))
                 if record:
                     result.setdefault(record["ticker"], []).append(record)
         except Exception as e:
