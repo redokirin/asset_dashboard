@@ -14,58 +14,38 @@
     </button>
 
     <div v-show="open" class="space-y-3">
-      <!-- 可執行訊號 -->
-      <div v-if="summary.actionable?.length">
-        <div class="text-xs text-gray-500 mb-1">【可執行】</div>
+      <!-- 可執行訊號／觀望／警示：依 ticker 合併顯示 -->
+      <div v-if="merged.length">
         <div
-          v-for="item in summary.actionable"
+          v-for="item in merged"
           :key="item.ticker"
           class="flex items-start gap-2 py-1.5 border-b border-gray-700/50 last:border-0"
         >
-          <span class="text-base leading-none mt-0.5">{{ item.emoji }}</span>
+          <span class="text-base leading-none mt-0.5">
+            {{ item.actionable ? item.actionable.emoji : (item.holdOff ? '⏸' : '⚠️') }}
+          </span>
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium">{{ item.ticker }}</span>
               <span class="text-xs text-gray-400">{{ item.name }}</span>
-              <span class="text-xs text-gray-500">{{ item.signal }}</span>
+              <span v-if="item.actionable" class="text-xs text-gray-500">{{ item.actionable.signal }}</span>
+              <span v-else-if="item.holdOff" class="text-xs text-gray-500">觀望</span>
             </div>
-            <div v-if="item.zone_range" class="text-xs text-gray-400">
-              區間 {{ item.zone_range }}
-              <span v-if="item.fib_price" class="ml-1 text-gray-500">
-                ｜支撐 {{ item.fib_label }} {{ item.fib_price }}
+            <div v-if="item.actionable?.zone_range" class="text-xs text-gray-400">
+              區間 {{ item.actionable.zone_range }}
+              <span v-if="item.actionable.fib_price" class="ml-1 text-gray-500">
+                ｜支撐 {{ item.actionable.fib_label }} {{ item.actionable.fib_price }}
               </span>
             </div>
-            <div v-if="item.quality_note" class="text-xs text-yellow-400/80">{{ item.quality_note }}</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 觀望 -->
-      <div v-if="summary.hold_off?.length">
-        <div class="text-xs text-gray-500 mb-1">【觀望（量價異常）】</div>
-        <div
-          v-for="item in summary.hold_off"
-          :key="item.ticker"
-          class="flex items-center gap-2 py-1 text-sm text-gray-400"
-        >
-          <span>⏸</span>
-          <span class="font-medium text-gray-300">{{ item.ticker }}</span>
-          <span class="text-xs">{{ item.quality_note || '量縮上漲，不追' }}</span>
-        </div>
-      </div>
-
-      <!-- 警示 -->
-      <div v-if="summary.warnings?.length">
-        <div class="text-xs text-gray-500 mb-1">【須注意】</div>
-        <div
-          v-for="w in summary.warnings"
-          :key="w.ticker"
-          class="flex items-start gap-2 py-1 text-xs text-red-300/80"
-        >
-          <span>⚠️</span>
-          <div>
-            <span class="font-medium text-red-300">{{ w.ticker }}</span>
-            {{ w.reasons?.join('、') }}｜{{ w.advice }}
+            <div v-if="item.actionable?.quality_note" class="text-xs text-yellow-400/80">
+              {{ item.actionable.quality_note }}
+            </div>
+            <div v-if="item.holdOff" class="text-xs text-gray-400">
+              {{ item.holdOff.quality_note || '量縮上漲，不追' }}
+            </div>
+            <div v-if="item.warning" class="text-xs text-red-300/80">
+              ⚠️ {{ item.warning.reasons?.join('、') }}｜{{ item.warning.advice }}
+            </div>
           </div>
         </div>
       </div>
@@ -89,10 +69,7 @@
       </div>
 
       <!-- 無訊號 -->
-      <div
-        v-if="!summary.actionable?.length && !summary.hold_off?.length && !summary.warnings?.length"
-        class="text-xs text-gray-500"
-      >
+      <div v-if="!merged.length" class="text-xs text-gray-500">
         ✅ 今日無須特別行動
       </div>
 
@@ -112,6 +89,25 @@ const open = ref(true)
 
 const badgeCount = computed(() => {
   return (props.summary.actionable?.length ?? 0) + (props.summary.warnings?.length ?? 0)
+})
+
+// 依 ticker 合併可執行訊號／觀望／警示；一檔標的可能同時有訊號 + 警示（例如可執行但 Pain Ratio 偏高）
+const merged = computed(() => {
+  const map = new Map()
+  const entry = (ticker, name) => {
+    if (!map.has(ticker)) map.set(ticker, { ticker, name, actionable: null, holdOff: null, warning: null })
+    return map.get(ticker)
+  }
+  for (const item of props.summary.actionable ?? []) {
+    entry(item.ticker, item.name).actionable = item
+  }
+  for (const item of props.summary.hold_off ?? []) {
+    entry(item.ticker, item.name).holdOff = item
+  }
+  for (const item of props.summary.warnings ?? []) {
+    entry(item.ticker, item.name).warning = item
+  }
+  return Array.from(map.values())
 })
 
 function pct(v) {
