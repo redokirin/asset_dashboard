@@ -1,0 +1,369 @@
+{
+  "info": {
+    "_postman_id": "3b14e521-6fa3-4f30-94da-ed4850d43901",
+    "name": "Asset_tracking",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "26555521",
+    "_collection_link": "https://go.postman.co/collection/26555521-3b14e521-6fa3-4f30-94da-ed4850d43901?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "健康檢查",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{assets_domain}}/health",
+          "host": [
+            "{{assets_domain}}"
+          ],
+          "path": [
+            "health"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "投資組合",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{assets_domain}}/api/portfolio",
+          "host": [
+            "{{assets_domain}}"
+          ],
+          "path": [
+            "api",
+            "portfolio"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "資產總覽歷史",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{assets_domain}}/api/portfolio/history?days=90",
+          "host": [
+            "{{assets_domain}}"
+          ],
+          "path": [
+            "api",
+            "portfolio",
+            "history"
+          ],
+          "query": [
+            {
+              "key": "days",
+              "value": "90",
+              "description": "回溯天數，1~36500，給大值（如 36500）等同拉取全部歷史"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "進階分析",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{assets_domain}}/api/analysis/advanced",
+          "host": [
+            "{{assets_domain}}"
+          ],
+          "path": [
+            "api",
+            "analysis",
+            "advanced"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "手動分析",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tickers\": [\"2330.TW\", \"AAPL\"]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{assets_domain}}/api/analysis/manual",
+          "host": [
+            "{{assets_domain}}"
+          ],
+          "path": [
+            "api",
+            "analysis",
+            "manual"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "風險分析",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{assets_domain}}/api/analysis/risk",
+          "host": [
+            "{{assets_domain}}"
+          ],
+          "path": [
+            "api",
+            "analysis",
+            "risk"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "今日行動摘要",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{assets_domain}}/api/summary/daily",
+          "host": [
+            "{{assets_domain}}"
+          ],
+          "path": [
+            "api",
+            "summary",
+            "daily"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "個股歷史資料",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{assets_domain}}/api/ticker/:ticker/historical?period=1mo",
+          "host": [
+            "{{assets_domain}}"
+          ],
+          "path": [
+            "api",
+            "ticker",
+            ":ticker",
+            "historical"
+          ],
+          "query": [
+            {
+              "key": "period",
+              "value": "1mo",
+              "description": "1mo | 3mo | 6mo | 1y | 2y"
+            }
+          ],
+          "variable": [
+            {
+              "key": "ticker",
+              "value": "2330.TW"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "個股基本面",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{assets_domain}}/api/ticker/:ticker/fundamental",
+          "host": [
+            "{{assets_domain}}"
+          ],
+          "path": [
+            "api",
+            "ticker",
+            ":ticker",
+            "fundamental"
+          ],
+          "variable": [
+            {
+              "key": "ticker",
+              "value": "2330.TW"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "AI 匯出報告",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{assets_domain}}/api/export/ai",
+          "host": [
+            "{{assets_domain}}"
+          ],
+          "path": [
+            "api",
+            "export",
+            "ai"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "AI 匯出報告（單一標的）",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{assets_domain}}/api/export/ai/:ticker",
+          "host": [
+            "{{assets_domain}}"
+          ],
+          "path": [
+            "api",
+            "export",
+            "ai",
+            ":ticker"
+          ],
+          "variable": [
+            {
+              "key": "ticker",
+              "value": "2330.TW"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "資產透視 X-Ray",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{assets_domain}}/api/xray",
+          "host": [
+            "{{assets_domain}}"
+          ],
+          "path": [
+            "api",
+            "xray"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "持股透視（單一標的）",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{assets_domain}}/api/holdings/:ticker",
+          "host": [
+            "{{assets_domain}}"
+          ],
+          "path": [
+            "api",
+            "holdings",
+            ":ticker"
+          ],
+          "variable": [
+            {
+              "key": "ticker",
+              "value": "0052.TW"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "交易紀錄",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{assets_domain}}/api/transactions",
+          "host": [
+            "{{assets_domain}}"
+          ],
+          "path": [
+            "api",
+            "transactions"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}
