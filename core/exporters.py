@@ -84,7 +84,7 @@ def _bank_mask(df):
 def export_for_ai(df_res, adv_res=None):
     """導出結構化的診斷報告（盤後模式：OHLC zone、Pain Ratio 變化、市場事件）。"""
     now_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
-    report = [f"# 診斷報告｜{now_str} 收盤後\n"]
+    report = [f"# 診斷報告｜{now_str}\n"]
     report.append(f"> 🕒 製表時間: {now_str}\n")
 
     # --- 1. 整體組合摘要 ---

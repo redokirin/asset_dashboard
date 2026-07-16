@@ -53,7 +53,6 @@
                                 風險評分載入中…
                             </div>
                         </div>
-                        <LiquidityCard v-if="assets.length" :assets="assets" />
                         <PortfolioTrendChart :dailyPnl="marketShare?.daily_pnl" />
                         <button v-if="marketShare && assets.length" @click="showAllocationModal = true"
                             class="w-full text-xs px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors">
