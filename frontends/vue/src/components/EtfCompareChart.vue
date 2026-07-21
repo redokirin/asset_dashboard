@@ -32,7 +32,7 @@ const PERIODS = [
     { key: '1y', label: '1年' },
 ]
 
-const period = ref('1y')
+const period = ref('1mo')
 const loading = ref(false)
 const error = ref('')
 const dates = ref([])
