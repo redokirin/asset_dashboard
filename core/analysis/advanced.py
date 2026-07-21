@@ -296,6 +296,7 @@ def run_advanced_analysis(df_res):
                     price=price_val,
                     ma5=ma5_val,
                     ma20=ma20_val,
+                    ma60=ma60_val,
                     ma250=ma250_val,
                     eps=fundamentals.get("eps"),
                     pe_ratio=fundamentals.get("pe"),

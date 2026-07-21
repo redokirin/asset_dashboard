@@ -13,6 +13,7 @@ from core.tags import (
     TAG_HIGH_EFFICIENCY,
     TAG_LONG_BEAR,
     TAG_LONG_BULL,
+    TAG_MA60_BREAK,
     TAG_MA_BREAK_WEAK,
     TAG_MA_BULL_SUPPORT,
     TAG_NEUTRAL,
@@ -51,6 +52,7 @@ def generate_advanced_diagnosis(
     price=None,
     ma5=None,
     ma20=None,
+    ma60=None,
     ma250=None,
     eps=None,
     pe_ratio=None,
@@ -120,6 +122,11 @@ def generate_advanced_diagnosis(
     else:
         tags.append(TAG_MA_BULL_SUPPORT)
         bias_advice += "站穩五日線，續強中。"
+
+    # 季線（中期趨勢），獨立於既有 MA250 長線與 MA20 短線判斷之外，只在跌破時標記
+    if price is not None and ma60 is not None and not math.isnan(ma60) and price < ma60:
+        tags.append(TAG_MA60_BREAK)
+        bias_advice += "跌破季線，中期趨勢轉弱訊號浮現。"
 
     if bias is not None and not math.isnan(bias):
         if bias <= -7:

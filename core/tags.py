@@ -38,6 +38,9 @@ TAG_RSI_OVERSOLD   = "rsi_oversold"   # 🔴 賣超
 TAG_MA_BREAK_WEAK    = "ma_break_weak"    # 🔴 破線轉弱
 TAG_MA_BULL_SUPPORT  = "ma_bull_support"  # 🟢 多頭支撐
 
+# MA60 / 季線（中期趨勢，獨立於既有 MA250 長線與 MA20 短線判斷）
+TAG_MA60_BREAK = "ma60_break"  # ⚠️ 跌破季線
+
 # Bias (deviation from MA20)
 TAG_BIAS_EXTREME_VALUE = "bias_extreme_value" # 🟠 極度價值區
 TAG_BIAS_DEEP_DROP     = "bias_deep_drop"     # 💧 跌深反彈區
@@ -87,6 +90,7 @@ TAG_DISPLAY: dict[str, str] = {
     TAG_RSI_OVERSOLD:      "🔴 賣超",
     TAG_MA_BREAK_WEAK:     "🔴 破線轉弱",
     TAG_MA_BULL_SUPPORT:   "🟢 多頭支撐",
+    TAG_MA60_BREAK:        "⚠️ 跌破季線",
     TAG_BIAS_EXTREME_VALUE:"🟠 極度價值區",
     TAG_BIAS_DEEP_DROP:    "💧 跌深反彈區",
     TAG_BIAS_OVERHEATED:   "🔴 過熱區",
