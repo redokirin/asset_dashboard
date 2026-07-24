@@ -1,11 +1,13 @@
 import sys
 import os
+import re
 import math
 import time
 import asyncio
 import datetime
 import logging
 import threading
+from pathlib import Path
 from contextlib import asynccontextmanager
 from functools import lru_cache
 
@@ -59,7 +61,13 @@ from core.xray import (
     get_ticker_sector,
 )
 from core.data_loader import get_etf_transactions
-from db.database import get_portfolio_value_history, update_ohlc_zones
+from db.database import (
+    get_portfolio_value_history,
+    update_ohlc_zones,
+    add_market_event,
+    get_market_events,
+    update_market_event,
+)
 
 _TZ_TW = datetime.timezone(datetime.timedelta(hours=8))
 _WARM_INTERVAL = 9 * 60  # 每 9 分鐘（< portfolio TTL 10 分鐘）
@@ -140,7 +148,7 @@ app = FastAPI(title="Asset Tracking API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PUT"],
     allow_headers=["*"],
 )
 
@@ -468,3 +476,90 @@ def get_risk():
             "alerts": alerts,
         }
     )
+
+
+# ── Market Events 日曆 ─────────────────────────────────────────────────────────
+
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_ANALYZE_ROOT = Path(__file__).resolve().parent.parent / "analyze"
+
+
+def _require_date(value: str) -> str:
+    if not _DATE_RE.match(value):
+        raise HTTPException(status_code=400, detail=f"日期格式錯誤，需為 YYYY-MM-DD：{value}")
+    return value
+
+
+class MarketEventCreate(BaseModel):
+    event_date: str
+    event_tag: str
+    event_name: str | None = None
+    event_note: str | None = None
+    is_pressure_test: int = 0
+
+
+class MarketEventUpdate(BaseModel):
+    event_tag: str | None = None
+    event_name: str | None = None
+    event_note: str | None = None
+    is_pressure_test: int | None = None
+
+
+@app.get("/api/market-events")
+def get_market_events_endpoint(
+    start: str = Query(...), end: str = Query(...)
+):
+    """指定日期區間（含頭尾）內的 market_events，供月曆月檢視／單日詳情共用（單日：start=end=date）。"""
+    _require_date(start)
+    _require_date(end)
+    return _safe_obj(get_market_events(start, end))
+
+
+@app.post("/api/market-events")
+def post_market_event(req: MarketEventCreate):
+    _require_date(req.event_date)
+    event_id = add_market_event(
+        event_date=req.event_date,
+        event_tag=req.event_tag,
+        event_name=req.event_name,
+        event_note=req.event_note,
+        is_pressure_test=req.is_pressure_test,
+    )
+    return {"id": event_id}
+
+
+@app.put("/api/market-events/{event_id}")
+def put_market_event(event_id: int, req: MarketEventUpdate):
+    ok = update_market_event(
+        event_id,
+        event_tag=req.event_tag,
+        event_name=req.event_name,
+        event_note=req.event_note,
+        is_pressure_test=req.is_pressure_test,
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"找不到 market_event id={event_id}，或未提供任何欄位")
+    return {"ok": True}
+
+
+@app.get("/api/reports/{date}")
+def list_reports(date: str):
+    """列出 analyze/{YYYYMMDD}/ 底下所有 .md 報告檔名（不假設檔名格式）。"""
+    _require_date(date)
+    day_dir = _ANALYZE_ROOT / date.replace("-", "")
+    if not day_dir.is_dir():
+        return {"files": []}
+    return {"files": sorted(p.name for p in day_dir.glob("*.md"))}
+
+
+@app.get("/api/reports/{date}/{filename}")
+def get_report_content(date: str, filename: str):
+    """讀取單一報告的原始 markdown 內容。filename 需為純檔名（無路徑分隔符）、以 .md 結尾。"""
+    _require_date(date)
+    if Path(filename).name != filename or not filename.endswith(".md"):
+        raise HTTPException(status_code=400, detail="檔名不合法")
+    day_dir = _ANALYZE_ROOT / date.replace("-", "")
+    file_path = (day_dir / filename).resolve()
+    if not file_path.is_relative_to(_ANALYZE_ROOT.resolve()) or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="找不到報告檔案")
+    return {"content": file_path.read_text(encoding="utf-8")}

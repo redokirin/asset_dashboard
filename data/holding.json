@@ -1,0 +1,850 @@
+[
+    {
+        "ticker": "1655.T",
+        "holdings": [
+            {
+                "symbol": "NVDA",
+                "name": "NVIDIA Corp",
+                "weight": 0.0776,
+                "ticker": "NVIDIA(NVDA)"
+            },
+            {
+                "symbol": "AAPL",
+                "name": "Apple Inc",
+                "weight": 0.0744,
+                "ticker": "Apple(AAPL)"
+            },
+            {
+                "symbol": "MSFT",
+                "name": "Microsoft Corp",
+                "weight": 0.0457,
+                "ticker": "Microsoft(MSFT)"
+            },
+            {
+                "symbol": "AMZN",
+                "name": "Amazon.com Inc",
+                "weight": 0.0375,
+                "ticker": "Amazon(AMZN)"
+            },
+            {
+                "symbol": "GOOGL",
+                "name": "Alphabet Inc Class A",
+                "weight": 0.0315,
+                "ticker": "Google(GOOGL)"
+            },
+            {
+                "symbol": "AVGO",
+                "name": "Broadcom Inc",
+                "weight": 0.0283,
+                "ticker": "Broadcom(AVGO)"
+            },
+            {
+                "symbol": "GOOG",
+                "name": "Alphabet Inc Class C",
+                "weight": 0.0253,
+                "ticker": "Google(GOOG)"
+            },
+            {
+                "symbol": "META",
+                "name": "Meta Platforms Inc Class A",
+                "weight": 0.0219,
+                "ticker": "Meta(META)"
+            },
+            {
+                "symbol": "MU",
+                "name": "Micron Technology Inc",
+                "weight": 0.0169,
+                "ticker": "Micron(MU)"
+            },
+            {
+                "symbol": "TSLA",
+                "name": "Tesla Inc",
+                "weight": 0.0165,
+                "ticker": "Tesla(TSLA)"
+            }
+        ],
+        "sector_allocation": [
+            {
+                "sector": "Technology",
+                "weight": 0.3791,
+                "name": "科技"
+            },
+            {
+                "sector": "Financial Services",
+                "weight": 0.1166,
+                "name": "金融"
+            },
+            {
+                "sector": "Communication Services",
+                "weight": 0.0997,
+                "name": "通訊服務"
+            },
+            {
+                "sector": "Consumer Cyclical",
+                "weight": 0.0956,
+                "name": "非必需消費"
+            },
+            {
+                "sector": "Healthcare",
+                "weight": 0.0908,
+                "name": "醫療保健"
+            },
+            {
+                "sector": "Industrials",
+                "weight": 0.0838,
+                "name": "工業"
+            },
+            {
+                "sector": "Consumer Defensive",
+                "weight": 0.0463,
+                "name": "必需消費"
+            },
+            {
+                "sector": "Energy",
+                "weight": 0.0302,
+                "name": "能源"
+            },
+            {
+                "sector": "Utilities",
+                "weight": 0.0225,
+                "name": "公用事業"
+            },
+            {
+                "sector": "Real Estate",
+                "weight": 0.0188,
+                "name": "房地產"
+            },
+            {
+                "sector": "Basic Materials",
+                "weight": 0.0166,
+                "name": "基本材料"
+            }
+        ]
+    },
+    {
+        "ticker": "1306.T",
+        "holdings": [
+            {
+                "symbol": "8306.T",
+                "name": "Mitsubishi UFJ Financial Group Inc",
+                "weight": 0.0393,
+                "ticker": "三菱UFJ(8306.T)"
+            },
+            {
+                "symbol": "7203.T",
+                "name": "Toyota Motor Corp",
+                "weight": 0.0276,
+                "ticker": "トヨタ自動車(7203.T)"
+            },
+            {
+                "symbol": "8316.T",
+                "name": "Sumitomo Mitsui Financial Group Inc",
+                "weight": 0.0264,
+                "ticker": "三井住友(8316.T)"
+            },
+            {
+                "symbol": "8035.T",
+                "name": "Tokyo Electron Ltd",
+                "weight": 0.0247,
+                "ticker": "東京エレクトロン(8035.T)"
+            },
+            {
+                "symbol": "6501.T",
+                "name": "Hitachi Ltd",
+                "weight": 0.0215,
+                "ticker": "日立製作所(6501.T)"
+            },
+            {
+                "symbol": "6758.T",
+                "name": "Sony Group Corp",
+                "weight": 0.0204,
+                "ticker": "ソニーグループ(6758.T)"
+            },
+            {
+                "symbol": "8411.T",
+                "name": "Mizuho Financial Group Inc",
+                "weight": 0.0201,
+                "ticker": "みずほ(8411.T)"
+            },
+            {
+                "symbol": "9984.T",
+                "name": "SoftBank Group Corp",
+                "weight": 0.0195,
+                "ticker": "ソフトバンク(9984.T)"
+            },
+            {
+                "symbol": "6098.T",
+                "name": "Recruit Holdings Co., Ltd.",
+                "weight": 0.0163,
+                "ticker": "瑞可利控股(6098.T)"
+            },
+            {
+                "symbol": "8058.T",
+                "name": "Mitsubishi Corporation",
+                "weight": 0.0160,
+                "ticker": "三菱商事(8058.T)"
+            }
+        ],
+        "sector_allocation": [
+            {
+                "sector": "Industrials",
+                "weight": 0.2512,
+                "name": "工業"
+            },
+            {
+                "sector": "Technology",
+                "weight": 0.2061,
+                "name": "科技"
+            },
+            {
+                "sector": "Financial Services",
+                "weight": 0.172,
+                "name": "金融"
+            },
+            {
+                "sector": "Consumer Cyclical",
+                "weight": 0.119,
+                "name": "非必需消費"
+            },
+            {
+                "sector": "Communication Services",
+                "weight": 0.0738,
+                "name": "通訊服務"
+            },
+            {
+                "sector": "Healthcare",
+                "weight": 0.0527,
+                "name": "醫療保健"
+            },
+            {
+                "sector": "Basic Materials",
+                "weight": 0.0453,
+                "name": "基本材料"
+            },
+            {
+                "sector": "Consumer Defensive",
+                "weight": 0.0421,
+                "name": "必需消費"
+            },
+            {
+                "sector": "Real Estate",
+                "weight": 0.0178,
+                "name": "房地產"
+            },
+            {
+                "sector": "Utilities",
+                "weight": 0.012,
+                "name": "公用事業"
+            },
+            {
+                "sector": "Energy",
+                "weight": 0.008,
+                "name": "能源"
+            }
+        ]
+    },
+    {
+        "ticker": "1321.T",
+        "holdings": [
+            {
+                "symbol": "6857.T",
+                "name": "Advantest Corp",
+                "weight": 0.1076,
+                "ticker": "アドバンテスト(6857.T)"
+            },
+            {
+                "symbol": "8035.T",
+                "name": "Tokyo Electron Ltd",
+                "weight": 0.0999,
+                "ticker": "東京エレクトロン(8035.T)"
+            },
+            {
+                "symbol": "9983.T",
+                "name": "Fast Retailing Co Ltd",
+                "weight": 0.0952,
+                "ticker": "ファーストリテイリング(9983.T)"
+            },
+            {
+                "symbol": "9984.T",
+                "name": "SoftBank Group Corp",
+                "weight": 0.0691,
+                "ticker": "ソフトバンク(9984.T)"
+            },
+            {
+                "symbol": "6762.T",
+                "name": "TDK Corp",
+                "weight": 0.0235,
+                "ticker": "TDK(6762.T)"
+            },
+            {
+                "symbol": "285A.T",
+                "name": "Kioxia Holdings Corp Ordinary Shares",
+                "weight": 0.0227,
+                "ticker": "キオクシア(285A.T)"
+            },
+            {
+                "symbol": "4062.T",
+                "name": "Ibiden Co Ltd",
+                "weight": 0.022788702,
+                "ticker": "イビデン(4062.T)"
+            },
+            {
+                "symbol": "6098.T",
+                "name": "Recruit Holdings Co., Ltd.",
+                "weight": 0.0186,
+                "ticker": "瑞可利控股(6098.T)"
+            },
+            {
+                "symbol": "4062.T",
+                "name": "Ibiden Co.,Ltd.",
+                "weight": 0.0184,
+                "ticker": "4062.T"
+            },
+            {
+                "symbol": "4063.T",
+                "name": "Shin-Etsu Chemical Co Ltd",
+                "weight": 0.0179,
+                "ticker": "信越化学(4063.T)"
+            },
+            {
+                "symbol": "9433.T",
+                "name": "KDDI Corporation",
+                "weight": 0.0174,
+                "ticker": "KDDI(9433.T)"
+            }
+        ],
+        "sector_allocation": [
+            {
+                "sector": "Technology",
+                "weight": 0.3871,
+                "name": "科技"
+            },
+            {
+                "sector": "Industrials",
+                "weight": 0.1721,
+                "name": "工業"
+            },
+            {
+                "sector": "Consumer Cyclical",
+                "weight": 0.1574,
+                "name": "非必需消費"
+            },
+            {
+                "sector": "Communication Services",
+                "weight": 0.1183,
+                "name": "通訊服務"
+            },
+            {
+                "sector": "Healthcare",
+                "weight": 0.0554,
+                "name": "醫療保健"
+            },
+            {
+                "sector": "Basic Materials",
+                "weight": 0.0372,
+                "name": "基本材料"
+            },
+            {
+                "sector": "Consumer Defensive",
+                "weight": 0.0293,
+                "name": "必需消費"
+            },
+            {
+                "sector": "Financial Services",
+                "weight": 0.0282,
+                "name": "金融"
+            },
+            {
+                "sector": "Real Estate",
+                "weight": 0.0112,
+                "name": "房地產"
+            },
+            {
+                "sector": "Energy",
+                "weight": 0.0023,
+                "name": "能源"
+            },
+            {
+                "sector": "Utilities",
+                "weight": 0.0014,
+                "name": "公用事業"
+            }
+        ]
+    },
+    {
+        "ticker": "0052.TW",
+        "holdings": [
+            {
+                "symbol": "2330.TW",
+                "name": "Taiwan Semiconductor Manufacturing Co Ltd",
+                "weight": 0.6634,
+                "ticker": "台積電(2330.TW)"
+            },
+            {
+                "symbol": "2454.TW",
+                "name": "MediaTek Inc",
+                "weight": 0.0607,
+                "ticker": "聯發科(2454.TW)"
+            },
+            {
+                "symbol": "2317.TW",
+                "name": "Hon Hai Precision Industry Co Ltd",
+                "weight": 0.0339,
+                "ticker": "鴻海(2317.TW)"
+            },
+            {
+                "symbol": "3711.TW",
+                "name": "ASE Technology Holding Co Ltd",
+                "weight": 0.0237,
+                "ticker": "日月光投控(3711.TW)"
+            },
+            {
+                "symbol": "2303.TW",
+                "name": "United Microelectronics Corp",
+                "weight": 0.0177,
+                "ticker": "聯電(2303.TW)"
+            },
+            {
+                "symbol": "2383.TW",
+                "name": "Elite Material Co Ltd",
+                "weight": 0.0158,
+                "ticker": "台光電(2383.TW)"
+            },
+            {
+                "symbol": "3037.TW",
+                "name": "Unimicron Technology Corp",
+                "weight": 0.0122,
+                "ticker": "欣興(3037.TW)"
+            },
+            {
+                "symbol": "2327.TW",
+                "name": "Yageo Corp",
+                "weight": 0.0119,
+                "ticker": "國巨(2327.TW)"
+            },
+            {
+                "symbol": "2382.TW",
+                "name": "Quanta Computer Inc",
+                "weight": 0.0097,
+                "ticker": "廣達(2382.TW)"
+            },
+            {
+                "symbol": "3017.TW",
+                "name": "Asia Vital Components Co Ltd",
+                "weight": 0.0084,
+                "ticker": "奇鋐(3017.TW)"
+            }
+        ],
+        "sector_allocation": [
+            {
+                "sector": "Technology",
+                "weight": 0.9934,
+                "name": "科技"
+            },
+            {
+                "sector": "Industrials",
+                "weight": 0.0066,
+                "name": "工業"
+            },
+            {
+                "sector": "Real Estate",
+                "weight": 0.0,
+                "name": "房地產"
+            },
+            {
+                "sector": "Consumer Cyclical",
+                "weight": 0.0,
+                "name": "非必需消費"
+            },
+            {
+                "sector": "Basic Materials",
+                "weight": 0.0,
+                "name": "基本材料"
+            },
+            {
+                "sector": "Consumer Defensive",
+                "weight": 0.0,
+                "name": "必需消費"
+            },
+            {
+                "sector": "Communication Services",
+                "weight": 0.0,
+                "name": "通訊服務"
+            },
+            {
+                "sector": "Financial Services",
+                "weight": 0.0,
+                "name": "金融"
+            },
+            {
+                "sector": "Utilities",
+                "weight": 0.0,
+                "name": "公用事業"
+            },
+            {
+                "sector": "Energy",
+                "weight": 0.0,
+                "name": "能源"
+            },
+            {
+                "sector": "Healthcare",
+                "weight": 0.0,
+                "name": "醫療保健"
+            }
+        ]
+    },
+    {
+        "ticker": "00981A.TW",
+        "holdings": [
+            {
+                "symbol": "2330.TW",
+                "name": "Taiwan Semiconductor Manufacturing Co Ltd",
+                "weight": 0.1021,
+                "ticker": "台積電(2330.TW)"
+            },
+            {
+                "symbol": "2383.TW",
+                "name": "Elite Material Co Ltd",
+                "weight": 0.0857,
+                "ticker": "台光電(2383.TW)"
+            },
+            {
+                "symbol": "2454.TW",
+                "name": "MediaTek Inc",
+                "weight": 0.0710,
+                "ticker": "聯發科(2454.TW)"
+            },
+            {
+                "symbol": "2327.TW",
+                "name": "Yageo Corp",
+                "weight": 0.0634,
+                "ticker": "國巨(2327.TW)"
+            },
+            {
+                "symbol": "3037.TW",
+                "name": "Unimicron Technology Corp",
+                "weight": 0.0053,
+                "ticker": "欣興(3037.TW)"
+            },
+            {
+                "symbol": "6223.TWO",
+                "name": "MPI Corporation",
+                "weight": 0.0527,
+                "ticker": "旺矽(6223.TWO)"
+            },
+            {
+                "symbol": "2345.TW",
+                "name": "Accton Technology Corp.",
+                "weight": 0.0520,
+                "ticker": "智邦(2345.TW)"
+            },
+            {
+                "symbol": "6669.TW",
+                "name": "Wiwynn Corporation",
+                "weight": 0.0471,
+                "ticker": "緯穎(6669.TW)"
+            },
+            {
+                "symbol": "8046.TW",
+                "name": "Nan Ya Printed Circuit Board Corporation",
+                "weight": 0.0446,
+                "ticker": "南電(8046.TW)"
+            },
+            {
+                "symbol": "3017.TW",
+                "name": "Asia Vital Components Co Ltd",
+                "weight": 0.0441,
+                "ticker": "奇鋐(3017.TW)"
+            }
+        ],
+        "sector_allocation": [
+            {
+                "sector": "Technology",
+                "weight": 0.8792,
+                "name": "科技"
+            },
+            {
+                "sector": "Industrials",
+                "weight": 0.0979,
+                "name": "工業"
+            },
+            {
+                "sector": "Basic Materials",
+                "weight": 0.0216,
+                "name": "基本材料"
+            },
+            {
+                "sector": "Consumer Cyclical",
+                "weight": 0.0013,
+                "name": "非必需消費"
+            },
+            {
+                "sector": "Real Estate",
+                "weight": 0.0,
+                "name": "房地產"
+            },
+            {
+                "sector": "Consumer Defensive",
+                "weight": 0.0,
+                "name": "必需消費"
+            },
+            {
+                "sector": "Communication Services",
+                "weight": 0.0,
+                "name": "通訊服務"
+            },
+            {
+                "sector": "Financial Services",
+                "weight": 0.0,
+                "name": "金融"
+            },
+            {
+                "sector": "Utilities",
+                "weight": 0.0,
+                "name": "公用事業"
+            },
+            {
+                "sector": "Energy",
+                "weight": 0.0,
+                "name": "能源"
+            },
+            {
+                "sector": "Healthcare",
+                "weight": 0.0,
+                "name": "醫療保健"
+            }
+        ]
+    },
+    {
+        "ticker": "00985A.TW",
+        "holdings": [
+            {
+                "symbol": "2330.TW",
+                "name": "Taiwan Semiconductor Manufacturing Co Ltd",
+                "weight": 0.2227,
+                "ticker": "台積電(2330.TW)"
+            },
+            {
+                "symbol": "2376.TW",
+                "name": "GIGABYTE TECHNOLOGY",
+                "weight": 0.0559097,
+                "ticker": "技嘉(2376.TW)"
+            },
+            {
+                "symbol": "2395.TW",
+                "name": "Advantech Co Ltd",
+                "weight": 0.0336,
+                "ticker": "研華(2395.TW)"
+            },
+            {
+                "symbol": "2059.TW",
+                "name": "King Slide Works Co., Ltd.",
+                "weight": 0.0336,
+                "ticker": "川湖(2059.TW)"
+            },
+            {
+                "symbol": "6442.TW",
+                "name": "EZconn Corp.",
+                "weight": 0.0442904,
+                "ticker": "光聖(6442.TW)"
+            },
+            {
+                "symbol": "2327.TW",
+                "name": "Yageo Corp",
+                "weight": 0.0298,
+                "ticker": "國巨(2327.TW)"
+            },
+            {
+                "symbol": "2303.TW",
+                "name": "United Microelectronics Corp",
+                "weight": 0.0296,
+                "ticker": "聯電(2303.TW)"
+            },
+            {
+                "symbol": "6505.TW",
+                "name": "Formosa Petrochemical Corp",
+                "weight": 0.0279,
+                "ticker": "台塑化(6505.TW)"
+            },
+            {
+                "symbol": "3008.TW",
+                "name": "LARGAN Precision Co., Ltd.",
+                "weight": 0.0277,
+                "ticker": "大立光(3008.TW)"
+            }
+        ],
+        "sector_allocation": [
+            {
+                "sector": "Technology",
+                "weight": 0.7317,
+                "name": "科技"
+            },
+            {
+                "sector": "Communication Services",
+                "weight": 0.1241,
+                "name": "通訊服務"
+            },
+            {
+                "sector": "Consumer Defensive",
+                "weight": 0.0408,
+                "name": "必需消費"
+            },
+            {
+                "sector": "Financial Services",
+                "weight": 0.0371,
+                "name": "金融"
+            },
+            {
+                "sector": "Industrials",
+                "weight": 0.0345,
+                "name": "工業"
+            },
+            {
+                "sector": "Consumer Cyclical",
+                "weight": 0.0227,
+                "name": "非必需消費"
+            },
+            {
+                "sector": "Basic Materials",
+                "weight": 0.0091,
+                "name": "基本材料"
+            },
+            {
+                "sector": "Real Estate",
+                "weight": 0.0,
+                "name": "房地產"
+            },
+            {
+                "sector": "Utilities",
+                "weight": 0.0,
+                "name": "公用事業"
+            },
+            {
+                "sector": "Energy",
+                "weight": 0.0,
+                "name": "能源"
+            },
+            {
+                "sector": "Healthcare",
+                "weight": 0.0,
+                "name": "醫療保健"
+            }
+        ]
+    },
+    {
+        "ticker": "00988A.TW",
+        "holdings": [
+            {
+                "symbol": "AMD",
+                "name": "Advanced Micro Devices Inc",
+                "weight": 0.06101,
+                "ticker": "AMD(AMD)"
+            },
+            {
+                "symbol": "MU",
+                "name": "Micron Technology Inc",
+                "weight": 0.0491,
+                "ticker": "美光(MU)"
+            },
+            {
+                "symbol": "009150.KS",
+                "name": "Samsung Electro-Mechanics Co Ltd",
+                "weight": 0.0441,
+                "ticker": "三星電機(009150.KS)"
+            },
+            {
+                "symbol": "AMAT",
+                "name": "Applied Materials, Inc.",
+                "weight": 0.0419,
+                "ticker": "應用材料(AMAT)"
+            },
+            {
+                "symbol": "BE",
+                "name": "Bloom Energy Corporation",
+                "weight": 0.0361,
+                "ticker": "Bloom(BE)"
+            },
+            {
+                "symbol": "6981.T",
+                "name": "Murata Manufacturing Co., Ltd.",
+                "weight": 0.0347,
+                "ticker": "村田製作所(6981.T)"
+            },
+            {
+                "symbol": "285A.T",
+                "name": "Kioxia Holdings Corporation",
+                "weight": 0.0341,
+                "ticker": "鎧俠(285A.T)"
+            },
+            {
+                "symbol": "3037.TW",
+                "name": "Unimicron Technology Corp.",
+                "weight": 0.0329,
+                "ticker": "欣興(3037.TW)"
+            },
+            {
+                "symbol": "2330.TW",
+                "name": "Taiwan Semiconductor Manufacturing Co Ltd",
+                "weight": 0.0318,
+                "ticker": "台積電(2330.TW)"
+            }
+        ],
+        "sector_allocation": [
+            {
+                "sector": "Technology",
+                "weight": 0.7573,
+                "name": "科技"
+            },
+            {
+                "sector": "Industrials",
+                "weight": 0.2083,
+                "name": "工業"
+            },
+            {
+                "sector": "Consumer Cyclical",
+                "weight": 0.017,
+                "name": "非必需消費"
+            },
+            {
+                "sector": "Communication Services",
+                "weight": 0.0103,
+                "name": "通訊服務"
+            },
+            {
+                "sector": "Basic Materials",
+                "weight": 0.0072,
+                "name": "基本材料"
+            },
+            {
+                "sector": "Real Estate",
+                "weight": 0.0,
+                "name": "房地產"
+            },
+            {
+                "sector": "Consumer Defensive",
+                "weight": 0.0,
+                "name": "必需消費"
+            },
+            {
+                "sector": "Financial Services",
+                "weight": 0.0,
+                "name": "金融"
+            },
+            {
+                "sector": "Utilities",
+                "weight": 0.0,
+                "name": "公用事業"
+            },
+            {
+                "sector": "Energy",
+                "weight": 0.0,
+                "name": "能源"
+            },
+            {
+                "sector": "Healthcare",
+                "weight": 0.0,
+                "name": "醫療保健"
+            }
+        ]
+    }
+]

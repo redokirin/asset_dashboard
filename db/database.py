@@ -777,6 +777,56 @@ def add_market_event(
         return cur.lastrowid
 
 
+def get_market_events(start_date: str, end_date: str) -> list[dict]:
+    """讀取指定日期區間內的所有 market_events（含 start/end 當天），依日期升冪排列。"""
+    try:
+        init_db()
+        with _get_connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM market_events WHERE event_date BETWEEN ? AND ? ORDER BY event_date, id",
+                (start_date, end_date),
+            ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception as exc:
+        logging.warning(f"[db] market_events 讀取失敗：{exc}")
+        return []
+
+
+def update_market_event(
+    event_id: int,
+    event_tag: str = None,
+    event_name: str = None,
+    event_note: str = None,
+    is_pressure_test: int = None,
+) -> bool:
+    """更新指定 id 的 market_events 記錄；查無資料或未提供任何欄位時回傳 False。"""
+    init_db()
+    updates, values = [], []
+    if event_tag is not None:
+        updates.append("event_tag = ?");        values.append(event_tag)
+    if event_name is not None:
+        updates.append("event_name = ?");       values.append(event_name)
+    if event_note is not None:
+        updates.append("event_note = ?");       values.append(event_note)
+    if is_pressure_test is not None:
+        updates.append("is_pressure_test = ?"); values.append(is_pressure_test)
+    if not updates:
+        return False
+    try:
+        with _get_connection() as conn:
+            existing = conn.execute(
+                "SELECT id FROM market_events WHERE id = ?", (event_id,)
+            ).fetchone()
+            if not existing:
+                return False
+            values.append(event_id)
+            conn.execute(f"UPDATE market_events SET {', '.join(updates)} WHERE id = ?", values)
+        return True
+    except Exception as exc:
+        logging.warning(f"[db] market_events 更新失敗：{exc}")
+        return False
+
+
 def update_report_run_event(
     report_date: str,
     market_event_tag: str = None,

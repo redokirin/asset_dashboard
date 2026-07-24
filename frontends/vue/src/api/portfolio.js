@@ -68,3 +68,30 @@ export async function fetchPortfolioHistory(days = 90) {
   const { data } = await axios.get(`${base}/api/portfolio/history`, { params: { days } })
   return data
 }
+
+export async function fetchMarketEvents(start, end) {
+  const { data } = await axios.get(`${base}/api/market-events`, { params: { start, end } })
+  return data
+}
+
+export async function createMarketEvent(payload) {
+  const { data } = await axios.post(`${base}/api/market-events`, payload)
+  return data
+}
+
+export async function updateMarketEvent(id, payload) {
+  const { data } = await axios.put(`${base}/api/market-events/${id}`, payload)
+  return data
+}
+
+export async function fetchDayReports(date) {
+  const { data } = await axios.get(`${base}/api/reports/${encodeURIComponent(date)}`)
+  return data
+}
+
+export async function fetchReportContent(date, filename) {
+  const { data } = await axios.get(
+    `${base}/api/reports/${encodeURIComponent(date)}/${encodeURIComponent(filename)}`
+  )
+  return data
+}

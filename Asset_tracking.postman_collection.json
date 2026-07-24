@@ -364,6 +364,177 @@
         }
       },
       "response": []
+    },
+    {
+      "name": "市場事件（區間查詢）",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{assets_domain}}/api/market-events?start=2026-07-01&end=2026-07-31",
+          "host": [
+            "{{assets_domain}}"
+          ],
+          "path": [
+            "api",
+            "market-events"
+          ],
+          "query": [
+            {
+              "key": "start",
+              "value": "2026-07-01",
+              "description": "起始日期 YYYY-MM-DD（含）"
+            },
+            {
+              "key": "end",
+              "value": "2026-07-31",
+              "description": "結束日期 YYYY-MM-DD（含）"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "新增市場事件",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"event_date\": \"2026-07-24\",\n  \"event_tag\": \"test_tag\",\n  \"event_name\": \"事件名稱\",\n  \"event_note\": \"事件備註\",\n  \"is_pressure_test\": 0\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{assets_domain}}/api/market-events",
+          "host": [
+            "{{assets_domain}}"
+          ],
+          "path": [
+            "api",
+            "market-events"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "更新市場事件",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"event_name\": \"更新後的事件名稱\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{assets_domain}}/api/market-events/:event_id",
+          "host": [
+            "{{assets_domain}}"
+          ],
+          "path": [
+            "api",
+            "market-events",
+            ":event_id"
+          ],
+          "variable": [
+            {
+              "key": "event_id",
+              "value": "1"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "當日 AI 報告清單",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{assets_domain}}/api/reports/:date",
+          "host": [
+            "{{assets_domain}}"
+          ],
+          "path": [
+            "api",
+            "reports",
+            ":date"
+          ],
+          "variable": [
+            {
+              "key": "date",
+              "value": "2026-07-24"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "AI 報告內容",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{assets_domain}}/api/reports/:date/:filename",
+          "host": [
+            "{{assets_domain}}"
+          ],
+          "path": [
+            "api",
+            "reports",
+            ":date",
+            ":filename"
+          ],
+          "variable": [
+            {
+              "key": "date",
+              "value": "2026-07-24"
+            },
+            {
+              "key": "filename",
+              "value": "report_20260724092107.md"
+            }
+          ]
+        }
+      },
+      "response": []
     }
   ]
 }

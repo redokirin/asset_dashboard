@@ -144,6 +144,9 @@ _TICKER_LABELS: dict[str, str] = {
     "6954.T": "ファナック",
     "4063.T": "信越化学",
     "9433.T": "KDDI",
+    "6723.T": "ルネサスエレクトロニクス",
+    "7735.T": "ＳＣＲＥＥＮホールディングス",
+    "6857.T": "アドバンテスト",
 
     "009150.KS" : "Samsung",
 }
@@ -178,6 +181,26 @@ def _with_ticker_label(holding: dict) -> dict:
 _CACHE_PATH = Path(__file__).parent.parent / "analyze" / ".xray_holdings_cache.json"
 _CACHE_TTL = 7 * 86400  # 7 days
 
+_MANUAL_HOLDINGS_PATH = Path(__file__).parent.parent / "data" / "holding.json"
+_manual_holdings: dict[str, dict] | None = None
+
+
+def _load_manual_holdings() -> dict[str, dict]:
+    """
+    讀取手動維護的 data/holding.json（yfinance 對部分標的回傳的持股/產業配置與實際落差較大時的人工修正）。
+    以 ticker（大寫）為 key 建索引，process 內只載入一次；檔案異動需重啟程序才會生效。
+    """
+    global _manual_holdings
+    if _manual_holdings is not None:
+        return _manual_holdings
+    try:
+        raw = json.loads(_MANUAL_HOLDINGS_PATH.read_text(encoding="utf-8"))
+        _manual_holdings = {str(item["ticker"]).upper(): item for item in raw if item.get("ticker")}
+    except Exception as exc:
+        logging.warning(f"[xray] data/holding.json 讀取失敗，改用 yfinance: {exc}")
+        _manual_holdings = {}
+    return _manual_holdings
+
 
 # ── Cache helpers ─────────────────────────────────────────────────────────────
 
@@ -209,7 +232,16 @@ def _cache_set(cache: dict, ticker: str, holdings: list[dict]) -> None:
 # ── Holdings fetch ────────────────────────────────────────────────────────────
 
 def _fetch_top_holdings(ticker: str) -> list[dict]:
-    """回傳 [{"symbol", "name", "ticker", "weight"}, ...]，失敗回傳空 list。"""
+    """
+    回傳 [{"symbol", "name", "weight"}, ...]，失敗回傳空 list。
+    data/holding.json 有手動維護的資料時優先採用（見 _load_manual_holdings）。
+    """
+    manual = _load_manual_holdings().get(ticker.upper())
+    if manual and manual.get("holdings"):
+        return [
+            {"symbol": h["symbol"], "name": h.get("name", h["symbol"]), "weight": float(h["weight"])}
+            for h in manual["holdings"]
+        ]
     try:
         fd = yf.Ticker(ticker).funds_data
         if fd is None:
@@ -234,7 +266,19 @@ def _fetch_top_holdings(ticker: str) -> list[dict]:
 
 
 def _fetch_fund_sector_weightings(ticker: str) -> dict[str, float]:
-    """回傳 ETF/基金整體產業配置權重 {sector: weight}，失敗回傳空 dict。"""
+    """
+    回傳 ETF/基金整體產業配置權重 {sector: weight}，失敗回傳空 dict。
+    data/holding.json 有手動維護的 sector_allocation 時優先採用（見 _load_manual_holdings）。
+    """
+    manual = _load_manual_holdings().get(ticker.upper())
+    if manual and manual.get("sector_allocation"):
+        result: dict[str, float] = {}
+        for row in manual["sector_allocation"]:
+            sec = _normalize_sector(str(row.get("sector", "")))
+            if sec:
+                result[sec] = result.get(sec, 0.0) + float(row.get("weight", 0))
+        if result:
+            return result
     try:
         fd = yf.Ticker(ticker).funds_data
         if fd is None:
