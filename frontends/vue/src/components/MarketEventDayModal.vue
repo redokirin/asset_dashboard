@@ -119,9 +119,9 @@
                             </div>
 
                             <div v-if="contentLoading" class="text-xs text-gray-500 text-center py-6">載入報告中…</div>
-                            <pre v-else-if="reportContent"
-                                class="text-xs text-gray-300 whitespace-pre-wrap leading-relaxed bg-gray-900/40 rounded-lg p-3 overflow-x-auto"
-                            >{{ reportContent }}</pre>
+                            <div v-else-if="reportContent"
+                                class="prose prose-invert prose-sm max-w-none bg-gray-900/40 rounded-lg p-3 overflow-x-auto"
+                                v-html="renderedReport" />
                         </template>
                     </div>
 
@@ -132,7 +132,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import {
     fetchMarketEvents, createMarketEvent, updateMarketEvent,
     fetchDayReports, fetchReportContent,
@@ -233,6 +235,9 @@ let reportsLoaded = false
 const selectedFile = ref('')
 const reportContent = ref('')
 const contentLoading = ref(false)
+const renderedReport = computed(() =>
+    DOMPurify.sanitize(marked.parse(reportContent.value || '', { gfm: true }))
+)
 
 async function loadReports() {
     reportsLoading.value = true
