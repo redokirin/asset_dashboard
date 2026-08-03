@@ -54,8 +54,11 @@ export async function fetchHoldings(ticker) {
   return data
 }
 
-export async function fetchXray() {
-  const { data } = await axios.get(`${base}/api/xray`)
+export async function fetchXray(regions) {
+  const { data } = await axios.get(`${base}/api/xray`, {
+    params: regions?.length ? { region: regions } : {},
+    paramsSerializer: { indexes: null }, // region=US&region=JP，而非 axios 預設的 region[]=US
+  })
   return data
 }
 

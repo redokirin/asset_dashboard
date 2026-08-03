@@ -22,8 +22,8 @@ import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
 import { fetchHistorical } from '../api/portfolio.js'
 
-const TICKERS = ['0050.TW', '00981A.TW', '00985A.TW', '0052.TW', '^TWII']//, '00988A.TW']
-const COLORS = ['#60a5fa', '#f59e0b', '#a78bfa', '#f472b6', '#9ca3af']//, '#02C874']
+const TICKERS = ['0050.TW', '00981A.TW', '00985A.TW', '0052.TW', '^TWII', '00878.TW']
+const COLORS = ['#60a5fa', '#f59e0b', '#a78bfa', '#f472b6', '#9ca3af', '#02C874']
 // 對齊後端 /api/ticker/{ticker}/historical 允許的 period 值，最大只開到 1y
 const PERIODS = [
     { key: '1mo', label: '1月' },

@@ -51,7 +51,11 @@ cd /volume1/web/assests
 mkdir -p ~/tmp && export TMPDIR=~/tmp
 uvicorn api.main:app --host 0.0.0.0 --port 8888 &
 
+poetry uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
 nohup uvicorn api.main:app --host 0.0.0.0 --port 8888 &> ~/uvicorn.log &
 
 scp -r -p22 dist/ redokirin@192.168.50.37:/web/assests/frontends/vue/
+
+
+claude --resume d335d9ca-fa16-440a-9fbd-e9ddd324d7fc

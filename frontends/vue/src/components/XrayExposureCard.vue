@@ -2,6 +2,17 @@
     <div class="rounded-xl bg-gray-800 p-4 space-y-4">
         <div class="font-semibold text-sm">🔍 X-Ray 個股穿透</div>
 
+        <!-- 地區篩選 -->
+        <div class="flex flex-wrap gap-1.5">
+            <button v-for="opt in regionOptions" :key="opt.code" type="button" @click="toggleRegion(opt.code)"
+                class="text-xs px-2.5 py-1 rounded-full border transition-colors"
+                :class="selectedRegions.includes(opt.code)
+                    ? 'bg-blue-500/20 border-blue-400 text-blue-300'
+                    : 'border-gray-600 text-gray-400 hover:border-gray-500'">
+                {{ opt.label }}
+            </button>
+        </div>
+
         <div v-if="loading" class="text-xs text-gray-500 text-center py-10">穿透分析中，請稍候…</div>
         <div v-else-if="error" class="text-xs text-red-400 text-center py-10">{{ error }}</div>
         <template v-else-if="data">
@@ -53,9 +64,17 @@ import * as echarts from 'echarts'
 import { fetchXray } from '../api/portfolio.js'
 import { buildHorizontalBarOption, buildPieOption, horizontalBarHeight, pieChartHeight } from '../utils/chartOptions.js'
 
+const regionOptions = [
+    { code: 'GB', label: '全球' },
+    { code: 'US', label: '美股' },
+    { code: 'JP', label: '日股' },
+    { code: 'TW', label: '台股' },
+]
+
 const loading = ref(false)
 const error = ref('')
 const data = ref(null)
+const selectedRegions = ref([])
 
 const exposuresTop = computed(() => data.value?.exposures?.slice(0, 20) ?? [])
 const totalExposures = computed(() => data.value?.exposures?.length ?? 0)
@@ -97,13 +116,23 @@ async function load() {
     loading.value = true
     error.value = ''
     try {
-        data.value = await fetchXray()
+        data.value = await fetchXray(selectedRegions.value)
     } catch (e) {
         error.value = `載入失敗：${e.message}`
     } finally {
         loading.value = false
     }
     await renderCharts()
+}
+
+function toggleRegion(code) {
+    const idx = selectedRegions.value.indexOf(code)
+    if (idx === -1) {
+        selectedRegions.value.push(code)
+    } else {
+        selectedRegions.value.splice(idx, 1)
+    }
+    load()
 }
 
 function onResize() {

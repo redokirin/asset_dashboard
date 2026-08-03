@@ -16,6 +16,7 @@ Portfolio X-Ray：穿透 ETF/基金持股，計算組合真實個股曝險比例
         "unidentified_pct": float,
     }
 """
+
 import json
 import logging
 import time
@@ -36,57 +37,66 @@ MANUAL_LABELS: dict[str, str] = {
     "009821.TW": "全球戰略稀土與關鍵資源",
 }
 
+# region 篩選代碼（CLI / API 用）↔ 資產 region 欄位的中文字串
+REGION_CODES: dict[str, str] = {
+    "US": "美股",
+    "JP": "日股",
+    "TW": "台股",
+    "GB": "全球",
+}
+
 # yfinance 對 sector 的命名不一致：funds_data.sector_weightings 用 snake_case
 # （如 "technology"），個股 info.sector 用 Title Case（如 "Technology"）。
 # 統一正規化成同一組標籤，避免同一產業在彙總時被拆成兩筆。
 _SECTOR_LABELS: dict[str, str] = {
-    "basic_materials":         "Basic Materials",
-    "communication_services":  "Communication Services",
-    "consumer_cyclical":       "Consumer Cyclical",
-    "consumer_defensive":      "Consumer Defensive",
-    "energy":                  "Energy",
-    "financial_services":      "Financial Services",
-    "healthcare":              "Healthcare",
-    "industrials":             "Industrials",
-    "real_estate":             "Real Estate",
-    "realestate":              "Real Estate",
-    "technology":              "Technology",
-    "utilities":               "Utilities",
+    "basic_materials": "Basic Materials",
+    "communication_services": "Communication Services",
+    "consumer_cyclical": "Consumer Cyclical",
+    "consumer_defensive": "Consumer Defensive",
+    "energy": "Energy",
+    "financial_services": "Financial Services",
+    "healthcare": "Healthcare",
+    "industrials": "Industrials",
+    "real_estate": "Real Estate",
+    "realestate": "Real Estate",
+    "technology": "Technology",
+    "utilities": "Utilities",
 }
 
 _INDUSTRY_TRANS: dict[str, str] = {
-    "technology":               "科技",
-    "industrials":              "工業",
-    "financial_services":       "金融",
-    "consumer_cyclical":        "非必需消費",
-    "communication_services":   "通訊服務",
-    "healthcare":               "醫療保健",
-    "consumer_defensive":       "必需消費",
-    "basic_materials":          "基本材料",
-    "energy":                   "能源",
-    "real_estate":              "房地產",
-    "utilities":                "公用事業",
+    "technology": "科技",
+    "industrials": "工業",
+    "financial_services": "金融",
+    "consumer_cyclical": "非必需消費",
+    "communication_services": "通訊服務",
+    "healthcare": "醫療保健",
+    "consumer_defensive": "必需消費",
+    "basic_materials": "基本材料",
+    "energy": "能源",
+    "real_estate": "房地產",
+    "utilities": "公用事業",
 }
 
 _TICKER_LABELS: dict[str, str] = {
-    "NVDA":     "NVIDIA",
-    "AAPL":     "Apple",
-    "MSFT":     "Microsoft",
-    "AMZN":     "Amazon",
-    "GOOGL":    "Google",
-    "AVGO":     "Broadcom",
-    "GOOG":     "Google",
-    "MU":       "Micron",
-    "META":     "Meta",
-    "TSLA":     "Tesla",
-    "LITE":     "Lumentum",
-    "GLW":      "康寧",
-    "CIEN":     "Ciena",
-    "GEV":      "奇異",
-    "AMD":      "AMD",
-    "SNDK":     "SANDISK",
-    "AMAT":     "Applied Materials",
-
+    "NVDA": "NVIDIA",
+    "AAPL": "Apple",
+    "MSFT": "Microsoft",
+    "AMZN": "Amazon",
+    "GOOGL": "Google",
+    "AVGO": "Broadcom",
+    "GOOG": "Google",
+    "MU": "Micron",
+    "META": "Meta",
+    "TSLA": "Tesla",
+    "LITE": "Lumentum",
+    "GLW": "康寧",
+    "CIEN": "Ciena",
+    "GEV": "奇異",
+    "AMD": "AMD",
+    "SNDK": "SANDISK",
+    "AMAT": "Applied Materials",
+    "BE": "Bloom",
+    "MRVL": "Marvell",
     "2330.TW": "台積電",
     "2383.TW": "台光電",
     "2317.TW": "鴻海",
@@ -115,13 +125,15 @@ _TICKER_LABELS: dict[str, str] = {
     "8996.TW": "高力",
     "2454.TW": "聯發科",
     "2327.TW": "國巨",
-
+    "2376.TW": "技嘉",
+    "2059.TW": "川湖",
+    "6505.TW": "台塑化",
+    "3008.TW": "大立光",
     "6223.TWO": "旺矽",
     "5274.TWO": "信驊",
     "3293.TWO": "鈊象",
     "4749.TWO": "新應材",
     "3081.TWO": "聯亞",
-
     "8306.T": "三菱UFJ",
     "7203.T": "トヨタ自動車",
     "9984.T": "ソフトバンク",
@@ -147,8 +159,7 @@ _TICKER_LABELS: dict[str, str] = {
     "6723.T": "ルネサスエレクトロニクス",
     "7735.T": "ＳＣＲＥＥＮホールディングス",
     "6857.T": "アドバンテスト",
-
-    "009150.KS" : "Samsung",
+    "009150.KS": "Samsung",
 }
 
 
@@ -178,6 +189,7 @@ def _with_ticker_label(holding: dict) -> dict:
     label = _TICKER_LABELS.get(sym)
     return {**holding, "ticker": f"{label}({sym})" if label else sym}
 
+
 _CACHE_PATH = Path(__file__).parent.parent / "analyze" / ".xray_holdings_cache.json"
 _CACHE_TTL = 7 * 86400  # 7 days
 
@@ -195,7 +207,9 @@ def _load_manual_holdings() -> dict[str, dict]:
         return _manual_holdings
     try:
         raw = json.loads(_MANUAL_HOLDINGS_PATH.read_text(encoding="utf-8"))
-        _manual_holdings = {str(item["ticker"]).upper(): item for item in raw if item.get("ticker")}
+        _manual_holdings = {
+            str(item["ticker"]).upper(): item for item in raw if item.get("ticker")
+        }
     except Exception as exc:
         logging.warning(f"[xray] data/holding.json 讀取失敗，改用 yfinance: {exc}")
         _manual_holdings = {}
@@ -203,6 +217,7 @@ def _load_manual_holdings() -> dict[str, dict]:
 
 
 # ── Cache helpers ─────────────────────────────────────────────────────────────
+
 
 def _load_cache() -> dict:
     try:
@@ -213,7 +228,9 @@ def _load_cache() -> dict:
 
 def _save_cache(cache: dict) -> None:
     _CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _CACHE_PATH.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
+    _CACHE_PATH.write_text(
+        json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
 def _cache_get(cache: dict, ticker: str) -> list[dict] | None:
@@ -231,6 +248,7 @@ def _cache_set(cache: dict, ticker: str, holdings: list[dict]) -> None:
 
 # ── Holdings fetch ────────────────────────────────────────────────────────────
 
+
 def _fetch_top_holdings(ticker: str) -> list[dict]:
     """
     回傳 [{"symbol", "name", "weight"}, ...]，失敗回傳空 list。
@@ -239,7 +257,11 @@ def _fetch_top_holdings(ticker: str) -> list[dict]:
     manual = _load_manual_holdings().get(ticker.upper())
     if manual and manual.get("holdings"):
         return [
-            {"symbol": h["symbol"], "name": h.get("name", h["symbol"]), "weight": float(h["weight"])}
+            {
+                "symbol": h["symbol"],
+                "name": h.get("name", h["symbol"]),
+                "weight": float(h["weight"]),
+            }
             for h in manual["holdings"]
         ]
     try:
@@ -255,9 +277,9 @@ def _fetch_top_holdings(ticker: str) -> list[dict]:
         df = df.reset_index()  # Symbol 從 index 升為欄位
         result = []
         for _, row in df.iterrows():
-            sym    = str(row.get("Symbol") or row.get("symbol") or "").strip()
-            name   = str(row.get("Name")   or row.get("name")   or sym).strip()
-            wt     = float(row.get("Holding Percent") or row.get("holding percent") or 0)
+            sym = str(row.get("Symbol") or row.get("symbol") or "").strip()
+            name = str(row.get("Name") or row.get("name") or sym).strip()
+            wt = float(row.get("Holding Percent") or row.get("holding percent") or 0)
             if sym and ticker:
                 result.append({"symbol": sym, "name": name, "weight": wt})
         return result
@@ -386,6 +408,7 @@ def get_holdings(ticker: str, cache: dict, depth: int = 0) -> tuple[list[dict], 
 
 # ── Public single-ticker query（SQLite 週度快照，供回測 holdings/sector 變化）───
 
+
 def get_ticker_holdings(ticker: str) -> list[dict]:
     """
     取得單一 ETF/基金前十大持股（帶 SQLite 週度快照，同一 ISO 年週只抓一次）。
@@ -440,9 +463,11 @@ def get_ticker_sector(ticker: str) -> list[dict]:
 
 # ── Main analysis ─────────────────────────────────────────────────────────────
 
+
 def analyze_portfolio_exposures(
     assets: dict | None = None,
     on_ticker: "callable[[str, float, str], None] | None" = None,
+    regions: list[str] | None = None,
 ) -> dict:
     """
     穿透 ETF/基金持股，回傳組合真實個股曝險比例。
@@ -451,9 +476,16 @@ def analyze_portfolio_exposures(
         assets:     由 get_assets() 取得的資產配置。None 時自動載入。
         on_ticker:  進度回呼 on_ticker(ticker, port_weight, status_msg)。
                     terminal 可傳入 print wrapper；API 呼叫不傳（使用 logging.info）。
+        regions:    地區篩選代碼清單（見 REGION_CODES：US/JP/TW/GB），只分析
+                    對應地區的標的；None 或空 list 代表不篩選（全部地區）。
+                    region 欄位未填的標的一律歸「未分類」，篩選時會被排除。
     """
     if assets is None:
         assets = _get_assets()
+
+    region_filter = (
+        {REGION_CODES[r] for r in regions if r in REGION_CODES} if regions else None
+    )
 
     # 1. 建立持倉清單（只取有市值的標的，銀行排除）
     portfolio: dict[str, dict] = {}
@@ -466,24 +498,27 @@ def analyze_portfolio_exposures(
             value = float(info.get("value") or 0)
             if value <= 0:
                 continue
+            region = info.get("region") or "未分類"
+            if region_filter is not None and region not in region_filter:
+                continue
             ticker = info.get("id") or key  # funds 的 key 是申購編號
             portfolio[ticker] = {
-                "value":  value,
-                "sheet":  sheet,
-                "name":   info.get("name", ticker),
-                "region": info.get("region") or "未分類",
+                "value": value,
+                "sheet": sheet,
+                "name": info.get("name", ticker),
+                "region": region,
             }
             total_value += value
 
     if total_value == 0:
         logging.warning("[xray] 無法取得市值資料，請確認 Google Sheets value 欄位")
         return {
-            "total_value_twd":  0,
-            "assets_count":     0,
-            "exposures":        [],
-            "buckets":          [],
+            "total_value_twd": 0,
+            "assets_count": 0,
+            "exposures": [],
+            "buckets": [],
             "sector_exposures": [],
-            "identified_pct":   0.0,
+            "identified_pct": 0.0,
             "unidentified_pct": 0.0,
         }
 
@@ -492,7 +527,7 @@ def analyze_portfolio_exposures(
 
     # 2. 穿透持股
     exposures: dict[str, dict] = {}
-    buckets:   list[dict]      = []
+    buckets: list[dict] = []
     sector_weights: dict[str, float] = {}
     cache = _load_cache()
 
@@ -520,13 +555,22 @@ def analyze_portfolio_exposures(
                     covered += w
                 leftover = max(0.0, 1.0 - covered)
                 if leftover > 0.005:
-                    sector_weights["未分類"] = sector_weights.get("未分類", 0.0) + pw * leftover
+                    sector_weights["未分類"] = (
+                        sector_weights.get("未分類", 0.0) + pw * leftover
+                    )
             else:
                 sector_weights["未分類"] = sector_weights.get("未分類", 0.0) + pw
 
         if ticker in MANUAL_LABELS:
             label = MANUAL_LABELS[ticker]
-            buckets.append({"label": label, "weight": pw, "ticker": ticker, "region": info["region"]})
+            buckets.append(
+                {
+                    "label": label,
+                    "weight": pw,
+                    "ticker": ticker,
+                    "region": info["region"],
+                }
+            )
             _notify(ticker, pw, f"手動標籤 → {label}")
             continue
 
@@ -544,33 +588,44 @@ def analyze_portfolio_exposures(
         _notify(ticker, pw, msg)
 
         if not holdings:
-            buckets.append({"label": f"{ticker} 無持股資料", "weight": pw, "ticker": ticker, "region": info["region"]})
+            buckets.append(
+                {
+                    "label": f"{ticker} 無持股資料",
+                    "weight": pw,
+                    "ticker": ticker,
+                    "region": info["region"],
+                }
+            )
             continue
 
         top_sum = sum(h["weight"] for h in holdings)
         other_w = max(0.0, 1.0 - top_sum)
 
         for h in holdings:
-            sym    = h["symbol"]
+            sym = h["symbol"]
             contrib = pw * h["weight"]
-            e = exposures.setdefault(sym, {"name": h["name"], "weight": 0.0, "sources": []})
+            e = exposures.setdefault(
+                sym, {"name": h["name"], "weight": 0.0, "sources": []}
+            )
             e["weight"] += contrib
             if ticker not in e["sources"]:
                 e["sources"].append(ticker)
 
         if other_w > 0.005:
-            buckets.append({
-                "label":  f"{ticker} 其他持股",
-                "weight": pw * other_w,
-                "ticker": ticker,
-                "region": info["region"],
-            })
+            buckets.append(
+                {
+                    "label": f"{ticker} 其他持股",
+                    "weight": pw * other_w,
+                    "ticker": ticker,
+                    "region": info["region"],
+                }
+            )
 
     _save_cache(cache)
 
     # 3. 整理回傳值
-    ranked       = sorted(exposures.items(), key=lambda x: x[1]["weight"], reverse=True)
-    identified   = sum(v["weight"] for v in exposures.values())
+    ranked = sorted(exposures.items(), key=lambda x: x[1]["weight"], reverse=True)
+    identified = sum(v["weight"] for v in exposures.values())
     unidentified = sum(b["weight"] for b in buckets)
 
     # 依 region 合併 buckets（同地區的「其他持股」加總）
@@ -598,19 +653,21 @@ def analyze_portfolio_exposures(
     )
 
     return {
-        "total_value_twd":  total_value,
-        "assets_count":     len(portfolio),
+        "total_value_twd": total_value,
+        "assets_count": len(portfolio),
         "exposures": [
-            _with_ticker_label({
-                "symbol":  sym,
-                "name":    info["name"],
-                "weight":  round(info["weight"], 6),
-                "sources": info["sources"],
-            })
+            _with_ticker_label(
+                {
+                    "symbol": sym,
+                    "name": info["name"],
+                    "weight": round(info["weight"], 6),
+                    "sources": info["sources"],
+                }
+            )
             for sym, info in ranked
         ],
         "buckets": merged_buckets,
         "sector_exposures": sector_exposures,
-        "identified_pct":   round(identified, 6),
+        "identified_pct": round(identified, 6),
         "unidentified_pct": round(unidentified, 6),
     }

@@ -23,7 +23,7 @@
                             <span class="text-sm font-medium">{{ item.ticker }}</span>
                             <span class="text-xs text-gray-400">{{ item.name }}</span>
                             <span v-if="item.actionable" class="text-xs text-gray-500">{{ item.actionable.signal
-                                }}</span>
+                            }}</span>
                             <span v-else-if="item.holdOff" class="text-xs text-gray-500">觀望</span>
                         </div>
                         <div v-if="item.actionable?.zone_range" class="text-xs text-gray-400">

@@ -56,6 +56,7 @@ from core.daily_summary import generate_daily_summary
 from core.exporters import export_for_ai, export_single_target_for_ai
 from core.tags import TAG_DISPLAY
 from core.xray import (
+    REGION_CODES,
     analyze_portfolio_exposures,
     get_ticker_holdings,
     get_ticker_sector,
@@ -233,15 +234,17 @@ def _load_advanced():
         raise HTTPException(status_code=502, detail=str(e))
 
 
-@lru_cache(maxsize=1)
-def _cached_xray(cache_key: int):
-    return analyze_portfolio_exposures()
+@lru_cache(maxsize=16)
+def _cached_xray(cache_key: int, regions: tuple[str, ...]):
+    return analyze_portfolio_exposures(regions=list(regions) or None)
 
 
-def _load_xray():
+def _load_xray(regions: list[str] | None = None):
     try:
         ttl = _XRAY_TTL if _is_trading_hours() else _XRAY_TTL_IDLE
-        return _cached_xray(int(time.time() // ttl))
+        key = int(time.time() // ttl)
+        region_key = tuple(sorted(set(regions))) if regions else ()
+        return _cached_xray(key, region_key)
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -410,8 +413,9 @@ def post_manual_analysis(req: ManualAnalysisRequest):
 
 
 @app.get("/api/xray")
-def get_xray():
-    return _safe_obj(_load_xray())
+def get_xray(region: list[str] | None = Query(None)):
+    regions = [r for r in region if r in REGION_CODES] if region else None
+    return _safe_obj(_load_xray(regions))
 
 
 @lru_cache(maxsize=64)

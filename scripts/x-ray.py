@@ -4,7 +4,9 @@ Portfolio X-Ray 終端機版。
 
 用法：
   .venv/Scripts/python.exe scripts/x-ray.py
+  .venv/Scripts/python.exe scripts/x-ray.py --region US JP
 """
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -12,7 +14,7 @@ from pathlib import Path
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.xray import analyze_portfolio_exposures
+from core.xray import REGION_CODES, analyze_portfolio_exposures
 
 
 def _pct(v: float) -> str:
@@ -23,10 +25,26 @@ def _progress(ticker: str, pw: float, msg: str) -> None:
     print(f"  [{ticker:<14}]  {_pct(pw)}  {msg}", flush=True)
 
 
-def main():
-    print("\n分析中，請稍候…\n")
+def _parse_args():
+    parser = argparse.ArgumentParser(description="Portfolio X-Ray 終端機版")
+    parser.add_argument(
+        "--region",
+        nargs="+",
+        choices=sorted(REGION_CODES),
+        help="只分析指定地區（可多選），例如 --region US JP",
+    )
+    return parser.parse_args()
 
-    result = analyze_portfolio_exposures(on_ticker=_progress)
+
+def main():
+    args = _parse_args()
+
+    region_label = (
+        "、".join(REGION_CODES[r] for r in args.region) if args.region else "全部"
+    )
+    print(f"\n分析中（地區：{region_label}），請稍候…\n")
+
+    result = analyze_portfolio_exposures(regions=args.region, on_ticker=_progress)
 
     if result["total_value_twd"] == 0:
         print("無法取得市值資料，請確認 Google Sheets value 欄位。")
