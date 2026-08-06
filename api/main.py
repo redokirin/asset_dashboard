@@ -53,7 +53,7 @@ from core.analysis.overall_risk import (
     get_risk_alerts,
 )
 from core.daily_summary import generate_daily_summary
-from core.exporters import export_for_ai, export_single_target_for_ai
+from core.exporters import export_for_ai, export_single_target_for_ai, save_ai_report
 from core.tags import TAG_DISPLAY
 from core.xray import (
     REGION_CODES,
@@ -74,6 +74,7 @@ _TZ_TW = datetime.timezone(datetime.timedelta(hours=8))
 _WARM_INTERVAL = 9 * 60  # 每 9 分鐘（< portfolio TTL 10 分鐘）
 _SNAPSHOT_HOUR = 15  # 每日快照存檔時間（台灣時間），涵蓋台股(13:30)/日股(14:30)收盤
 _SNAPSHOT_MINUTE = 0
+_AI_REPORT_TIMES = [(9, 30), (13, 50), (15, 10)]  # AI 報告自動存檔時間（台灣時間，僅平日）
 
 
 def _is_trading_hours() -> bool:
@@ -128,11 +129,50 @@ async def _daily_snapshot_scheduler():
             logging.warning(f"[snapshot] 每日 OHLC 區間補齊失敗：{exc}")
 
 
+def _generate_and_save_ai_report() -> str:
+    df, _, _, _ = _load_data()
+    adv_res = _load_advanced()
+    report = export_for_ai(df_res=df, adv_res=adv_res)
+    try:
+        save_ai_report(report)
+    except Exception as exc:
+        logging.warning(f"[api] AI 報告存檔失敗：{exc}")
+    return report
+
+
+def _seconds_until_next_weekday_time(times: list[tuple[int, int]]) -> float:
+    """回傳離 times 中最近一個「平日」時間點還有幾秒，週六日自動跳過。"""
+    now = datetime.datetime.now(tz=_TZ_TW)
+    candidates = sorted(times)
+    day_offset = 0
+    while True:
+        check_day = now + datetime.timedelta(days=day_offset)
+        if check_day.weekday() < 5:  # 週一~五
+            for hour, minute in candidates:
+                target = check_day.replace(
+                    hour=hour, minute=minute, second=0, microsecond=0
+                )
+                if target > now:
+                    return (target - now).total_seconds()
+        day_offset += 1
+
+
+async def _ai_report_scheduler():
+    """固定時間（09:30 / 13:50 / 15:10 台灣時間，週一~五）自動產生並存檔 AI 報告。"""
+    while True:
+        await asyncio.sleep(_seconds_until_next_weekday_time(_AI_REPORT_TIMES))
+        try:
+            _generate_and_save_ai_report()
+        except Exception as exc:
+            logging.warning(f"[ai_report] 排程存檔失敗：{exc}")
+
+
 @asynccontextmanager
 async def lifespan(app):
     tasks = [
         asyncio.create_task(_cache_warmer()),
         asyncio.create_task(_daily_snapshot_scheduler()),
+        asyncio.create_task(_ai_report_scheduler()),
     ]
     yield
     for task in tasks:
@@ -332,10 +372,7 @@ def get_ticker_historical(
 
 @app.get("/api/export/ai")
 def get_export_ai():
-    df, _, _, _ = _load_data()
-    adv_res = _load_advanced()
-    report = export_for_ai(df_res=df, adv_res=adv_res)
-    return {"report": report}
+    return {"report": _generate_and_save_ai_report()}
 
 
 @app.get("/api/export/ai/{ticker}")

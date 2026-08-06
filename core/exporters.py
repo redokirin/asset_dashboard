@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -25,6 +26,20 @@ from core.columns import (
 )
 
 _SUGGESTION_PATH = Path(__file__).parent / "ai_analysis_suggestion.md"
+_ANALYZE_DIR = Path(__file__).parent.parent / "analyze"
+
+
+def save_ai_report(text: str, now: datetime.datetime | None = None) -> Path:
+    """
+    將 AI 診斷報告存成檔案：analyze/YYYYMMDD/report_YYYYMMDDHHMMSS.md。
+    Returns: 寫入的檔案路徑。
+    """
+    now = now or datetime.datetime.now()
+    analyze_dir = _ANALYZE_DIR / now.strftime("%Y%m%d")
+    analyze_dir.mkdir(parents=True, exist_ok=True)
+    report_path = analyze_dir / f"report_{now.strftime('%Y%m%d%H%M%S')}.md"
+    report_path.write_text(text, encoding="utf-8")
+    return report_path
 
 
 def check_data_freshness(ticker, last_update_time):

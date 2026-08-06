@@ -5,10 +5,10 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import argparse
-import datetime
 import pandas as pd
 from core import dashboard_logic
 from core.daily_summary import generate_daily_summary
+from core.exporters import save_ai_report
 from ui.dashboard_ui import show_console_rich
 
 
@@ -84,13 +84,7 @@ def run_cli():
     # 當同時指定 --ai 與 --analyze 時，寫入診斷報告檔案
     if args.ai and args.analyze:
         ai_text = dashboard_logic.export_for_ai(df_final, adv_res=advanced_results)
-        now = datetime.datetime.now()
-        analyze_dir = os.path.join(os.path.dirname(__file__), "..", "analyze", now.strftime("%Y%m%d"))
-        os.makedirs(analyze_dir, exist_ok=True)
-        ts = now.strftime("%Y%m%d%H%M%S")
-        report_path = os.path.join(analyze_dir, f"report_{ts}.md")
-        with open(report_path, "w", encoding="utf-8") as f:
-            f.write(ai_text)
+        report_path = save_ai_report(ai_text)
         print(f"\n✅ 診斷報告已寫入: {report_path}")
     elif args.ai:
         print(dashboard_logic.export_for_ai(df_final, adv_res=advanced_results))
