@@ -176,14 +176,29 @@ def fetch_ohlc(ticker: str, date: str) -> dict | None:
         return None
 
 
+def _format_regular_market_time(ticker_obj) -> str:
+    """從 chart metadata 取 regularMarketTime（epoch 秒），轉為台北時區 'YYYY-MM-DD HH:MM'。"""
+    try:
+        meta = ticker_obj.get_history_metadata()
+        ts = meta.get("regularMarketTime")
+        if ts is None:
+            return ""
+        return (
+            pd.to_datetime(ts, unit="s", utc=True)
+            .tz_convert("Asia/Taipei")
+            .strftime("%Y-%m-%d %H:%M")
+        )
+    except Exception:
+        return ""
+
+
 def fetch_fast_info(tickers: list) -> dict:
     """批次取得即時報價與前日收盤，回傳 {ticker: {price, change, previous_close, date}}。"""
-    import datetime
-    today = datetime.date.today().strftime("%Y-%m-%d")
     result = {}
     for ticker in tickers:
         try:
-            fi = yf.Ticker(ticker).fast_info
+            tkr = yf.Ticker(ticker)
+            fi = tkr.fast_info
             price = fi.last_price
             prev  = fi.previous_close
             if price is None or prev is None:
@@ -192,7 +207,7 @@ def fetch_fast_info(tickers: list) -> dict:
                 "price":          float(price),
                 "change":         float(price - prev),
                 "previous_close": float(prev),
-                "date":           today,
+                "date":           _format_regular_market_time(tkr),
             }
         except Exception as exc:
             logging.warning(f"[fast_info] {ticker} 失敗: {exc}")

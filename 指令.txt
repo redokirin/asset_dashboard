@@ -59,3 +59,7 @@ scp -r -p22 dist/ redokirin@192.168.50.37:/web/assests/frontends/vue/
 
 
 claude --resume d335d9ca-fa16-440a-9fbd-e9ddd324d7fc
+
+redokirin@redokirin0729.asuscomm.com:61633
+
+http://redokirin0729.asuscomm.com:310/
