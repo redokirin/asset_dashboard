@@ -51,7 +51,7 @@
                             class="w-full text-xs px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors">
                             🔍 詳細配置分析（含 X-Ray 個股穿透）
                         </button>
-                        <LiquidityCard :marketShare="marketShare" />
+                        <LiquidityCard v-if="assets.length" :assets="assets" />
                         <div>
                             <RiskScoreCard v-if="risk" :risk="risk" />
                             <div v-else class="rounded-xl bg-gray-800 p-4 text-xs text-gray-500 animate-pulse">
