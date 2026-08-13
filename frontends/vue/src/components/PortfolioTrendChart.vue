@@ -66,9 +66,17 @@ const dailyPnlFmt = computed(() =>
 function buildOption(data, dailyPnl) {
   const dates = data.map(d => d.snapshot_date)
   const dailyChange = calcDailyChange(data)
-  // 最新一筆長條改用即時 daily_pnl 覆蓋，跟標題徽章對齊（快照差值本身可能還沒寫入今天，或含基金/交易影響）
-  if (dailyPnl != null && dailyChange.length) {
-    dailyChange[dailyChange.length - 1] = dailyPnl
+  // 若今天的快照已寫入，最新一筆長條改用即時 daily_pnl 覆蓋，跟標題徽章對齊
+  // （快照差值本身可能還沒寫入今天，或含基金/交易影響）；若今天還沒有快照，
+  // 補一筆「今天」的長條，避免誤蓋掉最後一筆歷史快照（通常是昨天）的真實數值
+  const todayStr = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Taipei' }).format(new Date())
+  if (dailyPnl != null) {
+    if (dates.length && dates[dates.length - 1] === todayStr) {
+      dailyChange[dailyChange.length - 1] = dailyPnl
+    } else {
+      dates.push(todayStr)
+      dailyChange.push(dailyPnl)
+    }
   }
   const upColor = '#ef4444'   // 紅漲（台股慣例）
   const downColor = '#22c55e' // 綠跌
