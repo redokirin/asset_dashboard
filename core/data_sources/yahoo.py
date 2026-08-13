@@ -123,6 +123,31 @@ def get_ticker_fundamental_info(ticker_symbol: str) -> dict:
     return _fetch_ticker_fundamental_info(ticker_symbol, key)
 
 
+def _fill_missing_ohlc_with_close(df_all):
+    """基金只有單一日 NAV，Open/High/Low 若缺失或為 0，補成 Close，
+    避免 K 線圖畫出從 0 開始的假影線（Yahoo 過去會自動補，近期部分基金標的不再補）。"""
+    if df_all is None or df_all.empty:
+        return df_all
+
+    def _fix(sub):
+        if not {"Open", "High", "Low", "Close"}.issubset(sub.columns):
+            return sub
+        close = pd.to_numeric(sub["Close"], errors="coerce")
+        for col in ("Open", "High", "Low"):
+            val = pd.to_numeric(sub[col], errors="coerce")
+            missing = val.isna() | (val == 0)
+            sub.loc[missing, col] = close[missing]
+        return sub
+
+    patched = df_all.copy()
+    if isinstance(patched.columns, pd.MultiIndex):
+        for ticker_key in patched.columns.get_level_values(0).unique():
+            patched[ticker_key] = _fix(patched[ticker_key])
+    else:
+        patched = _fix(patched)
+    return patched
+
+
 def fetch_historical_data(tickers, period="2y", group_by="ticker", fetchers=None):
     """抓取歷史價格數據，並包含特殊標的修正邏輯"""
     normalized_tickers = normalize_tickers(tickers)
@@ -145,6 +170,7 @@ def fetch_historical_data(tickers, period="2y", group_by="ticker", fetchers=None
 
     df_all = normalize_yfinance_columns(df_all)
     df_all = apply_yahoo_price_patches(df_all, normalized_tickers)
+    df_all = _fill_missing_ohlc_with_close(df_all)
     return squeeze_single_ticker_frame(df_all)
 
 
