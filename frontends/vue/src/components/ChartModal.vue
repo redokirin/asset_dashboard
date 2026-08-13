@@ -59,7 +59,7 @@ defineEmits(['close'])
 
 const PERIODS = ['1mo', '3mo', '6mo', '1y', '2y']
 
-const period = ref('6mo')
+const period = ref('1mo')
 const loading = ref(false)
 const error = ref('')
 const rawData = ref([])
