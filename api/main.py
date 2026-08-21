@@ -27,6 +27,7 @@ from core.columns import (
     COL_COST,
     COL_CURRENCY,
     COL_GET_VALUE,
+    COL_KEEP_TWD,
     COL_MARKET,
     COL_MARKET_VALUE,
     COL_NAME,
@@ -231,6 +232,40 @@ def _safe_obj(obj):
     return _safe(obj)
 
 
+# ── Demo 模式：以固定比例縮放金額/持有數量欄位，隱藏真實持股規模 ──────────────
+# 開關：環境變數 DEMO_MODE=1/true，同時也會讓 core/data_loader.py 自動切去 demo Google Sheet。
+# demo Sheet 本身內容已是調整過的假資料，預設不用再疊加縮放（DEMO_SCALE 預設 1.0 = 不縮放）；
+# 如果還想額外遮蔽一層，可自行覆寫 DEMO_SCALE（例如 0.4173）。
+# 只縮放「絕對金額/數量」欄位；股價、報酬率、佔比等比例型欄位維持原值，兩者同乘一個係數後衍生比例不變。
+DEMO_MODE = os.environ.get("DEMO_MODE", "").strip().lower() in ("1", "true", "yes", "on")
+DEMO_SCALE = float(os.environ.get("DEMO_SCALE", "1.0"))
+
+_DEMO_AMOUNT_FIELDS = {
+    COL_UNITS, COL_AVG_COST, COL_COST, COL_MARKET_VALUE, COL_PROFIT_LOSS, COL_KEEP_TWD,
+}
+_DEMO_TRANSACTION_FIELDS = ("shares", "cost", "fee", "total", "pnl")
+_DEMO_HISTORY_FIELDS = ("total_value", "total_gain", "invest_value")
+
+
+def _mask_amount(v):
+    """demo 模式下把金額/數量依 DEMO_SCALE 縮放；非 demo 模式或非數值原樣回傳。"""
+    if not DEMO_MODE or v is None:
+        return v
+    if isinstance(v, bool) or not isinstance(v, (int, float, np.integer, np.floating)):
+        return v
+    scaled = float(v) * DEMO_SCALE
+    return round(scaled) if isinstance(v, (int, np.integer)) else round(scaled, 4)
+
+
+def _mask_record(rec: dict, fields) -> dict:
+    if not DEMO_MODE:
+        return rec
+    for f in fields:
+        if f in rec:
+            rec[f] = _mask_amount(rec[f])
+    return rec
+
+
 @lru_cache(maxsize=1)
 def _cached_portfolio(cache_key: int):
     """cache_key = int(time.time() // TTL)，每 TTL 秒自動失效。"""
@@ -301,17 +336,21 @@ def get_portfolio():
     total_value = int(df[COL_MARKET_VALUE].sum()) if not df.empty else 0
     total_cost = int(df[COL_COST].sum()) if not df.empty else 0
     total_pl = int(df[COL_PROFIT_LOSS].sum()) if not df.empty else 0
+    return_pct = round(total_pl / total_cost * 100, 2) if total_cost else 0
+
+    assets = [_mask_record(rec, _DEMO_AMOUNT_FIELDS) for rec in _df_to_records(df)]
 
     return {
         "exchange_rates": rates,
-        "assets": _df_to_records(df),
+        "assets": assets,
         "market_share": market_share,
         "summary": {
-            "total_value_twd": total_value,
-            "total_cost_twd": total_cost,
-            "total_pl_twd": total_pl,
-            "return_pct": round(total_pl / total_cost * 100, 2) if total_cost else 0,
+            "total_value_twd": _mask_amount(total_value),
+            "total_cost_twd": _mask_amount(total_cost),
+            "total_pl_twd": _mask_amount(total_pl),
+            "return_pct": return_pct,
         },
+        "demo_mode": DEMO_MODE,
     }
 
 
@@ -452,7 +491,10 @@ def post_manual_analysis(req: ManualAnalysisRequest):
 @app.get("/api/xray")
 def get_xray(region: list[str] | None = Query(None)):
     regions = [r for r in region if r in REGION_CODES] if region else None
-    return _safe_obj(_load_xray(regions))
+    data = _load_xray(regions)
+    if DEMO_MODE and isinstance(data, dict) and "total_value_twd" in data:
+        data = {**data, "total_value_twd": _mask_amount(data["total_value_twd"])}
+    return _safe_obj(data)
 
 
 @lru_cache(maxsize=64)
@@ -487,7 +529,13 @@ def _cached_transactions(cache_key: int):
 def get_transactions():
     """依 ticker 分組的 ETF 交易紀錄（來源：Google Sheets JPY / TWD 分頁）。"""
     key = int(time.time() // _TRANSACTIONS_TTL)
-    return _safe_obj(_cached_transactions(key))
+    data = _cached_transactions(key)
+    if DEMO_MODE:
+        data = {
+            ticker: [_mask_record(dict(tx), _DEMO_TRANSACTION_FIELDS) for tx in txs]
+            for ticker, txs in data.items()
+        }
+    return _safe_obj(data)
 
 
 @app.get("/api/portfolio/history")
@@ -496,7 +544,10 @@ def get_portfolio_history(days: int = Query(default=90, ge=1, le=36500)):
     資產總覽時間序列（total_value / total_gain / invest_value / total_gain_pct），
     依日期升冪排列，供折線圖使用。days 給一個很大的值（如 36500）等同於拉全部歷史。
     """
-    return _safe_obj(get_portfolio_value_history(days))
+    history = get_portfolio_value_history(days)
+    if DEMO_MODE:
+        history = [_mask_record(dict(row), _DEMO_HISTORY_FIELDS) for row in history]
+    return _safe_obj(history)
 
 
 @app.get("/api/analysis/risk")

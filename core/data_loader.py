@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 import gspread
 import tomllib
 import logging
@@ -21,8 +22,30 @@ def get_secret(key, default=None):
         return default
 
 
-SPREADSHEET_ID = get_secret(
-    "spreadsheet_id", "1xiuVw0fuuIdqVX0a-gGf0MkEZWmwWGnsRndCoNEc-4A"
+def _local_spreadsheet_id():
+    """從本地 assets_config.toml 的 [my_assets] 讀 spreadsheet_id（未進版控，僅本機生效）。"""
+    if not TOML_PATH.exists():
+        return None
+    try:
+        with open(TOML_PATH, "rb") as f:
+            return tomllib.load(f).get("my_assets", {}).get("spreadsheet_id")
+    except Exception as e:
+        logging.error(f"讀取本地 spreadsheet_id 失敗: {e}")
+        return None
+
+
+_DEMO_MODE = os.environ.get("DEMO_MODE", "").strip().lower() in ("1", "true", "yes", "on")
+# demo Sheet 內容本身已是調整過的假資料，ID 本身不敏感，可直接寫死。
+_DEMO_SPREADSHEET_ID = "1CWsaZgQR9jbnm9BqaAE4Zczme_xUVVKRKuV9hTEGQ5M"
+
+# 優先序：環境變數 SPREADSHEET_ID（手動指定）> DEMO_MODE（自動切去 demo Sheet）
+# > 本地 assets_config.toml > Streamlit secrets。
+# 不寫死真實 ID：本檔會被 commit 進公開 repo，真實 ID 只留在未進版控的本地檔案。
+SPREADSHEET_ID = (
+    os.environ.get("SPREADSHEET_ID")
+    or (_DEMO_SPREADSHEET_ID if _DEMO_MODE else None)
+    or _local_spreadsheet_id()
+    or get_secret("spreadsheet_id")
 )
 
 
